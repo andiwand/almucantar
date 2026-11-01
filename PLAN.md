@@ -41,7 +41,7 @@ in hour angle, and at most about 0.25° per minute on the sky. So **1° of error
 | Refraction near the horizon, no correction | 0.57° | 2 min |
 | Refraction variation with temperature and pressure | about 0.1° near the horizon | < 1 min |
 | One screen pixel (70° FOV on 1080 px) | 0.065° | 15 s |
-| NOAA solar equations (1901–2099) | about 0.01° | 2 s |
+| NOAA solar equations (1950–2100, measured against JPL Horizons) | ≤ 0.015° | 4 s |
 | Location error of 2 km (coarse location) | about 0.02° | 5 s |
 | Phone clock error | < 1 s | < 1 s |
 | Sun disc diameter, for comparison | 0.53° | 2 min |
@@ -49,7 +49,7 @@ in hour angle, and at most about 0.25° per minute on the sky. So **1° of error
 ### Conclusions
 
 - The solar model is not the limit. A model with an error of 0.05° or better is
-  sufficient, and NOAA (about 0.01°) is more than sufficient.
+  sufficient, and NOAA (≤ 0.015°, measured) is more than sufficient.
 - The orientation of the phone is the limit, and the compass heading indoors is the main
   error. So most of the work goes into the orientation and the calibration, not into the
   astronomy.
@@ -150,7 +150,7 @@ Implementations:
 
 | Model | Accuracy | Source | Use |
 |---|---|---|---|
-| `NoaaModel` | about 0.01° | handroll, about 100 lines | default in the app |
+| `NoaaModel` | ≤ 0.015° (measured) | handroll, about 100 lines | default in the app (done in M1) |
 | `AstronomyEngineModel` | about 1′ (0.017°) | Astronomy Engine, MIT, single C file | second model, and the **moon** for calibration |
 | `SpaModel` | 0.0003° | NREL SPA | test oracle only; check the license before you ship it |
 
@@ -243,9 +243,13 @@ Projection steps:
 
 ### 5.6 Path, horizon, and search
 
-- `sun_path(date, observer)`: samples every 5 min from sunrise to sunset, with flags for
-  full hours. It also handles polar day and polar night.
-- `sun_events(date, observer)`: sunrise, sunset, solar noon, and the altitude at noon.
+- `sun_path(model, observer, start_utc, end_utc)`: samples at a fixed step (default
+  5 min), with or without refraction. It includes the points below the horizon. If
+  the interval starts at local midnight, the points fall on the full hours.
+- `sun_events(model, observer, start_utc, end_utc)`: all crossings of a threshold
+  altitude (sunrise, sunset, or twilight), the culmination, and the polar day or the
+  polar night. The platform gives the start and the end of the local day in UTC,
+  because it knows the time zone.
 - `horizon_line(camera, orientation)`: points of altitude 0° at all azimuths, projected
   and clipped.
 - `find_time(view_dir, date, observer)` for auto mode:
@@ -327,7 +331,7 @@ Notes:
 | # | Content | Done when |
 |---|---|---|
 | M0 | Repository, CMake, Conan profiles, Catch2, CI | an empty test runs on the host and in CI |
-| M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | tests agree with JPL Horizons to ≤ 0.05° |
+| M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | tests agree with JPL Horizons to ≤ 0.05° (done: ≤ 0.015°) |
 | M2 | WMM2025, orientation, camera model, projection, horizon | tests agree with GeographicLib; projection round-trip ≤ 1 px |
 | M3 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
 | M4 | Android shell without camera: sky view with sensors, JNI | the path moves correctly when you turn the phone |

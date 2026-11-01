@@ -17,6 +17,10 @@ option(SUNRADAR_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanit
 include(cmake/compiler_options.cmake)
 
 add_library(sunradar_core
+  src/events.cpp
+  src/noaa_model.cpp
+  src/path.cpp
+  src/refraction.cpp
   src/version.cpp)
 add_library(sunradar::core ALIAS sunradar_core)
 
