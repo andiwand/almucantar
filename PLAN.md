@@ -64,30 +64,40 @@ in hour angle, and at most about 0.25° per minute on the sky. So **1° of error
 - Solar model: ≤ 0.05° for 1950–2100.
 - Projection math: ≤ 1 px error for a given orientation and camera model.
 - Total, after calibration: ≤ 2° (about ±8 min). This is a goal, and the field tests in
-  M5 confirm it or not.
+  M6 and M7 confirm it or not.
 
 ## 3. Architecture
 
+The model is the one of OpenDocument.core (`~/odr/OpenDocument.core`). One C++ core
+has a small public API. Each language gets a binding of that API, and each binding is a
+package. The apps use the packages and contain no C++.
+
 ```
-┌──────────────────────────────┐   ┌──────────────────────────────┐
-│ Android app (Kotlin/Compose) │   │ PWA (TypeScript)             │
-│ CameraX, SensorManager,      │   │ getUserMedia,                │
-│ location, UI, time zones     │   │ AbsoluteOrientationSensor,   │
-│                              │   │ Geolocation, UI, Intl        │
-└──────────────┬───────────────┘   └──────────────┬───────────────┘
-               │ JNI                              │ embind
-┌──────────────┴──────────────────────────────────┴───────────────┐
-│ libsunradar (C++20)                                              │
-│ solar models · magnetic model · orientation and calibration ·    │
-│ camera model and projection · path, horizon, and search          │
-└──────────────────────────────────────────────────────────────────┘
+┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
+│ android/ app      │ │ pwa/ app          │ │ ios/ app (later)  │ │ scripts, notebooks│
+│ Kotlin, Compose   │ │ TypeScript        │ │ Swift, SwiftUI    │ │ reference checks  │
+└─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
+          │ AAR                 │ npm                 │ SwiftPM             │ PyPI
+┌─────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐
+│ core/android      │ │ core/wasm         │ │ core/apple        │ │ core/python       │
+│ JNI + Kotlin API  │ │ embind + JS/d.ts  │ │ Swift package     │ │ pybind11          │
+└─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
+          └─────────────────────┴──────────┬──────────┴─────────────────────┘
+┌──────────────────────────────────────────┴──────────────────────────────────────────┐
+│ core/src/sunradar/*.hpp: the public C++ API (small, value types, free functions)     │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│ core/src/sunradar/internal/: solar models, refraction, WMM, orientation,             │
+│ calibration, camera model, projection, search, numerics                              │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Rules for the boundary
 
+- Every binding wraps the public API only. A binding never includes
+  `sunradar/internal/...`.
 - The core uses UTC only, as Unix time in seconds (`double`). The platform converts
-  local time and time zones, because `java.time` and `Intl` do this well. The support for
-  `std::chrono` time zones in the libc++ of the NDK is not reliable.
+  local time and time zones, because `java.time`, `Intl`, and `Foundation` do this well.
+  The support for `std::chrono` time zones in the libc++ of the NDK is not reliable.
 - The core does not read sensors, files, or the camera. The platform gives it numbers.
 - The core returns geometry in screen pixels (points and polylines). The platform draws
   them.
@@ -95,55 +105,72 @@ in hour angle, and at most about 0.25° per minute on the sky. So **1° of error
 
 ## 4. Repository layout
 
-The repository is a monorepo. Each platform has its own directory, and each
-directory is a self-contained project with its own build system. All platforms use
-the C++ core in `core/`.
+The repository is a monorepo. `core/` is the library with all its bindings, the same
+as OpenDocument.core. Each app has its own directory. Each directory is a
+self-contained project with its own build system.
 
 ```
 sunradar/
-├── core/                  C++ core, a self-contained CMake and Conan project
-│   ├── include/sunradar/  public API
-│   ├── src/
-│   ├── tests/             Catch2 tests
-│   │   └── data/          reference data for tests
-│   ├── tools/             scripts to make reference data
-│   ├── bindings/wasm/     embind wrapper for the PWA (M8)
+├── core/
+│   ├── src/sunradar/          public API (*.hpp), installed
+│   ├── src/sunradar/internal/ everything else, not installed
+│   ├── test/                  Catch2 tests, reference data, and the scripts that make it
+│   ├── python/                pybind11 binding, Python package `sunradar`
+│   ├── android/               JNI binding and Kotlin API, AAR
+│   ├── wasm/                  embind binding and JS API, npm package
+│   ├── apple/                 Swift package (later, with ios/)
 │   ├── cmake/
-│   ├── conan/profiles/    android-armv8, android-x86_64, emscripten
+│   ├── conan/profiles/
 │   ├── conanfile.py
-│   └── CMakeLists.txt
-├── android/               Gradle project, with the JNI wrapper in app/src/main/cpp (M4)
-├── pwa/                   the PWA (M8)
-├── ios/                   the iOS app (later, if we need it)
-├── .github/workflows/     CI for all projects
+│   ├── pyproject.toml         scikit-build-core, for the Python package
+│   ├── CMakeLists.txt
+│   ├── CHANGELOG.md
+│   └── AGENTS.md
+├── android/                   the Android app
+├── pwa/                       the PWA
+├── ios/                       the iOS app (later, if we need it)
+├── .github/workflows/         one workflow per project and per package
+├── AGENTS.md                  orientation for agents; CLAUDE.md points to it
 ├── PLAN.md
 └── README.md
 ```
 
-The JNI wrapper belongs to `android/`, because it depends on the Android NDK and on
-the Kotlin classes. The embind wrapper belongs to `core/`, because Emscripten builds
-it as a target of the core.
+Two differences from OpenDocument.core, because the situation is different:
+
+- **No separate `jni/` and Maven jar.** OpenDocument.core has a Java API for desktop
+  JVMs, so `jni/` builds a jar and `android/` reuses its Java sources. sunradar needs the
+  JVM only on Android, so `core/android/` contains the JNI code and a Kotlin API
+  directly.
+- **Only the public headers are installed.** OpenDocument.core installs the internal
+  headers too. sunradar installs only `src/sunradar/*.hpp`, so a consumer cannot depend
+  on an internal header.
+
+In the monorepo, an app uses the binding from source: the Android app includes
+`core/android` as a Gradle composite build, the PWA uses `core/wasm` as an npm
+workspace package, and the iOS app uses `core/apple` as a local Swift package. So a
+change in the core and the app is one commit, and no app waits for a release. The
+release still publishes the packages, for other users and for the Python package.
 
 ## 5. C++ core
 
 ### 5.1 Solar models
 
-An interface lets us use different models. The main reason is testing: we compare the
-models with each other and with external reference data. Users do not need a choice.
+An internal interface lets us use different models. The main reason is testing: we
+compare the models with each other and with external reference data. The public API
+selects a model with an enum, so the bindings do not have to wrap a virtual class.
 
 ```cpp
-struct Observer { double lat_deg, lon_deg, height_m; };
-struct Atmosphere { double pressure_hpa = 1010, temperature_c = 10; };
-struct Horizontal { double azimuth_deg, altitude_deg; };  // azimuth from true north, clockwise
+// public: src/sunradar/sun.hpp
+enum class SolarModel { noaa, astronomy_engine };
 
-class SolarModel {
-public:
-  virtual ~SolarModel() = default;
-  // Geometric position, without refraction.
+// internal: src/sunradar/internal/solar_model.hpp
+class SolarModelImpl {
+ public:
+  virtual ~SolarModelImpl() = default;
+  // Apparent position without refraction ("airless").
   virtual Horizontal sun(double unix_utc, const Observer&) const = 0;
 };
-
-Horizontal apply_refraction(Horizontal, const Atmosphere&);  // separate step
+const SolarModelImpl& solar_model(SolarModel);
 ```
 
 Implementations:
@@ -262,12 +289,66 @@ Projection steps:
   two dates per year, one on each side of a solstice. A 2D search over the day of the
   year and the time of day finds them.
 
-### 5.7 Public API and bindings
+### 5.7 Public API
 
-- A C++ API with value types for the tests and for embind.
-- A thin JNI layer for Android. It gets primitive arrays and returns `FloatArray` for
-  polylines, so there are no object allocations per frame.
-- Later, we can generate the bindings (for example with djinni), if the API becomes large.
+The public API is small, and its form makes every binding easy:
+
+- Value types (plain structs) and free functions. No class hierarchies, no templates,
+  no callbacks, no handles, and no state in the core. The app stores state, for example
+  the heading offset of the calibration, and passes it in.
+- So a binding only converts structs and arrays. It does not manage the lifetime of
+  objects, which is the hard part of the JNI and Apple bindings of OpenDocument.core.
+- Invalid arguments give `std::invalid_argument`. Each binding maps it to the native
+  exception of its language (`IllegalArgumentException`, `ValueError`, a rejected JS
+  promise or a thrown `Error`, a Swift `throws`).
+- The public headers stay C++20. The internal code can use C++23 later, if the NDK and
+  emsdk support what we need.
+- One umbrella header, `sunradar/sunradar.hpp`, includes all public headers.
+
+The planned public headers:
+
+| Header | Content |
+|---|---|
+| `types.hpp` | `Observer`, `Horizontal`, `Atmosphere`, `Quaternion`, `Camera`, `ScreenPoint` |
+| `sun.hpp` | `SolarModel`, `sun_position()`, `sun_events()`, `sun_path()` |
+| `search.hpp` | `find_time()`, `find_dates()` |
+| `magnetic.hpp` | `magnetic_declination_deg()` |
+| `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `project()`, `unproject()`, `project_path()`, `horizon_line()`, `view_direction()` |
+| `calibration.hpp` | `heading_offset_from_tap()`, `heading_offset_from_bearing()` |
+| `version.hpp` | `version()` |
+
+That is about 7 headers and 15 functions. Everything else is internal: the model
+classes, the refraction formula, the WMM coefficients, the numerics, and the details of
+the projection. A function becomes public only if an app needs it.
+
+### 5.8 Bindings and packages
+
+| Binding | Directory | Technology | Package | Registry |
+|---|---|---|---|---|
+| Python | `core/python/` | pybind11, scikit-build-core | `sunradar` | PyPI |
+| Android | `core/android/` | JNI by hand, Kotlin API | `app.sunradar:core-android` (AAR) | Maven Central |
+| Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@sunradar/core` | npm |
+| Apple (later) | `core/apple/` | Swift package with a prebuilt xcframework | `SunradarCore` | SwiftPM (GitHub release) |
+| C++ | `core/` | Conan recipe | `sunradar` | own Conan remote, if anyone needs it |
+
+Rules for all bindings, from OpenDocument.core:
+
+- Mirror the C++ names, in the naming style of the language (`sun_events` in Python,
+  `sunEvents` in Kotlin, JS, and Swift).
+- Each binding has its own `AGENTS.md` and a test suite in its language: pytest,
+  instrumented tests on an emulator, `node --test`, and XCTest.
+- A new public function needs a binding and a test in every binding.
+- JNI: enums cross as ordinals, so the Kotlin order must match the C++ order. Polylines
+  cross as `FloatArray`, so the per-frame path allocates no objects.
+- WASM: the binding runs in a Web Worker, so every value must be structured-clonable.
+  Plain objects only, no embind class handles.
+- Apple: SwiftPM cannot build a C++ project with Conan dependencies, so the package
+  ships a prebuilt xcframework, the same as OpenDocument.core. Swift C++ interop (Swift
+  5.9 and later) can replace the Objective-C layer of OpenDocument.core. We decide
+  that when we start iOS.
+- A SwiftPM package for external users must have `Package.swift` at the root of the
+  repository. In the monorepo, the iOS app does not need this, because it uses a
+  local package.
 
 ## 6. Dependencies
 
@@ -281,6 +362,8 @@ Projection steps:
 | NOAA solar model | handroll | — |
 | WMM2025 | handroll | — |
 | Root finding (Brent) | handroll | — |
+| Python binding | pybind11 | Conan Center, `pybind11/2.13.x` |
+| Python build | scikit-build-core | PyPI, build dependency only |
 
 Notes:
 
@@ -290,22 +373,69 @@ Notes:
 - Each test oracle (GeographicLib, SPA, SOFA) is a test dependency only. The app does not
   link it.
 
-## 7. Build and tooling
+## 7. Build, release, and conventions
+
+### Build
 
 - CMake ≥ 3.24, C++20, Conan 2.
-- Conan profiles:
-  - `host` (macOS) for development and tests.
-  - `android-arm64` and `android-x86_64` (the x86_64 one is for the emulator), with
-    `tools.android:ndk_path`.
-  - `emscripten`, for the PWA.
-- Gradle runs `conan install` for each ABI before `externalNativeBuild`, and gives the
-  Conan toolchain file to CMake.
-- CI (GitHub Actions): it builds and tests the core on Linux and macOS, it builds the
-  Android AAR or APK, and later it builds the WASM.
-- Static analysis: `clang-tidy` and the sanitizers (ASan, UBSan) on the host build.
+- CMake options, one per binding, the same as `ODR_*` in OpenDocument.core:
+  `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WASM`,
+  `SUNRADAR_APPLE`. `conanfile.py` has the matching options (`with_python`, ...).
+- Conan profiles in `core/conan/profiles/`: `android-armv8`, `android-x86_64`, and
+  `emscripten`. Later `apple-*` for the xcframework slices.
+- The AAR: `core/android/build_native.py` runs Conan and CMake for each ABI into
+  `native/prebuilt/jniLibs`, and Gradle packs the AAR. This is the model of
+  OpenDocument.core. CI builds each ABI in its own job and gives the libraries to the
+  AAR job.
+- Static analysis: `clang-tidy` and `clang-format` with a CI check, and the sanitizers
+  (ASan, UBSan) on the host build.
+
+### CI
+
+One workflow per project and per package, each with a path filter, so a change in
+`pwa/` does not build the AAR:
+
+| Workflow | Paths | Does |
+|---|---|---|
+| `core.yml` | `core/**` | builds and tests the core on Linux and macOS, cross-builds Android |
+| `python.yml` | `core/**` | builds wheels, runs pytest |
+| `core-android.yml` | `core/**` | builds the AAR, runs the instrumented tests on an emulator |
+| `wasm.yml` | `core/**` | builds the npm package, runs `node --test` |
+| `android.yml` | `android/**`, `core/**` | builds and tests the app |
+| `pwa.yml` | `pwa/**`, `core/**` | builds and tests the PWA |
+| `format.yml` | all | clang-format, ktfmt, black, prettier |
+
+### Release
+
+The same flow as OpenDocument.core:
+
+1. Commit messages follow Conventional Commits (`feat(core): ...`, `fix(android): ...`).
+   The scope is the project. `git cliff --bumped-version` calculates the next version
+   from them.
+2. Each change that a user notices gets an entry under `## Unreleased` in the
+   `CHANGELOG.md` of its project, in the same pull request.
+3. A manual dispatch of `release.yml` makes a draft release. A human publishes it.
+4. The published release starts the publish workflows: PyPI (trusted publishing), npm
+   (with provenance), Maven Central, and later the xcframework for SwiftPM.
+
+A monorepo has more than one version, so the tags have a prefix: `core-v1.2.0` for
+the core and all its packages, and `android-v1.0.0` and `pwa-v1.0.0` for the apps.
+The core packages share one version, so the AAR, the npm package, and the wheel always
+contain the same core.
+
+### Conventions
+
+- `AGENTS.md` at the root and in each module, with the architecture, the build loop, and
+  the rules. `CLAUDE.md` only points to `AGENTS.md`. The same as OpenDocument.core.
+- The code conventions of OpenDocument.core apply where they fit: `std::array` instead
+  of C arrays, `const` where possible, `std::ranges`, fixed-width integers, the
+  qualified definition of free functions, and short doc comments (`///`, `///<`).
+- Commit messages, code comments, and documentation use Simplified Technical English.
 
 ## 8. Android app
 
+- Uses `core/android` (the AAR) as a Gradle composite build. The app contains no C++
+  and no JNI code.
 - Kotlin, Jetpack Compose, `minSdk 28` (for `LENS_DISTORTION`).
 - CameraX `PreviewView`, plus Camera2 interop to read the intrinsics.
 - The overlay is a Compose `Canvas` on top of the preview.
@@ -319,7 +449,8 @@ Notes:
 
 ## 9. PWA (after Android)
 
-- TypeScript, Vite, the core as WASM through Emscripten and embind.
+- TypeScript, Vite. Uses `@sunradar/core` (`core/wasm`) as an npm workspace package,
+  in a Web Worker.
 - Camera: `getUserMedia`. Orientation: `AbsoluteOrientationSensor`, with
   `deviceorientation` as a fallback. iOS needs a permission prompt for the sensors.
 - FOV: a slider, or calibration with two sun or moon taps.
@@ -330,19 +461,26 @@ Notes:
 
 | # | Content | Done when |
 |---|---|---|
-| M0 | Repository, CMake, Conan profiles, Catch2, CI | an empty test runs on the host and in CI |
-| M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | tests agree with JPL Horizons to ≤ 0.05° (done: ≤ 0.015°) |
-| M2 | WMM2025, orientation, camera model, projection, horizon | tests agree with GeographicLib; projection round-trip ≤ 1 px |
-| M3 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
-| M4 | Android shell without camera: sky view with sensors, JNI | the path moves correctly when you turn the phone |
-| M5 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
-| M6 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |
-| M7 | Date slider, auto mode UI, polish | usable in a real flat visit |
-| M8 | PWA | the same features, with the documented lower precision |
+| M0 | Repository, CMake, Conan profiles, Catch2, CI | done |
+| M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | done: ≤ 0.015° against JPL Horizons |
+| M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | the Python tests call the M1 API, and no binding or test includes an internal header except the internal tests |
+| M3 | WMM2025, orientation, camera model, projection, horizon | tests agree with GeographicLib; projection round-trip ≤ 1 px |
+| M4 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
+| M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | the instrumented tests pass on an emulator; the path moves correctly when you turn the phone |
+| M6 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
+| M7 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |
+| M8 | Date slider, auto mode UI, polish | usable in a real flat visit |
+| M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
+| M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |
+| later | `core/apple` Swift package, iOS app | if we decide to do iOS |
+
+The Python binding comes early (M2), because it is the easiest binding to test. It
+also checks that the public API is easy to bind before the API grows, and it gives a
+fast way to plot paths and to compare models.
 
 ## 11. Risks
 
-- **Compass indoors.** This is the largest risk. If the calibration in M6 does not get
+- **Compass indoors.** This is the largest risk. If the calibration in M7 does not get
   the error to about 2°, the app must make the map heading the main method.
 - **Camera intrinsics.** Some devices give no intrinsics or wrong ones. The fallback from
   the focal length and the sensor size gives about 1–3° at the edges.
@@ -354,8 +492,14 @@ Notes:
 
 ## 12. Open questions
 
-- Do we need iOS later? If yes, the core already supports it, and the app can be native
-  Swift or Kotlin Multiplatform.
+- Do we need iOS later? If yes, `core/apple` gives a Swift package, and the app is
+  native Swift. If we want external users of the Swift package, `Package.swift` must
+  be at the root of the monorepo.
+- The names of the packages: `sunradar` on PyPI, `@sunradar/core` on npm, and
+  `app.sunradar:core-android` on Maven Central are proposals. Check that the names are
+  free, and that we own a domain for the Maven group.
+- Do we publish the C++ package to a Conan remote? Only if someone outside this
+  repository needs it.
 - Do we show the moon as well? Astronomy Engine gives it at no extra cost, and the
   calibration needs it anyway.
 - Do we want a shadow mode later (for example, which wall gets the sun)? This needs a
