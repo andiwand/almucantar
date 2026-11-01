@@ -17,9 +17,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: The version to build (nothing is published)
+        # Valid for npm (semver), PyPI (PEP 440), and Maven at the same time.
+        description: The version to build, X.Y.Z (nothing is published)
         type: string
-        default: 0.0.0-test
+        default: 0.0.0
 
 env:
   CONAN_VERSION: "2.26.1"
