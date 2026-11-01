@@ -367,7 +367,7 @@ the projection. A function becomes public only if an app needs it.
 | Binding | Directory | Technology | Package | Registry |
 |---|---|---|---|---|
 | Python | `core/python/` | pybind11, scikit-build-core | `sunradar` | PyPI |
-| Android | `core/android/` | JNI by hand, Kotlin API | `app.sunradar:core-android` (AAR) | Maven Central |
+| Android | `core/android/` | JNI by hand, Kotlin API | `at.stefl.sunradar:core-android` (AAR) | Maven Central |
 | Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@sunradar/core` | npm |
 | Apple (later) | `core/apple/` | Swift package with a prebuilt xcframework | `SunradarCore` | SwiftPM (GitHub release) |
 | C++ | `core/` | Conan recipe | `sunradar` | own Conan remote, if anyone needs it |
@@ -481,8 +481,10 @@ contain the same core.
 - CameraX `PreviewView`, plus Camera2 interop to read the intrinsics.
 - The overlay is a Compose `Canvas` on top of the preview.
 - Sensors: `TYPE_ROTATION_VECTOR`, and `TYPE_GAME_ROTATION_VECTOR` for the gyro hold.
-- Location: the fused location provider with coarse accuracy, and also a manual pick on
-  a map. The manual pick lets the user plan a flat from home.
+- Location: the coarse location (fused, network, or GPS provider). Without it, the main
+  city of the device time zone (IANA `zone.tab`), and the app says so. The status shows
+  the nearest town (geocoder) and the error as a power of ten, with its error on the sky.
+  Later also a manual pick on a map, so the user can plan a flat from home.
 - Screens:
   1. Sky view: camera or no camera, path, horizon, sun marker, compass accuracy.
   2. Controls: mode switch (fixed time or auto), time slider, date slider.
@@ -507,7 +509,7 @@ contain the same core.
 | M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | done |
 | M3 | WMM2025, orientation, camera model, projection, horizon | done: WMM agrees with the official test values to 0.001 nT; projection round-trip < 1e-6 px |
 | M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
-| M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | the instrumented tests pass on an emulator; the path moves correctly when you turn the phone |
+| M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. Not yet checked on a real phone. |
 | M6 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
 | M7 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |
 | M8 | Date slider, auto mode UI, polish | usable in a real flat visit |
@@ -539,9 +541,8 @@ fast way to plot paths and to compare models.
 - Do we need iOS later? If yes, `core/apple` gives a Swift package, and the app is
   native Swift. If we want external users of the Swift package, `Package.swift` must
   be at the root of the monorepo.
-- The names of the packages: `sunradar` on PyPI, `@sunradar/core` on npm, and
-  `app.sunradar:core-android` on Maven Central are proposals. Check that the names are
-  free, and that we own a domain for the Maven group.
+- The names of the packages: `sunradar` on PyPI and `@sunradar/core` on npm are proposals.
+  Check that the names are free. The Maven group is `at.stefl.sunradar` (decided).
 - Do we publish the C++ package to a Conan remote? Only if someone outside this
   repository needs it.
 - Do we show the moon as well? Astronomy Engine gives it at no extra cost, and the

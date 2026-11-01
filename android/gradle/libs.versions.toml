@@ -1,0 +1,29 @@
+[versions]
+# The same as core/android.
+agp = "9.5.0"
+# The Kotlin version that AGP 9.5.0 brings (the runtime dependency kotlin-gradle-plugin of its
+# POM). The Compose compiler plugin must have the same version.
+kotlin = "2.2.10"
+spotless = "8.10.4"
+ktfmt = "0.64"
+
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+androidxCore = "1.19.1"
+junit = "4.13.2"
+
+[libraries]
+# From the composite build of ../core/android (see settings.gradle.kts), so it has no version.
+core-android = { module = "at.stefl.sunradar:core-android" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-core = { module = "androidx.core:core", version.ref = "androidxCore" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

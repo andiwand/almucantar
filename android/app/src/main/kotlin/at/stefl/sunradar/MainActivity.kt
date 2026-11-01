@@ -1,0 +1,47 @@
+package at.stefl.sunradar
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        // The user holds the phone up and watches the sky, so the screen stays on.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        setContent {
+            var granted by remember {
+                mutableStateOf(
+                    ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ) == PackageManager.PERMISSION_GRANTED
+                )
+            }
+            val launcher =
+                rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+                    granted = it
+                }
+            LaunchedEffect(Unit) {
+                if (!granted) {
+                    launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
+            }
+            SkyScreen(locationGranted = granted)
+        }
+    }
+}

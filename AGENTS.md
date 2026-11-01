@@ -12,8 +12,8 @@ the sun is at a given place in the sky. The repository is a monorepo:
 
 | Path | What | Has `AGENTS.md` |
 |---|---|---|
-| `core/` | The C++ library with all its bindings (Python now; Android, WASM, and Apple later). | yes |
-| `android/` | The Android app (M5). It uses `core/android`, and contains no C++. | later |
+| `core/` | The C++ library with all its bindings (Python and Android now; WASM and Apple later). | yes |
+| `android/` | The Android app. It uses `core/android` as a composite build, and contains no C++. | yes |
 | `pwa/` | The PWA (M9). It uses `core/wasm`. | later |
 | `ios/` | The iOS app, maybe later. It uses `core/apple`. | later |
 | `scripts/` | Repository tools: `format`, and the pinned versions of the dev tools. | no |
@@ -32,7 +32,10 @@ contain no C++. `PLAN.md` section 3 explains why.
    python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-dev.txt
    ```
 
-The build loop of the core is in [`core/AGENTS.md`](core/AGENTS.md).
+The build loop of the core is in [`core/AGENTS.md`](core/AGENTS.md). For Android, use the JDK
+of Android Studio (`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`)
+and set `ANDROID_HOME`. Install and test on an emulator only (`ANDROID_SERIAL`), because a
+phone can be connected.
 
 ## Conventions for all projects
 

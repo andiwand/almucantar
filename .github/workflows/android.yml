@@ -1,0 +1,58 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "core/**"
+      - ".github/workflows/android.yml"
+      - ".github/workflows/native-android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "core/**"
+      - ".github/workflows/android.yml"
+      - ".github/workflows/native-android.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    uses: ./.github/workflows/native-android.yml
+
+  app:
+    name: app (build, unit tests, lint, format)
+    needs: native
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: android
+    env:
+      # The native libraries come from the native job, so the AAR build does not run Conan.
+      SUNRADAR_ABIS: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          merge-multiple: true
+          path: core/android/native/prebuilt/jniLibs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, test, lint, and check the format
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:spotlessCheck
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sunradar-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
