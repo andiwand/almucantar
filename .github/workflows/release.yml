@@ -18,6 +18,10 @@ on:
         description: The version (empty for the version from the commits)
         type: string
         required: false
+      prerelease:
+        description: Mark the release as a pre-release
+        type: boolean
+        default: false
       dry_run:
         description: Show the release, change nothing
         type: boolean
@@ -48,13 +52,21 @@ jobs:
           python-version: "3.12"
 
       - name: Install git cliff
-        run: pip install git-cliff
+        run: pip install -r scripts/requirements-dev.txt
 
       - name: Version
         id: version
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          version="${{ inputs.version }}"
+          version="${VERSION}"
           if [ -z "${version}" ]; then version="$(python3 scripts/release.py version "${PROJECT}")"; fi
+          # A tag or a release (also a draft, which has no tag yet) with this version stops the run.
+          if git rev-parse -q --verify "refs/tags/${PROJECT}-v${version}" >/dev/null ||
+            gh release view "${PROJECT}-v${version}" >/dev/null 2>&1; then
+            echo "::error::${PROJECT}-v${version} exists already"
+            exit 1
+          fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "tag=${PROJECT}-v${version}" >> "${GITHUB_OUTPUT}"
           echo "Release ${PROJECT} ${version}" >> "${GITHUB_STEP_SUMMARY}"
@@ -82,4 +94,5 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" --draft \
             --target "$(git rev-parse HEAD)" \
             --title "${PROJECT} ${{ steps.version.outputs.version }}" \
-            --notes-file notes.md
+            --notes-file notes.md \
+            ${{ inputs.prerelease && '--prerelease' || '' }}

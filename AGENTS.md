@@ -19,7 +19,7 @@ the sun is at a given place in the sky. The repository is a monorepo:
 | `assets/` | The logo. | no |
 | `ios/` | The iOS app. It uses the Swift package of `core/apple`. | yes |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
-| `scripts/` | Repository tools: `format`, and the pinned versions of the dev tools. | no |
+| `scripts/` | Repository tools: `format`, `release.py`, and the pinned versions of the dev tools. | no |
 | `.github/workflows/` | One workflow per project and per package, with path filters. | no |
 
 The model is the one of OpenDocument.core: one core with a small public API, one
@@ -64,7 +64,7 @@ Each project has its own version and tag: `core-vX.Y.Z` (the core and all its pa
    makes them. An empty `## Unreleased` stops the release.
 2. Run the workflow `release` (Actions → release → Run workflow) with the project. Keep
    `dry_run` on first: the summary shows the version, the stamp, and the release notes.
-3. Run it again without `dry_run`. It commits `chore(release): <tag> [skip ci]` and creates a
+3. Run it again without `dry_run`. Set `prerelease` for a version that is not ready for all users. It commits `chore(release): <tag> [skip ci]` and creates a
    draft release.
 4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
    Maven Central, and the Swift package) or `android-release.yml` (the APK). The PWA needs no publish step, because

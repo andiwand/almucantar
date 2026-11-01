@@ -119,7 +119,7 @@ sunradar/
 │   ├── python/                pybind11 binding, Python package `sunradar`
 │   ├── android/               JNI binding and Kotlin API, AAR
 │   ├── wasm/                  embind binding and JS API, npm package
-│   ├── apple/                 Swift package (later, with ios/)
+│   ├── apple/                 C API and Swift package (Package.swift at the root)
 │   ├── cmake/
 │   ├── conan/profiles/
 │   ├── conanfile.py
@@ -129,7 +129,7 @@ sunradar/
 │   └── AGENTS.md
 ├── android/                   the Android app
 ├── pwa/                       the PWA
-├── ios/                       the iOS app (later, if we need it)
+├── ios/                       the iOS app
 ├── .github/workflows/         one workflow per project and per package
 ├── AGENTS.md                  orientation for agents; CLAUDE.md points to it
 ├── PLAN.md
@@ -147,8 +147,8 @@ Two differences from OpenDocument.core, because the situation is different:
   on an internal header.
 
 In the monorepo, an app uses the binding from source: the Android app includes
-`core/android` as a Gradle composite build, the PWA uses `core/wasm` as an npm
-workspace package, and the iOS app uses `core/apple` as a local Swift package. So a
+`core/android` as a Gradle composite build, the PWA uses the built `core/wasm`
+package as a `file:` dependency, and the iOS app uses `core/apple` as a local Swift package. So a
 change in the core and the app is one commit, and no app waits for a release. The
 release still publishes the packages, for other users and for the Python package.
 
@@ -373,7 +373,7 @@ the projection. A function becomes public only if an app needs it.
 | Python | `core/python/` | pybind11, scikit-build-core | `sunradar` | PyPI |
 | Android | `core/android/` | JNI by hand, Kotlin API | `at.stefl.sunradar:core-android` (AAR) | Maven Central |
 | Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@sunradar/core` | npm |
-| Apple (later) | `core/apple/` | Swift package with a prebuilt xcframework | `SunradarCore` | SwiftPM (GitHub release) |
+| Apple | `core/apple/` | C API and Swift package with a prebuilt xcframework | `Sunradar` | SwiftPM (GitHub release) |
 | C++ | `core/` | Conan recipe | `sunradar` | own Conan remote, if anyone needs it |
 
 Rules for all bindings, from OpenDocument.core:
@@ -385,12 +385,11 @@ Rules for all bindings, from OpenDocument.core:
 - A new public function needs a binding and a test in every binding.
 - JNI: enums cross as ordinals, so the Kotlin order must match the C++ order. Polylines
   cross as `FloatArray`, so the per-frame path allocates no objects.
-- WASM: the binding runs in a Web Worker, so every value must be structured-clonable.
-  Plain objects only, no embind class handles.
+- WASM: every value must be structured-clonable, so the binding can move to a Web Worker.
+  Plain objects only, no embind class handles. The PWA calls it on the main thread (M9).
 - Apple: SwiftPM cannot build a C++ project with Conan dependencies, so the package
-  ships a prebuilt xcframework, the same as OpenDocument.core. Swift C++ interop (Swift
-  5.9 and later) can replace the Objective-C layer of OpenDocument.core. We decide
-  that when we start iOS.
+  ships a prebuilt xcframework, the same as OpenDocument.core. The Swift API is on top
+  of a plain C API (M11), not on Swift C++ interop or an Objective-C layer.
 - A SwiftPM package for external users must have `Package.swift` at the root of the
   repository. In the monorepo, the iOS app does not need this, because it uses a
   local package.
@@ -427,7 +426,7 @@ Notes:
   `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WASM`,
   `SUNRADAR_APPLE`. `conanfile.py` has the matching options (`with_python`, ...).
 - Conan profiles in `core/conan/profiles/`: `android-armv8`, `android-x86_64`, and
-  `emscripten`. Later `apple-*` for the xcframework slices.
+  `emscripten`, and `apple-*` for the xcframework slices.
 - The AAR: `core/android/build_native.py` runs Conan and CMake for each ABI into
   `native/prebuilt/jniLibs`, and Gradle packs the AAR. This is the model of
   OpenDocument.core. CI builds each ABI in its own job and gives the libraries to the
@@ -442,13 +441,14 @@ One workflow per project and per package, each with a path filter, so a change i
 
 | Workflow | Paths | Does |
 |---|---|---|
-| `core.yml` | `core/**` | builds and tests the core on Linux and macOS, cross-builds Android |
+| `core.yml` | `core/**` | builds and tests the core on Linux and macOS, runs clang-tidy |
 | `python.yml` | `core/**` | builds wheels, runs pytest |
-| `core-android.yml` | `core/**` | builds the AAR, runs the instrumented tests on an emulator |
-| `wasm.yml` | `core/**` | builds the npm package, runs `node --test` |
-| `android.yml` | `android/**`, `core/**` | builds and tests the app |
-| `pwa.yml` | `pwa/**`, `core/**` | builds and tests the PWA |
-| `format.yml` | all | clang-format, ktfmt, black, prettier |
+| `core-android.yml` | `core/**` | builds the AAR (with `native-android.yml`), runs the instrumented tests on an emulator |
+| `android.yml` | `android/**`, `core/**` | builds and tests the app, runs lint and ktfmt |
+| `web.yml` | `core/**`, `pwa/**`, `website/**` | builds the npm package (`node --test`), tests and builds the PWA (prettier, vitest), deploys GitHub Pages |
+| `apple.yml` | `core/**`, `ios/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds and tests the iOS app |
+| `format.yml` | all | clang-format, black |
+| `release.yml`, `publish-core.yml`, `android-release.yml` | manual, release | the release flow (see below) |
 
 ### Release
 
@@ -461,10 +461,10 @@ The same flow as OpenDocument.core:
    `CHANGELOG.md` of its project, in the same pull request.
 3. A manual dispatch of `release.yml` makes a draft release. A human publishes it.
 4. The published release starts the publish workflows: PyPI (trusted publishing), npm
-   (with provenance), Maven Central, and later the xcframework for SwiftPM.
+   (with provenance), Maven Central, and the xcframework for SwiftPM (with a tag `X.Y.Z`).
 
 A monorepo has more than one version, so the tags have a prefix: `core-v1.2.0` for
-the core and all its packages, and `android-v1.0.0` and `pwa-v1.0.0` for the apps.
+the core and all its packages, and `android-v1.0.0`, `pwa-v1.0.0`, and `ios-v1.0.0` for the apps.
 The core packages share one version, so the AAR, the npm package, and the wheel always
 contain the same core.
 
@@ -520,9 +520,9 @@ contain the same core.
 | M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone. |
 | M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
 | M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. Open: a test with the real sun. |
-| M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 8 node tests of the package, 3 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). Open: a test on phones (Chrome on Android, Safari on iOS). |
+| M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 10 node tests of the package, 4 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). Open: a test on phones (Chrome on Android, Safari on iOS). |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central, Android APK | implemented: `scripts/release.py` and git cliff, the release workflow with a dry run, `publish-core.yml` (npm, wheels for Linux and macOS, sdist, AAR), `android-release.yml`. Open: the accounts and secrets of the registries, Windows wheels. |
-| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 7 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. Open: a test on a real iPhone. |
+| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. Open: a test on a real iPhone. |
 
 The Python binding comes early (M2), because it is the easiest binding to test. It
 also checks that the public API is easy to bind before the API grows, and it gives a

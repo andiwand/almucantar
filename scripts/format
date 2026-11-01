@@ -20,7 +20,7 @@ black="${BLACK:-black}"
 if [[ -x .venv/bin/clang-format && -z "${CLANG_FORMAT:-}" ]]; then clang_format=.venv/bin/clang-format; fi
 if [[ -x .venv/bin/black && -z "${BLACK:-}" ]]; then black=.venv/bin/black; fi
 
-cpp_files() { git ls-files -z --cached --others --exclude-standard -- '*.cpp' '*.hpp'; }
+cpp_files() { git ls-files -z --cached --others --exclude-standard -- '*.cpp' '*.hpp' '*.c' '*.h' ':!core/third_party'; }
 python_files() { git ls-files -z --cached --others --exclude-standard -- '*.py'; }
 
 if $check; then

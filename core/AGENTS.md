@@ -20,7 +20,7 @@ The design is in [`../PLAN.md`](../PLAN.md) section 5.
 | `apple/` | The C API and the Swift package (`Package.swift` at the root). See [`apple/AGENTS.md`](apple/AGENTS.md). |
 | `third_party/astronomy-engine/` | Astronomy Engine (MIT), vendored. Do not edit; see its `README.md`. |
 | `cmake/` | Compiler options and the check of the public headers. |
-| `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`. |
+| `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`, and `apple-*` (the xcframework slices). |
 | `pyproject.toml` | The Python package build (scikit-build-core). |
 
 ## Build and test
@@ -51,7 +51,7 @@ Run these commands in `core/`.
    ctest --preset conan-debug --output-on-failure
    ```
 
-5. Run clang-tidy on a file. CI runs it on `src/` and `python/src/`:
+5. Run clang-tidy on a file. CI runs it on `src/`, `python/src/`, and `android/jni/`:
 
    ```sh
    ../.venv/bin/clang-tidy -p build/Debug src/sunradar/sun.cpp

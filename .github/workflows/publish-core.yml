@@ -137,7 +137,7 @@ jobs:
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.version.outputs.version }}
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/core/build/Release/generators/conan_toolchain.cmake"
           CIBW_BEFORE_BUILD: >-
-            pip install "conan==2.26.1" &&
+            pip install "conan==${{ env.CONAN_VERSION }}" &&
             conan profile detect --force &&
             conan install {project}/core --build=missing -s build_type=Release -s compiler.cppstd=20
             -o "&:with_python=True" -o "&:with_tests=False"
@@ -289,7 +289,6 @@ jobs:
             -e "s|checksum: \"0\{64\}\"|checksum: \"${checksum}\"|" \
             Package.swift
           grep -q "${checksum}" Package.swift
-          rm -rf core/apple/build
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(core): release the Swift package ${VERSION}"
