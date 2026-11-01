@@ -12,7 +12,9 @@ rules are the same as in `core/CHANGELOG.md`.
 - The time when the sun is in the direction of the crosshair, with a vertical line from the
   horizon to the sun, and the dates when the sun is in the crosshair.
 - A date slider and a time slider.
-- A heading filter with the magnetometer.
+- A heading filter with the magnetometer. It estimates the error that the OS calibration of
+  the magnetometer leaves, so an alignment with the sun, the moon, or a landmark stays and does
+  not drift back to the compass heading.
 - The moon, and an arrow at the border of the screen that points to the sun when it is not on
   the screen.
 - An align menu: with the sun, with the moon, or with a landmark that you pick on a map. Each

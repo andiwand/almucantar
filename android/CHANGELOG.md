@@ -5,6 +5,13 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The heading filter estimates the bias of the magnetometer. After an alignment with the sun,
+  the moon, or a landmark, the heading stays aligned and does not drift back to the compass
+  heading. The app reads the raw magnetometer and calibrates it itself; the OS calibration is
+  only the first guess.
+- The heading accuracy is more realistic: the compass alone shows about ±5–10°, and better
+  values need an alignment or some rotation of the phone.
+
 ## 0.1.0 - 2026-11-01
 
 - A sky view without camera. It follows the orientation of the phone (rotation vector
