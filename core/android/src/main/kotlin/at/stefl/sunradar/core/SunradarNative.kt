@@ -107,6 +107,8 @@ internal object SunradarNative {
 
     @JvmStatic external fun moonIlluminatedFraction(unixUtc: Double): Double
 
-    /** The C++ defaults of the option structs, Camera, View, and the heading, for the tests. */
+    /**
+     * The C++ defaults of the option structs, Camera, View, and the heading filter, for the tests.
+     */
     @JvmStatic external fun defaults(): DoubleArray
 }

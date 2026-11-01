@@ -395,8 +395,8 @@ SUNRADAR_JNI(moonIlluminatedFraction)(JNIEnv* env, jclass, jdouble unix_utc)->jd
   return guarded<jdouble>(env, 0.0, [&] { return moon_illuminated_fraction(unix_utc); });
 }
 
-// The C++ defaults of the option structs and of Camera, in the layouts above, so the
-// instrumented tests can check that the Kotlin defaults are the same.
+// The C++ defaults of the option structs, Camera, View, and the heading filter, in the layouts
+// above, so the instrumented tests can check that the Kotlin defaults are the same.
 SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
   return guarded<jdoubleArray>(env, nullptr, [&] {
     const SunOptions s;
@@ -444,6 +444,10 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          v.heading_offset_deg,
                          MagnetometerOptions{}.sensor_sigma_deg,
                          HeadingEstimate{}.offset_deg,
-                         HeadingEstimate{}.variance_deg2});
+                         HeadingEstimate{}.variance_deg2,
+                         MoonOptions{}.refraction ? 1.0 : 0.0,
+                         MoonOptions{}.atmosphere.pressure_hpa,
+                         MoonOptions{}.atmosphere.temperature_c,
+                         kDefaultHeadingDriftDeg2PerS});
   });
 }

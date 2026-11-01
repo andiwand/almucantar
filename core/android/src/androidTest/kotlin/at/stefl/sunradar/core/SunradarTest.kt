@@ -43,7 +43,9 @@ class SunradarTest {
                 Camera().pack() +
                 View().pack().copyOfRange(0, 6) +
                 MagnetometerOptions().pack() +
-                HeadingEstimate().pack()
+                HeadingEstimate().pack() +
+                MoonOptions().pack() +
+                doubleArrayOf(DEFAULT_HEADING_DRIFT_DEG2_PER_S)
         assertEquals(expected.toList(), SunradarNative.defaults().toList())
     }
 

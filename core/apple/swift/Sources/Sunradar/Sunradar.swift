@@ -39,8 +39,7 @@ public let sunriseAltitudeDeg = sr_sunrise_altitude_deg()
 
 public func sunPosition(_ unixUtc: Double, observer: Observer, options: SunOptions = SunOptions()) throws -> Horizontal {
     var out = sr_horizontal()
-    let c = sr_sun_options(model: options.model.rawValue, refraction: options.refraction, atmosphere: options.atmosphere.c)
-    try check(sr_sun_position(unixUtc, observer.c, c, &out))
+    try check(sr_sun_position(unixUtc, observer.c, options.c, &out))
     return Horizontal(out)
 }
 
@@ -48,12 +47,13 @@ public func sunEvents(
     observer: Observer, startUtc: Double, endUtc: Double, options: EventOptions = EventOptions()
 ) throws -> DayEvents {
     var out = sr_day_events()
-    let c = sr_event_options(
-        model: options.model.rawValue, altitude_deg: options.altitudeDeg, search_step_s: options.searchStepS,
-        tolerance_s: options.toleranceS)
-    try check(sr_sun_events(observer.c, startUtc, endUtc, c, &out))
+    try check(sr_sun_events(observer.c, startUtc, endUtc, options.c, &out))
+    guard let kind = DayKind(rawValue: out.kind) else {
+        sr_free(out.crossings)
+        throw SunradarError(kind: .other, message: "unknown day kind \(out.kind)")
+    }
     return DayEvents(
-        kind: DayKind(rawValue: out.kind) ?? .normal,
+        kind: kind,
         crossings: take(out.crossings, out.crossing_count) { Crossing(unixUtc: $0.unix_utc, rising: $0.rising) },
         culminationUtc: out.culmination_utc, culminationAltitudeDeg: out.culmination_altitude_deg)
 }
@@ -63,16 +63,13 @@ public func sunPath(
 ) throws -> [PathPoint] {
     var points: UnsafeMutablePointer<sr_path_point>?
     var count = 0
-    let c = sr_path_options(
-        model: options.model.rawValue, step_s: options.stepS, refraction: options.refraction,
-        atmosphere: options.atmosphere.c)
-    try check(sr_sun_path(observer.c, startUtc, endUtc, c, &points, &count))
+    try check(sr_sun_path(observer.c, startUtc, endUtc, options.c, &points, &count))
     return take(points, count) { PathPoint(unixUtc: $0.unix_utc, position: Horizontal($0.position)) }
 }
 
 public func moonPosition(_ unixUtc: Double, observer: Observer, options: MoonOptions = MoonOptions()) throws -> Horizontal {
     var out = sr_horizontal()
-    try check(sr_moon_position(unixUtc, observer.c, sr_moon_options(refraction: options.refraction, atmosphere: options.atmosphere.c), &out))
+    try check(sr_moon_position(unixUtc, observer.c, options.c, &out))
     return Horizontal(out)
 }
 
@@ -149,19 +146,24 @@ public func findAzimuthTimes(
     return take(crossings, count) { AzimuthCrossing(unixUtc: $0.unix_utc, sun: Horizontal($0.sun)) }
 }
 
-public func headingPredict(_ estimate: HeadingEstimate, dtS: Double, driftDeg2PerS: Double = 1.0 / 60.0) throws -> HeadingEstimate {
+/// The variance of a heading that is not known at all, in square degrees.
+public let unknownHeadingVarianceDeg2 = sr_unknown_heading_variance_deg2()
+
+/// The default growth of the variance in headingPredict(), in square degrees per second.
+public let defaultHeadingDriftDeg2PerS = sr_default_heading_drift_deg2_per_s()
+
+public func headingPredict(
+    _ estimate: HeadingEstimate, dtS: Double, driftDeg2PerS: Double = defaultHeadingDriftDeg2PerS
+) throws -> HeadingEstimate {
     var out = sr_heading_estimate()
-    try check(sr_heading_predict(sr_heading_estimate(offset_deg: estimate.offsetDeg, variance_deg2: estimate.varianceDeg2), dtS, driftDeg2PerS, &out))
-    return HeadingEstimate(offsetDeg: out.offset_deg, varianceDeg2: out.variance_deg2)
+    try check(sr_heading_predict(estimate.c, dtS, driftDeg2PerS, &out))
+    return HeadingEstimate(out)
 }
 
 public func headingUpdate(_ estimate: HeadingEstimate, _ measurement: HeadingMeasurement) throws -> HeadingEstimate {
     var out = sr_heading_estimate()
-    try check(
-        sr_heading_update(
-            sr_heading_estimate(offset_deg: estimate.offsetDeg, variance_deg2: estimate.varianceDeg2),
-            sr_heading_measurement(offset_deg: measurement.offsetDeg, variance_deg2: measurement.varianceDeg2), &out))
-    return HeadingEstimate(offsetDeg: out.offset_deg, varianceDeg2: out.variance_deg2)
+    try check(sr_heading_update(estimate.c, measurement.c, &out))
+    return HeadingEstimate(out)
 }
 
 public func headingFromMagnetometer(
@@ -173,7 +175,7 @@ public func headingFromMagnetometer(
         sr_heading_from_magnetometer(
             deviceToFrame.c, sr_vector3(x: fieldUt.x, y: fieldUt.y, z: fieldUt.z), observer.c, unixUtc,
             sr_magnetometer_options(sensor_sigma_deg: options.sensorSigmaDeg), &out))
-    return HeadingMeasurement(offsetDeg: out.offset_deg, varianceDeg2: out.variance_deg2)
+    return HeadingMeasurement(out)
 }
 
 public func headingFromDirection(_ view: View, point: ScreenPoint, trueAzimuthDeg: Double, sigmaDeg: Double) throws
@@ -181,5 +183,5 @@ public func headingFromDirection(_ view: View, point: ScreenPoint, trueAzimuthDe
 {
     var out = sr_heading_measurement()
     try check(sr_heading_from_direction(view.c, point.c, trueAzimuthDeg, sigmaDeg, &out))
-    return HeadingMeasurement(offsetDeg: out.offset_deg, varianceDeg2: out.variance_deg2)
+    return HeadingMeasurement(out)
 }

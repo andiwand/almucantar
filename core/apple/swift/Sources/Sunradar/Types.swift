@@ -1,7 +1,7 @@
 import SunradarC
 
 // The value types of the public C++ API (core/src/sunradar). The names are the C++ names in
-// camel case. The defaults come from the C API, so they cannot drift from C++.
+// camel case. Each default comes from the C API (sr_default_*), so it cannot drift from C++.
 
 /// A place on the Earth, in geodetic coordinates (WGS 84).
 public struct Observer: Equatable, Sendable {
@@ -26,21 +26,23 @@ public struct Horizontal: Equatable, Sendable {
 public struct Atmosphere: Equatable, Sendable {
     public var pressureHpa: Double
     public var temperatureC: Double
-    public init(pressureHpa: Double = 1010, temperatureC: Double = 10) {
+    public init(pressureHpa: Double = Atmosphere.c.pressure_hpa, temperatureC: Double = Atmosphere.c.temperature_c) {
         self.pressureHpa = pressureHpa
         self.temperatureC = temperatureC
     }
+    @usableFromInline static let c = sr_default_sun_options().atmosphere
 }
 
 /// A unit quaternion; for the view, the device frame to East-North-Up.
 public struct Quaternion: Equatable, Sendable {
     public var w, x, y, z: Double
-    public init(w: Double = 1, x: Double = 0, y: Double = 0, z: Double = 0) {
+    public init(w: Double = Quaternion.c.w, x: Double = Quaternion.c.x, y: Double = Quaternion.c.y, z: Double = Quaternion.c.z) {
         self.w = w
         self.x = x
         self.y = y
         self.z = z
     }
+    @usableFromInline static let c = sr_default_view().device_to_enu
 }
 
 public struct Vector3: Equatable, Sendable {
@@ -86,7 +88,7 @@ public struct SunOptions: Sendable {
     public var refraction: Bool
     public var atmosphere: Atmosphere
     public init(
-        model: SolarModel = .noaa, refraction: Bool = SunOptions.c.refraction,
+        model: SolarModel = SolarModel(rawValue: SunOptions.c.model)!, refraction: Bool = SunOptions.c.refraction,
         atmosphere: Atmosphere = Atmosphere(SunOptions.c.atmosphere)
     ) {
         self.model = model
@@ -102,7 +104,7 @@ public struct EventOptions: Sendable {
     public var searchStepS: Double
     public var toleranceS: Double
     public init(
-        model: SolarModel = .noaa, altitudeDeg: Double = EventOptions.c.altitude_deg,
+        model: SolarModel = SolarModel(rawValue: EventOptions.c.model)!, altitudeDeg: Double = EventOptions.c.altitude_deg,
         searchStepS: Double = EventOptions.c.search_step_s, toleranceS: Double = EventOptions.c.tolerance_s
     ) {
         self.model = model
@@ -119,7 +121,7 @@ public struct PathOptions: Sendable {
     public var refraction: Bool
     public var atmosphere: Atmosphere
     public init(
-        model: SolarModel = .noaa, stepS: Double = PathOptions.c.step_s, refraction: Bool = PathOptions.c.refraction,
+        model: SolarModel = SolarModel(rawValue: PathOptions.c.model)!, stepS: Double = PathOptions.c.step_s, refraction: Bool = PathOptions.c.refraction,
         atmosphere: Atmosphere = Atmosphere(PathOptions.c.atmosphere)
     ) {
         self.model = model
@@ -138,7 +140,7 @@ public struct SearchOptions: Sendable {
     public var atmosphere: Atmosphere
     public var maxSeparationDeg: Double
     public init(
-        model: SolarModel = .noaa, stepS: Double = SearchOptions.c.step_s,
+        model: SolarModel = SolarModel(rawValue: SearchOptions.c.model)!, stepS: Double = SearchOptions.c.step_s,
         toleranceS: Double = SearchOptions.c.tolerance_s, refraction: Bool = SearchOptions.c.refraction,
         atmosphere: Atmosphere = Atmosphere(SearchOptions.c.atmosphere),
         maxSeparationDeg: Double = SearchOptions.c.max_separation_deg
@@ -165,9 +167,10 @@ public struct MoonOptions: Sendable {
 
 public struct MagnetometerOptions: Sendable {
     public var sensorSigmaDeg: Double
-    public init(sensorSigmaDeg: Double = sr_default_magnetometer_options().sensor_sigma_deg) {
+    public init(sensorSigmaDeg: Double = MagnetometerOptions.c.sensor_sigma_deg) {
         self.sensorSigmaDeg = sensorSigmaDeg
     }
+    @usableFromInline static let c = sr_default_magnetometer_options()
 }
 
 /// A pinhole camera with Brown–Conrady distortion (OpenCV convention), in screen pixels.
@@ -175,8 +178,8 @@ public struct Camera: Equatable, Sendable {
     public var width, height, fx, fy, cx, cy, k1, k2, k3, p1, p2: Double
     public init(
         width: Double = Camera.c.width, height: Double = Camera.c.height, fx: Double = Camera.c.fx,
-        fy: Double = Camera.c.fy, cx: Double = Camera.c.cx, cy: Double = Camera.c.cy, k1: Double = 0, k2: Double = 0,
-        k3: Double = 0, p1: Double = 0, p2: Double = 0
+        fy: Double = Camera.c.fy, cx: Double = Camera.c.cx, cy: Double = Camera.c.cy, k1: Double = Camera.c.k1,
+        k2: Double = Camera.c.k2, k3: Double = Camera.c.k3, p1: Double = Camera.c.p1, p2: Double = Camera.c.p2
     ) {
         self.width = width
         self.height = height
@@ -199,14 +202,15 @@ public struct View: Sendable {
     public var headingOffsetDeg: Double
     public var camera: Camera
     public init(
-        deviceToEnu: Quaternion = Quaternion(), screenRotation: ScreenRotation = .rotation0,
-        headingOffsetDeg: Double = 0, camera: Camera = Camera()
+        deviceToEnu: Quaternion = Quaternion(), screenRotation: ScreenRotation = ScreenRotation(rawValue: View.c.screen_rotation)!,
+        headingOffsetDeg: Double = View.c.heading_offset_deg, camera: Camera = Camera()
     ) {
         self.deviceToEnu = deviceToEnu
         self.screenRotation = screenRotation
         self.headingOffsetDeg = headingOffsetDeg
         self.camera = camera
     }
+    @usableFromInline static let c = sr_default_view()
 }
 
 public struct Projection: Sendable {
@@ -246,12 +250,14 @@ public struct HeadingEstimate: Equatable, Sendable {
     public var offsetDeg: Double
     public var varianceDeg2: Double
     public init(
-        offsetDeg: Double = sr_default_heading_estimate().offset_deg,
-        varianceDeg2: Double = sr_default_heading_estimate().variance_deg2
+        offsetDeg: Double = HeadingEstimate.c.offset_deg, varianceDeg2: Double = HeadingEstimate.c.variance_deg2
     ) {
         self.offsetDeg = offsetDeg
         self.varianceDeg2 = varianceDeg2
     }
+    @usableFromInline static let c = sr_default_heading_estimate()
+    var c: sr_heading_estimate { sr_heading_estimate(offset_deg: offsetDeg, variance_deg2: varianceDeg2) }
+    init(_ c: sr_heading_estimate) { self.init(offsetDeg: c.offset_deg, varianceDeg2: c.variance_deg2) }
 }
 
 public struct HeadingMeasurement: Equatable, Sendable {
@@ -312,6 +318,32 @@ extension View {
             device_to_enu: deviceToEnu.c, screen_rotation: screenRotation.rawValue,
             heading_offset_deg: headingOffsetDeg, camera: camera.c)
     }
+}
+
+extension SunOptions {
+    var c: sr_sun_options { sr_sun_options(model: model.rawValue, refraction: refraction, atmosphere: atmosphere.c) }
+}
+
+extension EventOptions {
+    var c: sr_event_options {
+        sr_event_options(
+            model: model.rawValue, altitude_deg: altitudeDeg, search_step_s: searchStepS, tolerance_s: toleranceS)
+    }
+}
+
+extension PathOptions {
+    var c: sr_path_options {
+        sr_path_options(model: model.rawValue, step_s: stepS, refraction: refraction, atmosphere: atmosphere.c)
+    }
+}
+
+extension MoonOptions {
+    var c: sr_moon_options { sr_moon_options(refraction: refraction, atmosphere: atmosphere.c) }
+}
+
+extension HeadingMeasurement {
+    var c: sr_heading_measurement { sr_heading_measurement(offset_deg: offsetDeg, variance_deg2: varianceDeg2) }
+    init(_ c: sr_heading_measurement) { self.init(offsetDeg: c.offset_deg, varianceDeg2: c.variance_deg2) }
 }
 
 extension SearchOptions {

@@ -85,6 +85,8 @@ sr_heading_estimate sr_default_heading_estimate(void);
 sr_camera sr_default_camera(void);
 sr_view sr_default_view(void);
 double sr_sunrise_altitude_deg(void);
+double sr_unknown_heading_variance_deg2(void);
+double sr_default_heading_drift_deg2_per_s(void);
 
 const char* sr_version(void);
 const char* sr_last_error(void);

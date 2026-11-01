@@ -110,7 +110,7 @@ fun findDates(
 fun headingPredict(
     estimate: HeadingEstimate,
     dtS: Double,
-    driftDeg2PerS: Double = 1.0 / 60.0,
+    driftDeg2PerS: Double = DEFAULT_HEADING_DRIFT_DEG2_PER_S,
 ): HeadingEstimate =
     SunradarNative.headingPredict(estimate.pack(), dtS, driftDeg2PerS).toHeadingEstimate()
 

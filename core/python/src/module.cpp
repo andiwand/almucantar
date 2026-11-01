@@ -95,6 +95,7 @@ void bind_heading(py::module_& m) {
       .def_readwrite("z", &Vector3::z);
 
   m.attr("UNKNOWN_HEADING_VARIANCE_DEG2") = kUnknownHeadingVarianceDeg2;
+  m.attr("DEFAULT_HEADING_DRIFT_DEG2_PER_S") = kDefaultHeadingDriftDeg2PerS;
 
   py::class_<HeadingEstimate>(m, "HeadingEstimate")
       .def(py::init([](const double offset_deg, const double variance_deg2) {
@@ -128,7 +129,7 @@ void bind_heading(py::module_& m) {
       .def_readwrite("sensor_sigma_deg", &MagnetometerOptions::sensor_sigma_deg);
 
   m.def("heading_predict", &heading_predict, "estimate"_a, "dt_s"_a,
-        "drift_deg2_per_s"_a = 1.0 / 60.0,
+        "drift_deg2_per_s"_a = kDefaultHeadingDriftDeg2PerS,
         "Increases the variance for the time dt_s, because the yaw of the frame drifts.");
   m.def("heading_update", &heading_update, "estimate"_a, "measurement"_a,
         "Combines the estimate with a measurement (a Kalman update on the circle).");

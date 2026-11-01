@@ -23,7 +23,7 @@ int main(void) {
   CHECK(sr_sun_position(1782039420, vienna, sr_default_sun_options(), &sun) == SR_OK);
   CHECK(fabs(sun.azimuth_deg - 180) < 1 && fabs(sun.altitude_deg - 65.25) < 0.3);
 
-  sr_day_events events;
+  sr_day_events events = {0};
   CHECK(sr_sun_events(vienna, day_start, day_start + 86400, sr_default_event_options(), &events) == SR_OK);
   CHECK(events.kind == 0 && events.crossing_count == 2 && events.crossings[0].rising);
   sr_free(events.crossings);
@@ -38,7 +38,7 @@ int main(void) {
 
   sr_view view = sr_default_view();
   view.device_to_enu = (sr_quaternion){cos(M_PI / 4), sin(M_PI / 4), 0, 0}; /* upright, to the north */
-  sr_polylines horizon;
+  sr_polylines horizon = {0};
   CHECK(sr_horizon_line(view, &horizon) == SR_OK);
   CHECK(horizon.line_count == 1 && fabs(horizon.points[0].y - 500) < 1e-6);
   sr_free_polylines(&horizon);

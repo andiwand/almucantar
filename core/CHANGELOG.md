@@ -16,6 +16,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ### API
 
+- `kDefaultHeadingDriftDeg2PerS` is the default drift of `heading_predict()`. All bindings
+  expose it and take their defaults from C++.
 - The public API is `sunradar/sunradar.hpp`: `sun_position()`, `sun_events()`, and
   `sun_path()`, with the value types `Observer`, `Horizontal`, `Atmosphere`, and the
   option structs. `SolarModel` selects the model. The only model is `noaa`.

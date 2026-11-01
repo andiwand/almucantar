@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 
+import SunradarC
+
 @testable import Sunradar
 
 /// Tests of the Swift API. The C++ tests check the precision; these tests check the binding.
@@ -69,10 +71,41 @@ final class SunradarTests: XCTestCase {
     }
 
     func testDefaultsComeFromCpp() {
-        XCTAssertEqual(PathOptions().stepS, 300)
-        XCTAssertEqual(SearchOptions().maxSeparationDeg, 2)
-        XCTAssertEqual(Camera().fx, 866.0254037844386, accuracy: 1e-12)
-        XCTAssertEqual(HeadingEstimate().varianceDeg2, 180 * 180)
+        // The Swift defaults convert back to the C defaults, field by field.
+        XCTAssertEqual(SunOptions().c.model, sr_default_sun_options().model)
+        XCTAssertEqual(SunOptions().c.atmosphere.pressure_hpa, sr_default_sun_options().atmosphere.pressure_hpa)
+        XCTAssertEqual(EventOptions().c.search_step_s, sr_default_event_options().search_step_s)
+        XCTAssertEqual(PathOptions().c.step_s, sr_default_path_options().step_s)
+        XCTAssertEqual(SearchOptions().c.max_separation_deg, sr_default_search_options().max_separation_deg)
+        XCTAssertEqual(MoonOptions().c.refraction, sr_default_moon_options().refraction)
+        XCTAssertEqual(View().c.device_to_enu.w, sr_default_view().device_to_enu.w)
+        XCTAssertEqual(View().c.camera.fx, sr_default_view().camera.fx)
+        XCTAssertEqual(View().c.screen_rotation, sr_default_view().screen_rotation)
+        XCTAssertEqual(HeadingEstimate().varianceDeg2, unknownHeadingVarianceDeg2)
+        // Independent values, so a wrong wiring of the constants fails.
+        XCTAssertEqual(unknownHeadingVarianceDeg2, 180 * 180)
+        XCTAssertEqual(defaultHeadingDriftDeg2PerS, 1.0 / 60.0)
         XCTAssertEqual(sunriseAltitudeDeg, -0.8333)
+    }
+
+    func testDatesLinesCameraAndMagnetometer() throws {
+        let direction = try sunPosition(dayStart - 50 * day + 10 * 3600, observer: vienna)
+        let dates = try findDates(observer: vienna, direction: direction, startUtc: dayStart - 100 * day, endUtc: dayStart + 100 * day)
+        XCTAssertEqual(dates.count, 2)
+        let moon = try moonPosition(dayStart, observer: vienna)
+        XCTAssertTrue((0..<360).contains(moon.azimuthDeg))
+        let camera = try cameraFromFov(width: 1000, height: 2000, horizontalFovDeg: 90)
+        XCTAssertEqual(camera.fx, 500, accuracy: 1e-9)
+        let lines = try projectLine(
+            View(deviceToEnu: northUpright, camera: camera),
+            [Horizontal(azimuthDeg: -10, altitudeDeg: 0), Horizontal(azimuthDeg: 10, altitudeDeg: 0)])
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertEqual(lines[0][0].y, 1000, accuracy: 1e-6)
+        XCTAssertEqual(try headingPredict(HeadingEstimate(offsetDeg: 0, varianceDeg2: 1), dtS: 60).varianceDeg2, 2, accuracy: 1e-12)
+        // A field to magnetic north in a frame with y to true north: the offset is the declination.
+        let m = try headingFromMagnetometer(
+            deviceToFrame: Quaternion(), fieldUt: Vector3(x: 0, y: 20, z: -44), observer: vienna, unixUtc: dayStart)
+        let declination = try magneticDeclinationDeg(observer: vienna, unixUtc: dayStart)
+        XCTAssertEqual(m.offsetDeg, (declination + 360).truncatingRemainder(dividingBy: 360), accuracy: 1e-6)
     }
 }

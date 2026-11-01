@@ -122,8 +122,15 @@ void fill(const std::vector<Polyline>& lines, sr_polylines* out) {
       points.push_back({p.x, p.y});
     }
   }
-  out->points = copy_out(points);
-  out->counts = copy_out(counts);
+  // Both arrays or none: the caller does not free the result of a failed call.
+  sr_screen_point* const p = copy_out(points);
+  try {
+    out->counts = copy_out(counts);
+  } catch (...) {
+    std::free(p);
+    throw;
+  }
+  out->points = p;
   out->line_count = counts.size();
 }
 
@@ -168,6 +175,8 @@ sr_view sr_default_view(void) {
           to_c(d.camera)};
 }
 double sr_sunrise_altitude_deg(void) { return kSunriseAltitudeDeg; }
+double sr_unknown_heading_variance_deg2(void) { return kUnknownHeadingVarianceDeg2; }
+double sr_default_heading_drift_deg2_per_s(void) { return kDefaultHeadingDriftDeg2PerS; }
 
 const char* sr_version(void) {
   static const std::string kVersion(version());

@@ -32,6 +32,8 @@ auto guarded(F&& f) -> decltype(f()) {
     val::global("RangeError").new_(std::string(e.what())).throw_();
   } catch (const std::exception& e) {
     val::global("Error").new_(std::string(e.what())).throw_();
+  } catch (...) {
+    val::global("Error").new_(std::string("unknown error")).throw_();
   }
   return decltype(f())();
 }
@@ -44,11 +46,13 @@ Enum to_enum(const int value, const char* name) {
   return static_cast<Enum>(static_cast<std::uint8_t>(value));
 }
 
-// Mirror structs with integer fields instead of enums.
+int to_int(const SolarModel model) { return static_cast<int>(model); }
+
+// Mirror structs with integer fields instead of enums. Each default comes from the C++ struct.
 struct SunOptionsJs {
-  int model = 0;
-  bool refraction = true;
-  Atmosphere atmosphere;
+  int model = to_int(SunOptions{}.model);
+  bool refraction = SunOptions{}.refraction;
+  Atmosphere atmosphere = SunOptions{}.atmosphere;
   [[nodiscard]] SunOptions get() const {
     return {.model = to_enum<SolarModel>(model, "model"),
             .refraction = refraction,
@@ -57,10 +61,10 @@ struct SunOptionsJs {
 };
 
 struct EventOptionsJs {
-  int model = 0;
-  double altitudeDeg = kSunriseAltitudeDeg;
-  double searchStepS = 600;
-  double toleranceS = 0.5;
+  int model = to_int(EventOptions{}.model);
+  double altitudeDeg = EventOptions{}.altitude_deg;
+  double searchStepS = EventOptions{}.search_step_s;
+  double toleranceS = EventOptions{}.tolerance_s;
   [[nodiscard]] EventOptions get() const {
     return {.model = to_enum<SolarModel>(model, "model"),
             .altitude_deg = altitudeDeg,
@@ -70,10 +74,10 @@ struct EventOptionsJs {
 };
 
 struct PathOptionsJs {
-  int model = 0;
-  double stepS = 300;
-  bool refraction = true;
-  Atmosphere atmosphere;
+  int model = to_int(PathOptions{}.model);
+  double stepS = PathOptions{}.step_s;
+  bool refraction = PathOptions{}.refraction;
+  Atmosphere atmosphere = PathOptions{}.atmosphere;
   [[nodiscard]] PathOptions get() const {
     return {.model = to_enum<SolarModel>(model, "model"),
             .step_s = stepS,
@@ -83,12 +87,12 @@ struct PathOptionsJs {
 };
 
 struct SearchOptionsJs {
-  int model = 0;
-  double stepS = 300;
-  double toleranceS = 0.5;
-  bool refraction = true;
-  Atmosphere atmosphere;
-  double maxSeparationDeg = 2;
+  int model = to_int(SearchOptions{}.model);
+  double stepS = SearchOptions{}.step_s;
+  double toleranceS = SearchOptions{}.tolerance_s;
+  bool refraction = SearchOptions{}.refraction;
+  Atmosphere atmosphere = SearchOptions{}.atmosphere;
+  double maxSeparationDeg = SearchOptions{}.max_separation_deg;
   [[nodiscard]] SearchOptions get() const {
     return {.model = to_enum<SolarModel>(model, "model"),
             .step_s = stepS,
@@ -100,10 +104,10 @@ struct SearchOptionsJs {
 };
 
 struct ViewJs {
-  Quaternion deviceToEnu;
-  int screenRotation = 0;
-  double headingOffsetDeg = 0;
-  Camera camera;
+  Quaternion deviceToEnu = View{}.device_to_enu;
+  int screenRotation = static_cast<int>(View{}.screen_rotation);
+  double headingOffsetDeg = View{}.heading_offset_deg;
+  Camera camera = View{}.camera;
   [[nodiscard]] View get() const {
     return {.device_to_enu = deviceToEnu,
             .screen_rotation = to_enum<ScreenRotation>(screenRotation, "screenRotation"),
@@ -273,7 +277,7 @@ HeadingMeasurement heading_from_direction_js(const ViewJs& v, const ScreenPoint&
   return guarded([&] { return heading_from_direction(v.get(), p, az, sigma); });
 }
 
-/// The C++ defaults of the option structs and of Camera, for index.js.
+/// The C++ defaults of the option structs, the view, and the heading filter, for index.js.
 val defaults_js() {
   val d = val::object();
   d.set("sunOptions", SunOptionsJs{});
@@ -286,6 +290,7 @@ val defaults_js() {
   d.set("camera", Camera{});
   d.set("view", ViewJs{});
   d.set("sunriseAltitudeDeg", kSunriseAltitudeDeg);
+  d.set("headingDriftDeg2PerS", kDefaultHeadingDriftDeg2PerS);
   return d;
 }
 

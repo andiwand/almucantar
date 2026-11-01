@@ -90,3 +90,33 @@ test("invalid arguments throw RangeError", () => {
   assert.throws(() => sunradar.sunEvents(vienna, 10, 10), RangeError);
   assert.throws(() => sunradar.sunPosition(0, vienna, { model: 7 }), RangeError);
 });
+
+test("the defaults are frozen and come from C++", () => {
+  const d = sunradar.defaults;
+  assert.ok(Object.isFrozen(d) && Object.isFrozen(d.sunOptions.atmosphere));
+  assert.throws(() => {
+    "use strict";
+    d.sunOptions.refraction = false;
+  }, TypeError);
+  near(d.headingDriftDeg2PerS, 1 / 60, 1e-15);
+  near(sunradar.headingPredict({ offsetDeg: 0, varianceDeg2: 1 }, 60).varianceDeg2, 2, 1e-12);
+});
+
+test("dates, moon, camera, lines, and magnetometer", () => {
+  const direction = sunradar.sunPosition(dayStart - 50 * day + 10 * 3600, vienna);
+  const dates = sunradar.findDates(vienna, direction, dayStart - 100 * day, dayStart + 100 * day);
+  assert.equal(dates.length, 2);
+  const moon = sunradar.moonPosition(dayStart, vienna);
+  assert.ok(moon.azimuthDeg >= 0 && moon.azimuthDeg < 360);
+  const camera = sunradar.cameraFromFov(1000, 2000, 90);
+  near(camera.fx, 500, 1e-9);
+  const lines = sunradar.projectLine({ deviceToEnu: northUpright, camera }, [
+    { azimuthDeg: -10, altitudeDeg: 0 },
+    { azimuthDeg: 10, altitudeDeg: 0 },
+  ]);
+  assert.equal(lines.length, 1);
+  near(lines[0][0].y, 1000, 1e-6);
+  // A field to magnetic north, in a frame with y to true north: the offset is the declination.
+  const m = sunradar.headingFromMagnetometer({ w: 1, x: 0, y: 0, z: 0 }, { x: 0, y: 20, z: -44 }, vienna, dayStart);
+  near(m.offsetDeg, (sunradar.magneticDeclinationDeg(vienna, dayStart) + 360) % 360, 1e-6);
+});

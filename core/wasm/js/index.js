@@ -16,6 +16,11 @@ export const ScreenRotation = Object.freeze({ rotation0: 0, rotation90: 1, rotat
 /** The variance of a heading that is not known at all, in square degrees. */
 export const UNKNOWN_HEADING_VARIANCE_DEG2 = 180 * 180;
 
+function deepFreeze(o) {
+  for (const v of Object.values(o)) if (typeof v === "object" && v !== null) deepFreeze(v);
+  return Object.freeze(o);
+}
+
 function merge(defaults, value) {
   const result = { ...defaults, ...(value ?? {}) };
   if (defaults.atmosphere) result.atmosphere = { ...defaults.atmosphere, ...(value?.atmosphere ?? {}) };
@@ -30,7 +35,7 @@ function merge(defaults, value) {
  */
 export async function load(moduleOptions = {}) {
   const m = await createSunradarModule(moduleOptions);
-  const d = m.defaults();
+  const d = deepFreeze(m.defaults());
   const view = (v) => merge(d.view, v);
   return Object.freeze({
     version: () => m.version(),
@@ -56,7 +61,7 @@ export async function load(moduleOptions = {}) {
       m.findDates(observer, direction, startUtc, endUtc, merge(d.searchOptions, options)),
     findAzimuthTimes: (observer, azimuthDeg, startUtc, endUtc, options) =>
       m.findAzimuthTimes(observer, azimuthDeg, startUtc, endUtc, merge(d.searchOptions, options)),
-    headingPredict: (estimate, dtS, driftDeg2PerS = 1 / 60) => m.headingPredict(estimate, dtS, driftDeg2PerS),
+    headingPredict: (estimate, dtS, driftDeg2PerS = d.headingDriftDeg2PerS) => m.headingPredict(estimate, dtS, driftDeg2PerS),
     headingUpdate: (estimate, measurement) => m.headingUpdate(estimate, measurement),
     headingFromMagnetometer: (deviceToFrame, fieldUt, observer, unixUtc, options) =>
       m.headingFromMagnetometer(deviceToFrame, fieldUt, observer, unixUtc, merge(d.magnetometerOptions, options)),

@@ -152,6 +152,9 @@ data class Vector3(val x: Double = 0.0, val y: Double = 0.0, val z: Double = 0.0
 /** The variance of a heading that is not known at all, in square degrees. */
 const val UNKNOWN_HEADING_VARIANCE_DEG2: Double = 180.0 * 180.0
 
+/** The default growth of the variance in [headingPredict], in square degrees per second. */
+const val DEFAULT_HEADING_DRIFT_DEG2_PER_S: Double = 1.0 / 60.0
+
 /**
  * The estimate of a heading filter: true azimuth = frame azimuth + [offsetDeg]. Use [offsetDeg] as
  * [View.headingOffsetDeg].

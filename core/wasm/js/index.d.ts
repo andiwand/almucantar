@@ -46,6 +46,20 @@ type Partial2<T> = { [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K]
 export interface Sunradar {
   version(): string;
   readonly sunriseAltitudeDeg: number;
+  /** The C++ defaults (frozen). */
+  readonly defaults: {
+    readonly sunOptions: Readonly<SunOptions>;
+    readonly eventOptions: Readonly<EventOptions>;
+    readonly pathOptions: Readonly<PathOptions>;
+    readonly searchOptions: Readonly<SearchOptions>;
+    readonly moonOptions: Readonly<MoonOptions>;
+    readonly magnetometerOptions: Readonly<MagnetometerOptions>;
+    readonly headingEstimate: Readonly<HeadingEstimate>;
+    readonly camera: Readonly<Camera>;
+    readonly view: Readonly<View>;
+    readonly sunriseAltitudeDeg: number;
+    readonly headingDriftDeg2PerS: number;
+  };
   sunPosition(unixUtc: number, observer: Observer, options?: Partial2<SunOptions>): Horizontal;
   sunEvents(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<EventOptions>): DayEvents;
   sunPath(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<PathOptions>): PathPoint[];
