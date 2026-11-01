@@ -1,0 +1,59 @@
+# The Python package `sunradar`. Conan resolves the C++ dependencies. Run
+# `conan install` first and give CMake the toolchain file; see python/README.md.
+
+[build-system]
+requires = ["scikit-build-core>=0.10", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "sunradar"
+# From the git tag of the core (core-v1.2.0 gives 1.2.0).
+dynamic = ["version"]
+description = "Sun position, sun path, and sunrise and sunset times"
+readme = "python/README.md"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Andreas Stefl", email = "stefl.andreas@gmail.com" }]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.urls]
+source = "https://github.com/andiwand/sunradar"
+tracker = "https://github.com/andiwand/sunradar/issues"
+
+[tool.scikit-build]
+cmake.version = ">=3.24"
+# CMake installs everything that goes into the wheel (component `python`).
+wheel.packages = []
+install.components = ["python"]
+sdist.exclude = ["build", "test/data"]
+
+[tool.scikit-build.cmake.define]
+SUNRADAR_PYTHON = "ON"
+SUNRADAR_TESTS = "OFF"
+BUILD_SHARED_LIBS = "OFF"
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.setuptools_scm"
+
+[tool.setuptools_scm]
+# The repository root is one level up, and the core has its own tags.
+root = ".."
+tag_regex = "^core-v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+.*)$"
+git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "core-v*"]
+fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+
+[tool.black]
+target-version = ["py310"]

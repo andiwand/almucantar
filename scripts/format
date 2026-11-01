@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Formats the C++ code with clang-format and the Python code with black.
+#
+#   scripts/format          format the files in place
+#   scripts/format --check  fail if a file is not formatted (CI uses this)
+#
+# The tool versions are pinned in scripts/requirements-dev.txt, because a
+# different version of clang-format can format the same code differently.
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+check=false
+if [[ "${1:-}" == "--check" ]]; then
+  check=true
+fi
+
+clang_format="${CLANG_FORMAT:-clang-format}"
+black="${BLACK:-black}"
+if [[ -x .venv/bin/clang-format && -z "${CLANG_FORMAT:-}" ]]; then clang_format=.venv/bin/clang-format; fi
+if [[ -x .venv/bin/black && -z "${BLACK:-}" ]]; then black=.venv/bin/black; fi
+
+cpp_files() { git ls-files -z --cached --others --exclude-standard -- '*.cpp' '*.hpp'; }
+python_files() { git ls-files -z --cached --others --exclude-standard -- '*.py'; }
+
+if $check; then
+  cpp_files | xargs -0 "$clang_format" --dry-run --Werror
+  python_files | xargs -0 "$black" --check --quiet
+else
+  cpp_files | xargs -0 "$clang_format" -i
+  python_files | xargs -0 "$black" --quiet
+fi

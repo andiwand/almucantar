@@ -1,0 +1,94 @@
+name: python
+
+on:
+  push:
+    branches: [main]
+    paths: ["core/**", ".github/workflows/python.yml"]
+  pull_request:
+    paths: ["core/**", ".github/workflows/python.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONAN_VERSION: "2.26.1"
+
+defaults:
+  run:
+    working-directory: core
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, python: "3.10" }
+          - { os: ubuntu-24.04, python: "3.14" }
+          - { os: macos-15, python: "3.14" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install tools
+        run: |
+          pip install "conan==${CONAN_VERSION}" pytest
+          conan profile detect --force
+
+      - name: Install dependencies
+        run: conan install . --build=missing -s build_type=Release -s compiler.cppstd=20 -o "&:with_python=True"
+
+      - name: Configure
+        run: cmake --preset conan-release -DSUNRADAR_WARNINGS_AS_ERRORS=ON -DPython_EXECUTABLE="$(which python)"
+
+      - name: Build
+        run: cmake --build --preset conan-release
+
+      - name: Test
+        run: ctest --preset conan-release -R python --output-on-failure
+
+  wheel:
+    name: wheel (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # setuptools-scm needs the tags and the history for the version.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+
+      - name: Install dependencies
+        run: >
+          conan install . --build=missing -s build_type=Release -s compiler.cppstd=20
+          -o "&:with_python=True" -o "&:with_tests=False"
+
+      - name: Build the wheel
+        run: |
+          CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=${PWD}/build/Release/generators/conan_toolchain.cmake" \
+            pip wheel . --wheel-dir "${RUNNER_TEMP}/dist"
+
+      - name: Test the installed wheel
+        run: |
+          python -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install "${RUNNER_TEMP}"/dist/*.whl pytest
+          # Run from outside the source tree, so the test imports the installed package.
+          cd "${RUNNER_TEMP}" && "${RUNNER_TEMP}/venv/bin/python" -m pytest "${GITHUB_WORKSPACE}/core/python/tests"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: ${{ runner.temp }}/dist/*.whl

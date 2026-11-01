@@ -1,18 +1,34 @@
+from pathlib import Path
+
 from conan import ConanFile
-from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.files import copy
 
 
 class SunradarConan(ConanFile):
     name = "sunradar"
     version = "0.1.0"
+    url = "https://github.com/andiwand/sunradar"
+    description = "Sun position, sun path and projection for a camera overlay"
+    license = "MPL-2.0"
+
     settings = "os", "arch", "compiler", "build_type"
-    options = {"with_tests": [True, False]}
-    default_options = {"with_tests": True}
-    generators = "CMakeDeps"
+    options = {
+        "shared": [True, False],
+        "with_tests": [True, False],
+        "with_python": [True, False],
+    }
+    default_options = {
+        "shared": False,
+        "with_tests": True,
+        "with_python": False,
+    }
+
+    exports_sources = ["LICENSE", "cmake/*", "python/*", "src/*", "CMakeLists.txt"]
 
     def requirements(self):
-        # The core has no runtime dependencies yet. Eigen comes in M2.
-        pass
+        if self.options.with_python:
+            self.requires("pybind11/3.0.1")
 
     def build_requirements(self):
         if self.options.with_tests:
@@ -23,12 +39,28 @@ class SunradarConan(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.cache_variables["SUNRADAR_BUILD_TESTS"] = bool(self.options.with_tests)
+        tc.cache_variables["SUNRADAR_TESTS"] = bool(self.options.with_tests)
+        tc.cache_variables["SUNRADAR_PYTHON"] = bool(self.options.with_python)
         tc.generate()
+        CMakeDeps(self).generate()
 
     def build(self):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
-        if self.options.with_tests and not self.conf.get("tools.build:skip_test", default=False):
+        if self.options.with_tests and not self.conf.get(
+            "tools.build:skip_test", default=False
+        ):
             cmake.test()
+
+    def package(self):
+        copy(
+            self,
+            "LICENSE",
+            self.source_folder,
+            str(Path(self.package_folder) / "licenses"),
+        )
+        CMake(self).install(component="core")
+
+    def package_info(self):
+        self.cpp_info.libs = ["sunradar"]

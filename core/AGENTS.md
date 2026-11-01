@@ -1,0 +1,94 @@
+# AGENTS.md — the core
+
+The C++20 library that calculates the sun and the projection, with its bindings.
+The design is in [`../PLAN.md`](../PLAN.md) section 5.
+
+## Directory map
+
+| Path | What |
+|---|---|
+| `src/sunradar/*.hpp`, `*.cpp` | The public API. `sunradar.hpp` includes all public headers. Only these headers are installed. |
+| `src/sunradar/internal/` | Everything else: the solar models (`SolarModelImpl`, `NoaaModel`), refraction, events, paths, time, math. |
+| `test/src/` | Catch2 tests of the public API. |
+| `test/src/internal/` | Catch2 tests of internal code, where the internals are the subject (the model, the refraction). |
+| `test/data/` | Reference data from JPL Horizons. `test/tools/fetch_horizons.py` makes it. |
+| `python/` | The Python binding. See [`python/AGENTS.md`](python/AGENTS.md). |
+| `cmake/` | Compiler options and the check of the public headers. |
+| `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`. |
+| `pyproject.toml` | The Python package build (scikit-build-core). |
+
+## Build and test
+
+Run these commands in `core/`.
+
+1. Install the dependencies. Add `-o "&:with_python=True"` for the Python binding:
+
+   ```sh
+   conan install . --build=missing -s build_type=Debug
+   ```
+
+2. Configure. Add `-DSUNRADAR_SANITIZE=ON` for ASan and UBSan:
+
+   ```sh
+   cmake --preset conan-debug -DSUNRADAR_WARNINGS_AS_ERRORS=ON
+   ```
+
+3. Build:
+
+   ```sh
+   cmake --build --preset conan-debug
+   ```
+
+4. Run the tests. With the Python binding, CTest also runs pytest:
+
+   ```sh
+   ctest --preset conan-debug --output-on-failure
+   ```
+
+5. Run clang-tidy on a file. CI runs it on `src/` and `python/src/`:
+
+   ```sh
+   ../.venv/bin/clang-tidy -p build/Debug src/sunradar/sun.cpp
+   ```
+
+CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_WARNINGS_AS_ERRORS`,
+`SUNRADAR_SANITIZE`. Add a new `.cpp` to `SUNRADAR_SOURCE_FILES`.
+
+## The public API
+
+- The public API is small: value types (plain structs) and free functions. It has no
+  class hierarchies, no templates, no callbacks, no handles, and no state. So a
+  binding only converts structs and arrays.
+- A public header never includes an internal header. The test
+  `public_headers_do_not_include_internal_headers` checks this. Each public header
+  must also compile alone with only the public headers on the include path. The
+  target `sunradar_public_header_check` checks this.
+- A function becomes public only if an app needs it. Then add it to every binding,
+  with a test in each binding, and add an entry to `CHANGELOG.md`.
+- A public function validates its arguments and throws `std::invalid_argument` with a
+  message that names the argument. The internal functions do not validate. The
+  public function does it for them.
+- Use plain types at the boundary: `bool` and a struct, not `std::optional<Struct>`,
+  because not every binding converts `std::optional` easily.
+- A new `SolarModel` enumerator needs a `SolarModelImpl` and a case in
+  `internal::solar_model()`. Add the enumerator only when the model exists.
+
+## Precision
+
+The tests compare the results with JPL Horizons. Each tolerance is the measured
+maximum error plus a margin, and a comment gives the measured value. If you change a
+model, measure again and update the comment. Do not increase a tolerance to make a
+test pass without a reason in the comment.
+
+## Conventions
+
+- C++20 everywhere for now. The public headers must stay C++20.
+- `std::array`, not C arrays. `const` for locals, parameters, and members that do not
+  change. `std::ranges` where it is clearer.
+- Define a free function from a header with its qualified namespace, in the
+  reopened namespace. Keep file-local helpers in an anonymous namespace.
+- Doc comments: `///` for functions, classes, structs, and enums. `///<` after a
+  member or an enumerator. One or two lines: what it does, its preconditions, and its
+  units. Units go into the names: `_deg`, `_s`, `_utc`, `_hpa`, `_c`.
+- All times are Unix time in seconds (UTC), as `double`. The platform converts time
+  zones.

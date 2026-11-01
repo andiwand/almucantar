@@ -11,9 +11,25 @@ This repository is a monorepo. Each directory is a self-contained project.
 | Path | Content | Status |
 |---|---|---|
 | `core/` | the C++20 core: solar models, projection, search | in progress |
+| `core/python/` | the Python package `sunradar` | in progress |
 | `android/` | the Android app (Kotlin, Jetpack Compose) | planned (M4) |
 | `pwa/` | the PWA (TypeScript, the core as WebAssembly) | planned (M8) |
 | `ios/` | the iOS app | maybe later |
+
+Agents: read [`AGENTS.md`](AGENTS.md) first.
+
+## License
+
+[MPL-2.0](LICENSE).
+
+## Development setup
+
+Make a venv with the pinned tools (black, clang-format, clang-tidy, pytest). Run
+`scripts/format` before each commit.
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-dev.txt
+```
 
 ## Core
 
@@ -52,7 +68,9 @@ Run these commands in `core/`.
    ctest --preset conan-debug --output-on-failure
    ```
 
-To use the sanitizers, add `-DSUNRADAR_SANITIZE=ON` to step 2.
+To use the sanitizers, add `-DSUNRADAR_SANITIZE=ON` to step 2. For the Python binding,
+add `-o "&:with_python=True"` to step 1. Then step 4 also runs pytest. See
+[`core/python/README.md`](core/python/README.md).
 
 ### Build for Android
 

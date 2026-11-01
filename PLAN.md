@@ -463,7 +463,7 @@ contain the same core.
 |---|---|---|
 | M0 | Repository, CMake, Conan profiles, Catch2, CI | done |
 | M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | done: ≤ 0.015° against JPL Horizons |
-| M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | the Python tests call the M1 API, and no binding or test includes an internal header except the internal tests |
+| M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | done |
 | M3 | WMM2025, orientation, camera model, projection, horizon | tests agree with GeographicLib; projection round-trip ≤ 1 px |
 | M4 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | the instrumented tests pass on an emulator; the path moves correctly when you turn the phone |

@@ -1,0 +1,31 @@
+# clang-tidy configuration of the core. CI runs it on src/ and python/src/.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  cert-err58-cpp,
+  clang-analyzer-*,
+  cppcoreguidelines-init-variables,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-special-member-functions,
+  misc-const-correctness,
+  misc-definitions-in-headers,
+  misc-unused-parameters,
+  misc-use-anonymous-namespace,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  performance-*,
+  readability-braces-around-statements,
+  readability-const-return-type,
+  readability-container-size-empty,
+  readability-else-after-return,
+  readability-inconsistent-declaration-parameter-name,
+  readability-make-member-function-const,
+  readability-redundant-*,
+  readability-simplify-boolean-expr
+WarningsAsErrors: "*"
+HeaderFilterRegex: "sunradar/(src|python)/"
+CheckOptions:
+  misc-const-correctness.AnalyzeValues: true
+  misc-const-correctness.WarnPointersAsValues: false
