@@ -80,3 +80,16 @@ class SkyDay(val observer: Observer, val startUtc: Double, val endUtc: Double, z
             TIME.format(Instant.ofEpochSecond(Math.round(unixUtc)).atZone(zone))
     }
 }
+
+/** The parts above the horizon of the paths of the two solstices of [year], as guide lines. */
+fun solsticeGuides(observer: Observer, year: Int, zone: ZoneId): List<DirectionLine> =
+    listOf(6, 12).flatMap { month ->
+        val date = java.time.LocalDate.of(year, month, 21)
+        SkyDay(
+                observer,
+                date.atStartOfDay(zone).toEpochSecond().toDouble(),
+                date.plusDays(1).atStartOfDay(zone).toEpochSecond().toDouble(),
+                zone,
+            )
+            .daySegments
+    }

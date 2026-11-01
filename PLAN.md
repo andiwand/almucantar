@@ -227,7 +227,8 @@ the core later (about 150 lines).
 
 The heading indoors is the main error (section 2). The core supports these methods:
 
-1. **Sun or moon tap.** The user taps the real sun or moon on the camera image. The core
+1. **Sun or moon tap.** The user taps the real sun or moon on the camera image. Later (M8b)
+   the app detects the sun itself, highlights it with a box, and the user only confirms. The core
    calculates the direction of the body, compares it with the tapped ray, and stores the
    heading offset. This method is exact to about 0.5°.
 2. **Map heading.** The user marks the direction of a window or a façade on a map. The
@@ -514,8 +515,9 @@ contain the same core.
 | M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. Not yet checked on a real phone. |
 | M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. Open: the outdoor check of 2° on a real phone. |
-| M7 | Heading filter (core) with game rotation vector, magnetometer, and sun tap; UI rework | implemented: the filter and its measurements are tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone, the moon tap (needs Astronomy Engine), and the map bearing (needs a map UI). |
-| M8 | Date slider, auto mode UI, polish | usable in a real flat visit |
+| M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone. |
+| M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
+| M8b | Sun detection in the camera image: find the brightest saturated blob near the predicted position of the sun, draw a box around it, and wait for the user to confirm it with a tap. Then the alignment needs no exact tap, and the app can propose it. | planned (proposal of the user after the first trials) |
 | M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |
 | later | `core/apple` Swift package, iOS app | if we decide to do iOS |

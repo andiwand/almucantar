@@ -36,6 +36,8 @@ object SkyColors {
     val glow = Color(0x40FFC83D)
     val sun = Color(0xFFFFE08A)
     val nearest = Color(0xFF7FD8FF)
+    val guide = Color(0x59FFFFFF)
+    val moon = Color(0xFFE0E6F0)
 }
 
 /** A text paint with a dark shadow, so the text is readable on a camera image. */

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,41 +49,64 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import at.stefl.sunradar.core.AzimuthCrossing
+import at.stefl.sunradar.core.DirectionLine
 import at.stefl.sunradar.core.Horizontal
+import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.ScreenPoint
 import at.stefl.sunradar.core.ScreenRotation
 import at.stefl.sunradar.core.TimeMatch
 import at.stefl.sunradar.core.View
 import at.stefl.sunradar.core.cameraFromFov
-import at.stefl.sunradar.core.findTime
+import at.stefl.sunradar.core.findAzimuthTimes
+import at.stefl.sunradar.core.findDates
 import at.stefl.sunradar.core.headingFromDirection
 import at.stefl.sunradar.core.horizonLine
+import at.stefl.sunradar.core.moonIlluminatedFraction
+import at.stefl.sunradar.core.moonPosition
 import at.stefl.sunradar.core.projectLine
 import at.stefl.sunradar.core.sunPosition
 import at.stefl.sunradar.core.unproject
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.atan
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /** The horizontal field of view of the virtual camera, in portrait and in landscape. */
 private const val FOV_PORTRAIT_DEG = 60.0
 private const val FOV_LANDSCAPE_DEG = 90.0
 
-/** Within this angle of the path, the crosshair counts as "on the path". */
-private const val ON_PATH_DEG = 1.5
+/** Above this altitude of the crosshair, the azimuth is badly defined (the phone is flat). */
+private const val MAX_CROSSHAIR_ALTITUDE_DEG = 75.0
 
-/** The angular error of a tap on the sun (the sun has a diameter of 0.5°). */
-private const val SUN_TAP_SIGMA_DEG = 0.5
+/** The angular error of a tap on the sun or the moon (both have a diameter of 0.5°). */
+private const val BODY_TAP_SIGMA_DEG = 0.5
 
-/** A tap more than this far from the altitude of the sun is not the sun. */
-private const val SUN_TAP_MAX_ALTITUDE_ERROR_DEG = 5.0
+/** A tap more than this far from the altitude of the body is not the body. */
+private const val BODY_TAP_MAX_ALTITUDE_ERROR_DEG = 5.0
+
+/** The moon must be at least this bright to be found in the camera image. */
+private const val MIN_MOON_FRACTION = 0.1
+
+/** The things that the user can align the heading with. */
+enum class AlignTarget {
+    SUN,
+    MOON,
+    LANDMARK,
+}
 
 /**
- * The sky view: the horizon with the cardinal points, the path of the sun today with the hours, the
- * sun now, and the point of the path nearest to the crosshair with its time. With the camera, the
- * same overlay lies on the camera image, and the user can align the heading with the sun.
+ * The sky view: the horizon with the cardinal points, the path of the sun on the selected day with
+ * the hours, the sun and the moon at the selected time, and a vertical line through the crosshair
+ * with the time when the sun is in that direction. With the camera, the same overlay lies on the
+ * camera image, and the user can align the heading with the sun, the moon, or a landmark.
  */
 @Composable
 fun SkyScreen(locationGranted: Boolean) {
@@ -96,7 +122,22 @@ fun SkyScreen(locationGranted: Boolean) {
             now = System.currentTimeMillis() / 1000.0
         }
     }
-    val date = Instant.ofEpochSecond(now.toLong()).atZone(zone).toLocalDate()
+
+    // The selected date and time. minuteOfDay null means the live time.
+    var dayOffset by remember { mutableIntStateOf(0) }
+    var minuteOfDay by remember { mutableStateOf<Int?>(null) }
+    var showTime by remember { mutableStateOf(false) }
+    val nowLocal = Instant.ofEpochSecond(now.toLong()).atZone(zone)
+    val today = nowLocal.toLocalDate()
+    val date = today.plusDays(dayOffset.toLong())
+    val liveMinute = nowLocal.hour * 60 + nowLocal.minute
+    val time =
+        if (minuteOfDay == null && dayOffset == 0) {
+            now
+        } else {
+            date.atStartOfDay(zone).toEpochSecond() + 60.0 * (minuteOfDay ?: liveMinute)
+        }
+
     val day =
         remember(place.observer, date) {
             SkyDay(
@@ -106,6 +147,8 @@ fun SkyScreen(locationGranted: Boolean) {
                 zone,
             )
         }
+    val guides =
+        remember(place.observer, date.year) { solsticeGuides(place.observer, date.year, zone) }
 
     // The activity handles rotations itself, so reading the configuration recomposes after one.
     LocalConfiguration.current
@@ -114,14 +157,17 @@ fun SkyScreen(locationGranted: Boolean) {
     val context = LocalContext.current
     var cameraOn by remember { mutableStateOf(false) }
     var viewCamera by remember { mutableStateOf<ViewCamera?>(null) }
-    var aligning by remember { mutableStateOf(false) }
+    var aligning by remember { mutableStateOf<AlignTarget?>(null) }
+    var alignMenu by remember { mutableStateOf(false) }
+    var pickingLandmark by remember { mutableStateOf(false) }
+    var landmark by remember { mutableStateOf<Observer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraOn = it
         }
     val toggleCamera = {
-        aligning = false
+        aligning = null
         if (cameraOn) {
             cameraOn = false
         } else if (
@@ -150,18 +196,65 @@ fun SkyScreen(locationGranted: Boolean) {
                         ?: cameraFromFov(size.width.toDouble(), size.height.toDouble(), fov),
             )
         }
-    val sun = sunPosition(now, day.observer)
+    // The sun and the moon now (for the alignment) and at the selected time (for the overlay).
+    val sunNow = sunPosition(now, day.observer)
+    val moonNow = moonPosition(now, day.observer)
+    val moonFraction = moonIlluminatedFraction(now)
+    val sun = sunPosition(time, day.observer)
+    val moon = moonPosition(time, day.observer)
     val center = view?.let { unproject(it, ScreenPoint(it.camera.width / 2, it.camera.height / 2)) }
-    val nearest = center?.let { findTime(day.observer, it, day.startUtc, day.endUtc) }
+    val crosshairUsable = center != null && abs(center.altitudeDeg) <= MAX_CROSSHAIR_ALTITUDE_DEG
+    val crossing =
+        if (crosshairUsable) {
+            findAzimuthTimes(day.observer, center!!.azimuthDeg, day.startUtc, day.endUtc)
+                .firstOrNull()
+        } else {
+            null
+        }
+
+    // The dates in the next 12 months when the sun goes through the crosshair. The search takes
+    // some
+    // milliseconds, so it runs in the background when the crosshair has been still for a moment.
+    var crosshairDates by remember { mutableStateOf<List<TimeMatch>>(emptyList()) }
+    val crosshairKey =
+        center
+            ?.takeIf { crosshairUsable }
+            ?.let { (it.azimuthDeg * 2).roundToInt() to (it.altitudeDeg * 2).roundToInt() }
+    LaunchedEffect(crosshairKey, place.observer, today) {
+        crosshairDates = emptyList()
+        val direction = center ?: return@LaunchedEffect
+        if (crosshairKey == null || direction.altitudeDeg < 0) return@LaunchedEffect
+        delay(400)
+        val start = today.atStartOfDay(zone).toEpochSecond().toDouble()
+        crosshairDates =
+            withContext(Dispatchers.Default) {
+                findDates(place.observer, direction, start, start + 365 * 86400.0)
+            }
+    }
 
     val onTap = { at: Offset ->
-        if (aligning && view != null) {
-            message = alignWithSun(tracker, view, at, sun)
-            aligning = false
+        val target = aligning
+        if (view != null && (target == AlignTarget.SUN || target == AlignTarget.MOON)) {
+            message =
+                if (target == AlignTarget.SUN) {
+                    alignWithBody(tracker, view, at, sunNow, "sun")
+                } else {
+                    alignWithBody(tracker, view, at, moonNow, "moon")
+                }
+            aligning = null
         }
     }
 
     MaterialTheme(colorScheme = darkColorScheme()) {
+        if (pickingLandmark) {
+            MapPicker(place.observer) {
+                pickingLandmark = false
+                landmark = it
+                aligning = if (it != null) AlignTarget.LANDMARK else null
+            }
+            return@MaterialTheme
+        }
+
         Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
             if (cameraOn) {
                 CameraPreview(Modifier.fillMaxSize(), displayRotation) { viewCamera = it }
@@ -172,7 +265,20 @@ fun SkyScreen(locationGranted: Boolean) {
                         detectTapGestures { onTap(it) }
                     }
                 ) {
-                    drawSky(view, day, sun, center, nearest)
+                    drawSky(
+                        view,
+                        day,
+                        guides,
+                        sun,
+                        moon.takeIf { moonFraction >= 0.02 },
+                        center,
+                        crossing.takeIf { crosshairUsable },
+                        landmark
+                            ?.takeIf { aligning == AlignTarget.LANDMARK }
+                            ?.let {
+                                Horizontal(Geo.bearingDeg(place.observer, it), 0.0)
+                            },
+                    )
                 }
             }
 
@@ -180,13 +286,12 @@ fun SkyScreen(locationGranted: Boolean) {
                 Modifier.align(Alignment.TopStart)
                     .safeDrawingPadding()
                     .padding(12.dp)
-                    .widthIn(max = 420.dp),
+                    .widthIn(max = 440.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 StatusCard(place, tracker, day, cameraOn, viewCamera)
                 message?.let { Panel { Text(it, color = Color.White) } }
-                if (aligning)
-                    Panel { Text("Tap the sun in the camera image.", color = Color.White) }
+                aligning?.let { Panel { Text(alignHint(it), color = Color.White) } }
             }
 
             Column(
@@ -197,20 +302,75 @@ fun SkyScreen(locationGranted: Boolean) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                TimeReadout(nearest, zone)
+                if (showTime) {
+                    Panel {
+                        TimePanel(
+                            today,
+                            dayOffset,
+                            { dayOffset = it },
+                            minuteOfDay,
+                            liveMinute,
+                            { minuteOfDay = it },
+                        )
+                    }
+                }
+                Readout(center, crosshairUsable, crossing, crosshairDates, zone)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = toggleCamera) {
-                        Text(if (cameraOn) "Sky view" else "Camera")
+                        Text(if (cameraOn) "Sky" else "Camera")
                     }
-                    if (cameraOn) {
+                    FilledTonalButton(onClick = { showTime = !showTime }) {
+                        Text(if (dayOffset == 0 && minuteOfDay == null) "Time" else "Time ●")
+                    }
+                    if (aligning == AlignTarget.LANDMARK) {
                         Button(
                             onClick = {
-                                message = null
-                                aligning = !aligning
-                            },
-                            enabled = sun.altitudeDeg > 0,
+                                message = alignWithLandmark(tracker, view, place, landmark)
+                                aligning = null
+                            }
                         ) {
-                            Text(if (aligning) "Cancel" else "Align with the sun")
+                            Text("Aligned")
+                        }
+                    } else if (aligning != null) {
+                        Button(onClick = { aligning = null }) { Text("Cancel") }
+                    } else {
+                        Box {
+                            Button(onClick = { alignMenu = true }) { Text("Align") }
+                            DropdownMenu(
+                                expanded = alignMenu,
+                                onDismissRequest = { alignMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("With the sun (tap it)") },
+                                    enabled = cameraOn && sunNow.altitudeDeg > 0,
+                                    onClick = {
+                                        alignMenu = false
+                                        message = null
+                                        aligning = AlignTarget.SUN
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("With the moon (tap it)") },
+                                    enabled =
+                                        cameraOn &&
+                                            moonNow.altitudeDeg > 0 &&
+                                            moonFraction >= MIN_MOON_FRACTION,
+                                    onClick = {
+                                        alignMenu = false
+                                        message = null
+                                        aligning = AlignTarget.MOON
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("With a landmark on the map") },
+                                    enabled = place.source == PlaceSource.DEVICE,
+                                    onClick = {
+                                        alignMenu = false
+                                        message = null
+                                        pickingLandmark = true
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -219,19 +379,71 @@ fun SkyScreen(locationGranted: Boolean) {
     }
 }
 
-/** Calibrates the heading with a tap on the sun. Returns the message for the user. */
-private fun alignWithSun(tracker: HeadingTracker, view: View, at: Offset, sun: Horizontal): String {
+private fun alignHint(target: AlignTarget) =
+    when (target) {
+        AlignTarget.SUN -> "Tap the sun in the camera image."
+        AlignTarget.MOON -> "Tap the moon in the camera image."
+        AlignTarget.LANDMARK -> "Point the crosshair at the landmark, then press \"Aligned\"."
+    }
+
+/** Calibrates the heading with a tap on the sun or the moon. Returns the message for the user. */
+private fun alignWithBody(
+    tracker: HeadingTracker,
+    view: View,
+    at: Offset,
+    body: Horizontal,
+    name: String,
+): String {
     val point = ScreenPoint(at.x.toDouble(), at.y.toDouble())
     val tapped = unproject(view, point)
-    val altitudeError = abs(tapped.altitudeDeg - sun.altitudeDeg)
-    if (altitudeError > SUN_TAP_MAX_ALTITUDE_ERROR_DEG) {
-        return "That point is %.0f° from the height of the sun. Tap the sun itself."
-            .format(altitudeError)
+    val altitudeError = abs(tapped.altitudeDeg - body.altitudeDeg)
+    if (altitudeError > BODY_TAP_MAX_ALTITUDE_ERROR_DEG) {
+        return "That point is %.0f° from the height of the %s. Tap the %s itself."
+            .format(altitudeError, name, name)
     }
-    val measurement = headingFromDirection(view, point, sun.azimuthDeg, SUN_TAP_SIGMA_DEG)
+    return applyMeasurement(
+        tracker,
+        headingFromDirection(view, point, body.azimuthDeg, BODY_TAP_SIGMA_DEG),
+        name,
+    )
+}
+
+/**
+ * Calibrates the heading with a landmark in the crosshair. The error of the bearing comes from the
+ * location error and from the distance: an error e at a distance d is atan(e / d).
+ */
+private fun alignWithLandmark(
+    tracker: HeadingTracker,
+    view: View?,
+    place: Place,
+    landmark: Observer?,
+): String {
+    if (view == null || landmark == null) return "No landmark."
+    val distance = Geo.distanceM(place.observer, landmark)
+    if (distance < 50) return "The landmark is too near. Choose one that is farther away."
+    val positionError = (place.accuracyM ?: 50.0) + 5.0
+    val sigma = Math.toDegrees(atan(positionError / distance)) + 0.3
+    val center = ScreenPoint(view.camera.width / 2, view.camera.height / 2)
+    return applyMeasurement(
+        tracker,
+        headingFromDirection(view, center, Geo.bearingDeg(place.observer, landmark), sigma),
+        "landmark",
+    )
+}
+
+private fun applyMeasurement(
+    tracker: HeadingTracker,
+    measurement: at.stefl.sunradar.core.HeadingMeasurement,
+    name: String,
+): String {
     val change = ((measurement.offsetDeg - tracker.estimate.offsetDeg + 540) % 360) - 180
     tracker.apply(measurement)
-    return "Heading aligned with the sun (corrected by %.1f°).".format(change)
+    return "Heading aligned with the %s (corrected by %.1f°, now ±%.1f°)."
+        .format(
+            name,
+            change,
+            sqrt(tracker.estimate.varianceDeg2),
+        )
 }
 
 @Composable
@@ -272,33 +484,63 @@ private fun HeadingText(tracker: HeadingTracker) {
     val (text, color) =
         when {
             sigma > 30 -> "Heading unknown: move the phone in a figure 8" to Color(0xFFFF8A80)
-            sigma > 10 ->
-                "Heading ±%.0f° (poor, align with the sun)".format(sigma) to Color(0xFFFFB74D)
+            sigma > 10 -> "Heading ±%.0f° (poor, use Align)".format(sigma) to Color(0xFFFFB74D)
             sigma > 3 -> "Heading ±%.0f°".format(sigma) to Color(0xFFFFE082)
             else -> "Heading ±%.1f°".format(sigma) to Color(0xFFA5D6A7)
         }
     Text(text, color = color)
 }
 
+/** A short date in the current locale. The locale can change while the app runs. */
+private fun shortDate() = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+
 @Composable
-private fun TimeReadout(nearest: TimeMatch?, zone: ZoneId) {
-    if (nearest == null) return
-    val time = SkyDay.formatTime(nearest.unixUtc, zone)
-    val detail =
-        when {
-            nearest.sun.altitudeDeg < -0.8 -> "Nearest point of today's path · below the horizon"
-            nearest.separationDeg <= ON_PATH_DEG -> "The sun is in the crosshair today"
-            else -> "Nearest point of today's path · %.0f° away".format(nearest.separationDeg)
-        }
+private fun Readout(
+    center: Horizontal?,
+    usable: Boolean,
+    crossing: AzimuthCrossing?,
+    dates: List<TimeMatch>,
+    zone: ZoneId,
+) {
+    if (center == null) return
     Panel {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                time,
-                color = SkyColors.nearest,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(detail, color = Color.White)
+            when {
+                !usable ->
+                    Text(
+                        "Hold the phone up to see when the sun is in that direction.",
+                        color = Color.White,
+                    )
+                crossing == null ->
+                    Text("The sun does not reach this direction on this day.", color = Color.White)
+                else -> {
+                    Text(
+                        SkyDay.formatTime(crossing.unixUtc, zone),
+                        color = SkyColors.nearest,
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    val altitude = crossing.sun.altitudeDeg
+                    Text(
+                        if (altitude >= 0)
+                            "The sun is in this direction, %.0f° high".format(altitude)
+                        else "The sun is in this direction below the horizon",
+                        color = Color.White,
+                    )
+                }
+            }
+            if (dates.isNotEmpty()) {
+                Text(
+                    "In the crosshair: " +
+                        dates.joinToString(", ") {
+                            shortDate()
+                                .format(Instant.ofEpochSecond(it.unixUtc.toLong()).atZone(zone)) +
+                                " " +
+                                SkyDay.formatTime(it.unixUtc, zone)
+                        },
+                    color = SkyColors.sun,
+                )
+            }
         }
     }
 }
@@ -306,9 +548,12 @@ private fun TimeReadout(nearest: TimeMatch?, zone: ZoneId) {
 private fun DrawScope.drawSky(
     view: View,
     day: SkyDay,
+    guides: List<DirectionLine>,
     sun: Horizontal,
+    moon: Horizontal?,
     center: Horizontal,
-    nearest: TimeMatch?,
+    crossing: AzimuthCrossing?,
+    landmark: Horizontal?,
 ) {
     val px = density
     val labels = labelPaint(14 * px)
@@ -333,6 +578,13 @@ private fun DrawScope.drawSky(
         if (label != null) drawUprightText(label, at, up, 16 * px, labels)
     }
 
+    // The paths of the solstices: the band that the sun can reach in a year.
+    for (guide in guides) drawPolylines(
+        projectLine(view, guide),
+        SkyColors.guide,
+        dashed(1.5f * px, 4 * px),
+    )
+
     // The path: dashed below the horizon, bright with a glow above.
     drawPolylines(projectLine(view, day.fullPath), SkyColors.nightPath, dashed(2 * px, 8 * px))
     for (segment in day.daySegments) {
@@ -351,24 +603,36 @@ private fun DrawScope.drawSky(
         drawUprightText(mark.label, at, upAt(view, mark.direction, at), -22 * px, small)
     }
 
-    // The point of the path nearest to the crosshair, with a line from the crosshair.
-    val c = Offset(size.width / 2, size.height / 2)
-    if (nearest != null) {
-        screenPoint(view, nearest.sun)?.let { at ->
-            if (nearest.separationDeg > ON_PATH_DEG) {
-                drawLine(
-                    SkyColors.nearest,
-                    c,
-                    at,
-                    strokeWidth = 1.5f * px,
-                    pathEffect = dashed(1f, 6 * px).pathEffect,
-                )
-            }
-            drawCircle(SkyColors.nearest, radius = 9 * px, center = at, style = Stroke(2.5f * px))
+    // The vertical line through the crosshair (constant azimuth), and where it crosses the path.
+    if (crossing != null) {
+        val vertical = (-10..89).map { Horizontal(center.azimuthDeg, it.toDouble()) }
+        drawPolylines(
+            projectLine(view, DirectionLine.of(vertical)),
+            SkyColors.nearest,
+            dashed(1.5f * px, 6 * px),
+        )
+        screenPoint(view, crossing.sun)?.let {
+            drawCircle(SkyColors.nearest, radius = 9 * px, center = it, style = Stroke(2.5f * px))
         }
     }
 
-    // The sun now, or an arrow at the border of the screen that points to it.
+    // A landmark of the calibration: a marker on the horizon at its bearing.
+    landmark?.let { direction ->
+        screenPoint(view, direction)?.let {
+            drawCircle(Color(0xFFFF5252), radius = 8 * px, center = it, style = Stroke(2.5f * px))
+            drawUprightText("landmark", it, upAt(view, direction, it), 14 * px, small)
+        }
+    }
+
+    // The moon.
+    moon?.let { direction ->
+        screenPoint(view, direction)?.let {
+            drawCircle(SkyColors.moon, radius = 11 * px, center = it)
+            drawUprightText("moon", it, upAt(view, direction, it), 16 * px, small)
+        }
+    }
+
+    // The sun, or an arrow at the border of the screen that points to it.
     val bounds = Rect(0f, 0f, size.width, size.height).deflate(28 * px)
     val indicator = edgeIndicator(view, center, sun, bounds)
     if (indicator == null) {
@@ -383,6 +647,7 @@ private fun DrawScope.drawSky(
     }
 
     // The crosshair.
+    val c = Offset(size.width / 2, size.height / 2)
     val arm = 16 * px
     drawLine(Color.White, Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), strokeWidth = 1.5f * px)
     drawLine(Color.White, Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), strokeWidth = 1.5f * px)
@@ -415,7 +680,7 @@ internal fun errorScale(accuracyM: Double): String {
             else -> "±100 km"
         }
     val skyDeg = Math.pow(10.0, exponent.toDouble()) / 111_195.0
-    val sky = if (skyDeg < 0.01) "< 0.01°" else "%.2f°".format(java.util.Locale.ROOT, skyDeg)
+    val sky = if (skyDeg < 0.01) "< 0.01°" else "%.2f°".format(Locale.ROOT, skyDeg)
     return "$label (sky $sky)"
 }
 

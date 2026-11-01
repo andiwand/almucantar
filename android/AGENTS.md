@@ -14,6 +14,9 @@ API of the AAR.
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
 | `.../HeadingTracker.kt` | The game rotation vector, the magnetometer (once per second), and the heading filter of the core. `apply()` takes a calibration, for example a sun tap. |
 | `.../SkyDrawing.kt` | Drawing helpers: upright labels, the arrow at the screen border, dashed lines. |
+| `.../TimePanel.kt` | The date and time sliders. |
+| `.../MapPicker.kt` | A small OpenStreetMap tile map to pick a landmark. It follows the OSM tile policy: a User-Agent that names the app, the attribution, and tiles in memory only. |
+| `.../Geo.kt` | Bearing and distance on a sphere. |
 | `.../Location.kt` | The place: the device location (coarse), else the city of the time zone, else Vienna. The town name comes from the geocoder of the device. |
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
 | `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |

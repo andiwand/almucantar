@@ -27,6 +27,14 @@ The changes in the Android app that a user notices. Each release has the tag
 - A new layout: readable panels on the camera image, labels that stay upright relative to
   the horizon, ticks on the horizon, sunrise and sunset marks, a dashed night path, and an
   arrow at the border of the screen when the sun is outside the view.
+- A vertical line through the crosshair shows the direction, and the readout gives the time
+  when the sun is in that direction, with its height. When the phone lies flat, the line
+  is hidden. If the crosshair is in the band that the sun reaches in a year, the readout
+  also lists the dates when the sun is in the crosshair.
+- Time and date: the "Time" panel moves the view to another date (±6 months) and time.
+  The paths of the solstices show as faint guide lines.
+- Align with the moon (tap it), or with a landmark: pick it on an OpenStreetMap map, point
+  the crosshair at it, and press "Aligned". The moon shows on the overlay.
 - The crosshair no longer shows "The sun does not pass here today". Instead, the app marks
   the point of today's path that is nearest to the crosshair and shows its time large, with
   the angle to the crosshair.
