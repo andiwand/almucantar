@@ -6,6 +6,7 @@ add_executable(sunradar_test
   src/test_events.cpp
   src/test_magnetic.cpp
   src/test_path.cpp
+  src/test_search.cpp
   src/test_sun.cpp
   src/test_version.cpp
   src/test_view.cpp

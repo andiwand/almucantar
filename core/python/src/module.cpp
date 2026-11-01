@@ -66,6 +66,49 @@ void bind_types(const py::module_& m) {
       .def("__repr__", [](const Atmosphere& a) { return repr(a); });
 }
 
+void bind_search(py::module_& m) {
+  using namespace sunradar;
+
+  const SearchOptions defaults;
+  py::class_<SearchOptions>(m, "SearchOptions")
+      .def(py::init([](const SolarModel model, const double step_s, const double tolerance_s,
+                       const bool refraction, const Atmosphere& atmosphere,
+                       const double max_separation_deg) {
+             return SearchOptions{.model = model,
+                                  .step_s = step_s,
+                                  .tolerance_s = tolerance_s,
+                                  .refraction = refraction,
+                                  .atmosphere = atmosphere,
+                                  .max_separation_deg = max_separation_deg};
+           }),
+           "model"_a = defaults.model, "step_s"_a = defaults.step_s,
+           "tolerance_s"_a = defaults.tolerance_s, "refraction"_a = defaults.refraction,
+           "atmosphere"_a = defaults.atmosphere,
+           "max_separation_deg"_a = defaults.max_separation_deg)
+      .def_readwrite("model", &SearchOptions::model)
+      .def_readwrite("step_s", &SearchOptions::step_s)
+      .def_readwrite("tolerance_s", &SearchOptions::tolerance_s)
+      .def_readwrite("refraction", &SearchOptions::refraction)
+      .def_readwrite("atmosphere", &SearchOptions::atmosphere)
+      .def_readwrite("max_separation_deg", &SearchOptions::max_separation_deg);
+
+  py::class_<TimeMatch>(m, "TimeMatch", "The time when the sun is nearest to a direction.")
+      .def_readonly("unix_utc", &TimeMatch::unix_utc)
+      .def_readonly("separation_deg", &TimeMatch::separation_deg)
+      .def_readonly("sun", &TimeMatch::sun)
+      .def("__repr__", [](const TimeMatch& t) {
+        return "TimeMatch(unix_utc=" + num(t.unix_utc) +
+               ", separation_deg=" + num(t.separation_deg) + ", sun=" + repr(t.sun) + ")";
+      });
+
+  m.def("find_time", &find_time, "observer"_a, "direction"_a, "start_utc"_a, "end_utc"_a,
+        "options"_a = SearchOptions{},
+        "Finds the time between start_utc and end_utc when the sun is nearest to direction.");
+  m.def("find_dates", &find_dates, "observer"_a, "direction"_a, "start_utc"_a, "end_utc"_a,
+        "options"_a = SearchOptions{},
+        "Finds the dates when the sun goes through direction, one 24-hour window at a time.");
+}
+
 void bind_view(py::module_& m) {
   using namespace sunradar;
 
@@ -272,6 +315,7 @@ PYBIND11_MODULE(_core, m) {
   bind_types(m);
   bind_sun(m);
   bind_view(m);
+  bind_search(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");

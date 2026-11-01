@@ -319,15 +319,16 @@ Projection steps:
   because it knows the time zone.
 - `horizon_line(camera, orientation)`: points of altitude 0° at all azimuths, projected
   and clipped.
-- `find_time(view_dir, date, observer)` for auto mode:
-  1. Find the sample of the path with the smallest angle to `view_dir`.
-  2. Refine the time with Brent's method between the two adjacent samples.
-  3. Return the time and the angular distance. The UI shows "not today" if the distance
-     is more than a threshold (for example 3°).
-- `find_dates(view_dir, observer)` for the date slider: each point in the sky between the
-  path of the winter solstice and the path of the summer solstice gets the sun on about
-  two dates per year, one on each side of a solstice. A 2D search over the day of the
-  year and the time of day finds them.
+- `find_time(observer, direction, start_utc, end_utc)` for auto mode (done in M4):
+  1. Find the sample of the path with the smallest angle to the direction.
+  2. Refine the time with a golden-section search between the two adjacent samples.
+  3. Return the time, the angular distance, and the position of the sun. The UI shows
+     "not today" if the distance is more than a threshold (for example 3°).
+- `find_dates(observer, direction, start_utc, end_utc)` for the date slider (done in M4):
+  each point in the sky between the path of the winter solstice and the path of the
+  summer solstice gets the sun on about two dates per year, one on each side of a
+  solstice. The function runs `find_time()` for each 24-hour window and returns the
+  local minima of the distance below a threshold.
 
 ### 5.7 Public API
 
@@ -351,7 +352,7 @@ The planned public headers:
 |---|---|
 | `types.hpp` | `Observer`, `Horizontal`, `Atmosphere`, `Quaternion`, `Camera`, `ScreenPoint` |
 | `sun.hpp` | `SolarModel`, `sun_position()`, `sun_events()`, `sun_path()` |
-| `search.hpp` | `find_time()`, `find_dates()` |
+| `search.hpp` | `SearchOptions`, `TimeMatch`, `find_time()`, `find_dates()` (done in M4) |
 | `magnetic.hpp` | `magnetic_declination_deg()` (done in M3) |
 | `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `ScreenRotation`, `Camera`, `camera_from_fov()`, `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()` (done in M3). The view direction for auto mode is `unproject()` of the screen center. |
 | `calibration.hpp` | `heading_offset_from_tap()`, `heading_offset_from_bearing()` |
@@ -505,7 +506,7 @@ contain the same core.
 | M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | done: ≤ 0.015° against JPL Horizons |
 | M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | done |
 | M3 | WMM2025, orientation, camera model, projection, horizon | done: WMM agrees with the official test values to 0.001 nT; projection round-trip < 1e-6 px |
-| M4 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
+| M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | the instrumented tests pass on an emulator; the path moves correctly when you turn the phone |
 | M6 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
 | M7 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |

@@ -25,6 +25,9 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()`, and
   `camera_from_fov()`. The camera model is a pinhole with Brown–Conrady distortion
   (OpenCV convention). Lines are clipped at a cone a little larger than the screen.
+- `find_time()` finds the time when the sun is nearest to a direction (auto mode), and
+  `find_dates()` finds the dates when the sun goes through a direction (date slider).
+  Both compare with the refracted position by default.
 - An invalid argument throws `std::invalid_argument`: a value that is not finite, a
   latitude outside [-90, 90], an empty interval, a step that is not positive, or a
   path with more than 1,000,000 points.
@@ -41,5 +44,5 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 ### Packages
 
 - The Python package `sunradar` (pybind11, scikit-build-core). It has the same
-  functions and types as the C++ API, including the view and the magnetic
-  declination. An invalid argument raises `ValueError`.
+  functions and types as the C++ API, including the view, the magnetic
+  declination, and the search. An invalid argument raises `ValueError`.

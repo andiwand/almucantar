@@ -20,6 +20,7 @@ include(cmake/compiler_options.cmake)
 
 set(SUNRADAR_SOURCE_FILES
   src/sunradar/magnetic.cpp
+  src/sunradar/search.cpp
   src/sunradar/sun.cpp
   src/sunradar/version.cpp
   src/sunradar/view.cpp
@@ -28,6 +29,7 @@ set(SUNRADAR_SOURCE_FILES
   src/sunradar/internal/path.cpp
   src/sunradar/internal/projection.cpp
   src/sunradar/internal/refraction.cpp
+  src/sunradar/internal/search.cpp
   src/sunradar/internal/solar_model.cpp
   src/sunradar/internal/time.cpp
   src/sunradar/internal/validate.cpp
