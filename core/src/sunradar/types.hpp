@@ -14,6 +14,23 @@ struct Horizontal {
   double altitude_deg = 0;  ///< above the horizon, -90 to 90
 };
 
+/// A rotation as a unit quaternion. The view uses it for the orientation of the device:
+/// it rotates a vector from the frame of the device to the East-North-Up frame. This is
+/// the convention of the Android rotation vector (`SensorManager.getQuaternionFromVector`).
+struct Quaternion {
+  double w = 1;
+  double x = 0;
+  double y = 0;
+  double z = 0;
+};
+
+/// A point on the screen, in pixels. The origin is the top left corner, x goes right,
+/// and y goes down.
+struct ScreenPoint {
+  double x = 0;
+  double y = 0;
+};
+
 /// The state of the air near the observer. The refraction depends on it.
 struct Atmosphere {
   double pressure_hpa = 1010;

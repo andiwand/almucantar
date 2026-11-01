@@ -19,6 +19,12 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 - The public API is `sunradar/sunradar.hpp`: `sun_position()`, `sun_events()`, and
   `sun_path()`, with the value types `Observer`, `Horizontal`, `Atmosphere`, and the
   option structs. `SolarModel` selects the model. The only model is `noaa`.
+- `magnetic_declination_deg()` gives the magnetic declination from the World Magnetic
+  Model 2025 (valid 2025 to 2029).
+- `View` (orientation quaternion, screen rotation, heading offset, and `Camera`) with
+  `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()`, and
+  `camera_from_fov()`. The camera model is a pinhole with Brown–Conrady distortion
+  (OpenCV convention). Lines are clipped at a cone a little larger than the screen.
 - An invalid argument throws `std::invalid_argument`: a value that is not finite, a
   latitude outside [-90, 90], an empty interval, a step that is not positive, or a
   path with more than 1,000,000 points.
@@ -28,8 +34,12 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 - The position of the sun agrees with JPL Horizons to 0.015° or better for 1950 to
   2100. Sunrise and sunset agree to 71 s or better (135 s in Tromsø), mostly
   because Horizons rounds its times to the minute.
+- The magnetic field agrees with the 100 official WMM2025 test values to 0.001 nT,
+  and the declination to their rounding of 0.005°.
+- `project()` and `unproject()` are inverse to better than 1e-6 px, with distortion.
 
 ### Packages
 
 - The Python package `sunradar` (pybind11, scikit-build-core). It has the same
-  functions and types as the C++ API. An invalid argument raises `ValueError`.
+  functions and types as the C++ API, including the view and the magnetic
+  declination. An invalid argument raises `ValueError`.

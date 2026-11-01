@@ -101,7 +101,8 @@ package. The apps use the packages and contain no C++.
 - The core does not read sensors, files, or the camera. The platform gives it numbers.
 - The core returns geometry in screen pixels (points and polylines). The platform draws
   them.
-- The core does not allocate in the per-frame path. The platform calls it at 30–60 Hz.
+- The core allocates little in the per-frame path: a few vectors of a few hundred
+  points. The platform calls it at 30–60 Hz.
 
 ## 4. Repository layout
 
@@ -198,10 +199,9 @@ declination.
   degree 12, and the code for the spherical harmonics is about 200 lines. We compile the
   coefficients into the library, so the core does no file IO. WMM2025 is valid from 2025
   to 2030, so we must update the coefficients for WMM2030.
-- Alternative: GeographicLib (`geographiclib/2.6` in Conan Center, MIT) contains
-  `MagneticModel`. But it loads the coefficients from data files at run time, so Android
-  must copy assets and the PWA must preload files. We use GeographicLib as a test oracle
-  for our WMM code.
+- Done in M3. The tests use the 100 official test values of WMM2025, which come with
+  the coefficients. They are a better oracle than GeographicLib, because they come from
+  the authors of the model.
 
 ### 5.3 Orientation
 
@@ -239,6 +239,46 @@ The heading indoors is the main error (section 2). The core supports these metho
 
 The platform also gives the accuracy status of the magnetometer
 (`SENSOR_STATUS_ACCURACY_*`), and the UI shows a warning.
+
+### 5.4a Proposal: a heading filter, from the thesis on magnetometer calibration
+
+Source: <https://github.com/andiwand/magnetic-calibration-thesis> (particle filter for
+the online calibration of the magnetometer in smartphones). Its pipeline is:
+
+1. Madgwick IMU filter (accelerometer and gyroscope, no magnetometer). It gives the
+   tilt exactly and the yaw with slow drift.
+2. A particle filter for the hard iron: each particle has a hard-iron bias and an
+   external field in the world frame. The predicted measurement is
+   `bias + R(q)ᵀ · external`. It updates only after enough rotation.
+3. A particle filter for the heading: it combines the yaw changes of the gyroscope with
+   the heading of the calibrated magnetometer. The variance of the magnetometer heading
+   grows when the measured field differs from the expected field of the Earth.
+
+Step 3 is the answer to our largest risk (the compass indoors, section 11): near steel,
+the field changes, so the filter trusts the gyroscope and not the magnetometer. The
+proposal for sunradar:
+
+- The orientation comes from `TYPE_GAME_ROTATION_VECTOR` (accelerometer and gyroscope,
+  no magnetometer). This is step 1, done by the OS. The core does not need its own
+  Madgwick filter.
+- The core gets a **heading filter** with one state: the heading offset of the game
+  frame to true north (and its variance). A one-dimensional Kalman filter is
+  sufficient, because the state is one angle and the measurements are angles. It has
+  these measurements:
+  - the heading of the calibrated magnetometer, with a variance from the difference
+    between the measured field and the expected field. The expected field is now known
+    from the WMM in the core (intensity and inclination at the place and the date). This
+    replaces the fixed field `{0, 20, −44} µT` of the thesis.
+  - a sun or moon tap: a very small variance.
+  - a map bearing: a small variance.
+  - the process noise is the yaw drift of the game rotation vector.
+- So the three calibration methods of section 5.4 become measurements of one filter,
+  and the app shows the variance as the accuracy of the heading.
+- The hard-iron calibration (step 2) stays with the OS at first. If the OS calibration is
+  bad on some devices, a Kalman filter can replace the particle filter: given the
+  orientation, the measurement is linear in the state (bias and external field).
+- The public API stays without state: the filter state is a value type, and an update
+  is a pure function, for example `HeadingState update(HeadingState, Measurement)`.
 
 ### 5.5 Camera model and projection
 
@@ -312,8 +352,8 @@ The planned public headers:
 | `types.hpp` | `Observer`, `Horizontal`, `Atmosphere`, `Quaternion`, `Camera`, `ScreenPoint` |
 | `sun.hpp` | `SolarModel`, `sun_position()`, `sun_events()`, `sun_path()` |
 | `search.hpp` | `find_time()`, `find_dates()` |
-| `magnetic.hpp` | `magnetic_declination_deg()` |
-| `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `project()`, `unproject()`, `project_path()`, `horizon_line()`, `view_direction()` |
+| `magnetic.hpp` | `magnetic_declination_deg()` (done in M3) |
+| `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `ScreenRotation`, `Camera`, `camera_from_fov()`, `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()` (done in M3). The view direction for auto mode is `unproject()` of the screen center. |
 | `calibration.hpp` | `heading_offset_from_tap()`, `heading_offset_from_bearing()` |
 | `version.hpp` | `version()` |
 
@@ -354,10 +394,10 @@ Rules for all bindings, from OpenDocument.core:
 
 | Need | Choice | Source |
 |---|---|---|
-| Vectors, quaternions, least squares | Eigen | Conan Center, `eigen/3.4.x` or `5.0.x` |
+| Vectors, quaternions | handroll (`internal/vector.hpp`, about 60 lines) | — (Eigen only if the calibration needs least squares) |
 | Tests | Catch2 | Conan Center, `catch2/3.x` |
 | Second solar model, moon | Astronomy Engine | `FetchContent` or own recipe |
-| Magnetic oracle for tests | GeographicLib | Conan Center, `geographiclib/2.6` |
+| Magnetic oracle for tests | the official WMM2025 test values | NOAA NCEI, in the coefficient download |
 | Precise reference (optional) | SOFA | Conan Center, `sofa/20231011` |
 | NOAA solar model | handroll | — |
 | WMM2025 | handroll | — |
@@ -464,7 +504,7 @@ contain the same core.
 | M0 | Repository, CMake, Conan profiles, Catch2, CI | done |
 | M1 | `NoaaModel`, refraction, sunrise and sunset, `sun_path` | done: ≤ 0.015° against JPL Horizons |
 | M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | done |
-| M3 | WMM2025, orientation, camera model, projection, horizon | tests agree with GeographicLib; projection round-trip ≤ 1 px |
+| M3 | WMM2025, orientation, camera model, projection, horizon | done: WMM agrees with the official test values to 0.001 nT; projection round-trip < 1e-6 px |
 | M4 | Search: `find_time`, `find_dates` | tests for auto mode and dates pass, including polar cases |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | the instrumented tests pass on an emulator; the path moves correctly when you turn the phone |
 | M6 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
@@ -486,6 +526,9 @@ fast way to plot paths and to compare models.
   the focal length and the sensor size gives about 1–3° at the edges.
 - **Preview crop.** The conversion from the sensor frame to the CameraX preview frame is
   a frequent source of offsets. Test it on two or three devices.
+- **Direction of the distortion.** The core uses the OpenCV direction (ideal to
+  distorted). The documentation of Camera2 `LENS_DISTORTION` can be read in both
+  directions. Check it in M6 with a real image of a straight edge.
 - **Licenses.** Check the NREL SPA license before we put the code in the repository.
   Astronomy Engine (MIT), GeographicLib (MIT), and Eigen (MPL 2.0) are not a problem.
 - **WMM validity.** WMM2025 is valid until the end of 2029. Plan an update.

@@ -13,6 +13,7 @@ Checks: >
   misc-unused-parameters,
   misc-use-anonymous-namespace,
   modernize-*,
+  -modernize-use-designated-initializers,
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
   performance-*,
@@ -25,7 +26,7 @@ Checks: >
   readability-redundant-*,
   readability-simplify-boolean-expr
 WarningsAsErrors: "*"
-HeaderFilterRegex: "sunradar/(src|python)/"
+HeaderFilterRegex: "core/(src|python)/"
 CheckOptions:
   misc-const-correctness.AnalyzeValues: true
   misc-const-correctness.WarnPointersAsValues: false

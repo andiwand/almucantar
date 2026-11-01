@@ -19,13 +19,20 @@ include(GNUInstallDirs)
 include(cmake/compiler_options.cmake)
 
 set(SUNRADAR_SOURCE_FILES
+  src/sunradar/magnetic.cpp
   src/sunradar/sun.cpp
   src/sunradar/version.cpp
+  src/sunradar/view.cpp
   src/sunradar/internal/events.cpp
   src/sunradar/internal/noaa_model.cpp
   src/sunradar/internal/path.cpp
+  src/sunradar/internal/projection.cpp
   src/sunradar/internal/refraction.cpp
-  src/sunradar/internal/solar_model.cpp)
+  src/sunradar/internal/solar_model.cpp
+  src/sunradar/internal/time.cpp
+  src/sunradar/internal/validate.cpp
+  src/sunradar/internal/wmm.cpp
+  src/sunradar/internal/wmm_coefficients.cpp)
 
 add_library(sunradar ${SUNRADAR_SOURCE_FILES})
 add_library(sunradar::sunradar ALIAS sunradar)

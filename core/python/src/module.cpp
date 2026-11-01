@@ -66,6 +66,115 @@ void bind_types(const py::module_& m) {
       .def("__repr__", [](const Atmosphere& a) { return repr(a); });
 }
 
+void bind_view(py::module_& m) {
+  using namespace sunradar;
+
+  py::class_<Quaternion>(m, "Quaternion",
+                         "A unit quaternion. For the view: device frame to East-North-Up.")
+      .def(py::init([](const double w, const double x, const double y, const double z) {
+             return Quaternion{.w = w, .x = x, .y = y, .z = z};
+           }),
+           "w"_a = 1.0, "x"_a = 0.0, "y"_a = 0.0, "z"_a = 0.0)
+      .def_readwrite("w", &Quaternion::w)
+      .def_readwrite("x", &Quaternion::x)
+      .def_readwrite("y", &Quaternion::y)
+      .def_readwrite("z", &Quaternion::z)
+      .def("__repr__", [](const Quaternion& q) {
+        return "Quaternion(w=" + num(q.w) + ", x=" + num(q.x) + ", y=" + num(q.y) +
+               ", z=" + num(q.z) + ")";
+      });
+
+  py::class_<ScreenPoint>(m, "ScreenPoint", "A point on the screen in pixels, y goes down.")
+      .def(py::init([](const double x, const double y) { return ScreenPoint{.x = x, .y = y}; }),
+           "x"_a = 0.0, "y"_a = 0.0)
+      .def_readwrite("x", &ScreenPoint::x)
+      .def_readwrite("y", &ScreenPoint::y)
+      .def("__repr__", [](const ScreenPoint& p) {
+        return "ScreenPoint(x=" + num(p.x) + ", y=" + num(p.y) + ")";
+      });
+
+  py::enum_<ScreenRotation>(m, "ScreenRotation", "The meaning of Android Surface.ROTATION_*.")
+      .value("rotation_0", ScreenRotation::rotation_0)
+      .value("rotation_90", ScreenRotation::rotation_90)
+      .value("rotation_180", ScreenRotation::rotation_180)
+      .value("rotation_270", ScreenRotation::rotation_270);
+
+  const Camera camera_defaults;
+  py::class_<Camera>(m, "Camera", "A pinhole camera with Brown-Conrady distortion, in pixels.")
+      .def(py::init([](const double width, const double height, const double fx, const double fy,
+                       const double cx, const double cy, const double k1, const double k2,
+                       const double k3, const double p1, const double p2) {
+             return Camera{.width = width,
+                           .height = height,
+                           .fx = fx,
+                           .fy = fy,
+                           .cx = cx,
+                           .cy = cy,
+                           .k1 = k1,
+                           .k2 = k2,
+                           .k3 = k3,
+                           .p1 = p1,
+                           .p2 = p2};
+           }),
+           "width"_a = camera_defaults.width, "height"_a = camera_defaults.height,
+           "fx"_a = camera_defaults.fx, "fy"_a = camera_defaults.fy, "cx"_a = camera_defaults.cx,
+           "cy"_a = camera_defaults.cy, "k1"_a = 0.0, "k2"_a = 0.0, "k3"_a = 0.0, "p1"_a = 0.0,
+           "p2"_a = 0.0)
+      .def_readwrite("width", &Camera::width)
+      .def_readwrite("height", &Camera::height)
+      .def_readwrite("fx", &Camera::fx)
+      .def_readwrite("fy", &Camera::fy)
+      .def_readwrite("cx", &Camera::cx)
+      .def_readwrite("cy", &Camera::cy)
+      .def_readwrite("k1", &Camera::k1)
+      .def_readwrite("k2", &Camera::k2)
+      .def_readwrite("k3", &Camera::k3)
+      .def_readwrite("p1", &Camera::p1)
+      .def_readwrite("p2", &Camera::p2);
+
+  const View view_defaults;
+  py::class_<View>(m, "View", "Everything that defines what the screen shows.")
+      .def(py::init([](const Quaternion& device_to_enu, const ScreenRotation screen_rotation,
+                       const double heading_offset_deg, const Camera& camera) {
+             return View{.device_to_enu = device_to_enu,
+                         .screen_rotation = screen_rotation,
+                         .heading_offset_deg = heading_offset_deg,
+                         .camera = camera};
+           }),
+           "device_to_enu"_a = view_defaults.device_to_enu,
+           "screen_rotation"_a = view_defaults.screen_rotation,
+           "heading_offset_deg"_a = view_defaults.heading_offset_deg,
+           "camera"_a = view_defaults.camera)
+      .def_readwrite("device_to_enu", &View::device_to_enu)
+      .def_readwrite("screen_rotation", &View::screen_rotation)
+      .def_readwrite("heading_offset_deg", &View::heading_offset_deg)
+      .def_readwrite("camera", &View::camera);
+
+  py::class_<Projection>(m, "Projection")
+      .def_readonly("valid", &Projection::valid,
+                    "True if the direction is in front and inside the valid cone")
+      .def_readonly("point", &Projection::point)
+      .def("__repr__", [](const Projection& p) {
+        return std::string("Projection(valid=") + (p.valid ? "True" : "False") +
+               ", point=ScreenPoint(x=" + num(p.point.x) + ", y=" + num(p.point.y) + "))";
+      });
+
+  m.def("magnetic_declination_deg", &magnetic_declination_deg, "observer"_a, "unix_utc"_a,
+        "Returns the magnetic declination (WMM2025), positive to the east.");
+  m.def("camera_from_fov", &camera_from_fov, "width"_a, "height"_a, "horizontal_fov_deg"_a,
+        "Returns a camera without distortion with the given horizontal field of view.");
+  m.def("project", &project, "view"_a, "direction"_a, "Projects a direction to the screen.");
+  m.def("unproject", &unproject, "view"_a, "point"_a,
+        "Returns the direction that the screen point shows.");
+  m.def("project_line", &project_line, "view"_a, "line"_a,
+        "Projects a line of directions, clipped to the valid area. Returns a list of "
+        "polylines.");
+  m.def("project_path", &project_path, "view"_a, "path"_a,
+        "Projects a path of the sun (see sun_path). Returns a list of polylines.");
+  m.def("horizon_line", &horizon_line, "view"_a,
+        "Projects the astronomical horizon. Returns a list of polylines.");
+}
+
 void bind_sun(py::module_& m) {
   using namespace sunradar;
 
@@ -162,6 +271,7 @@ PYBIND11_MODULE(_core, m) {
   m.doc() = "The Python binding of the sunradar core.";
   bind_types(m);
   bind_sun(m);
+  bind_view(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");

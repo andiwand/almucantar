@@ -17,3 +17,21 @@ TEST_CASE("unix_time is the inverse of julian_date", "[time]") {
                WithinAbs(t, 1e-4));
   }
 }
+
+TEST_CASE("decimal_year", "[time]") {
+  using sunradar::internal::civil_year;
+  using sunradar::internal::decimal_year;
+  using sunradar::internal::year_start_utc;
+  const double y2025 = 1735689600;  // 2025-01-01T00:00:00Z
+  const double y2028 = 1830297600;  // 2028-01-01T00:00:00Z, a leap year
+  CHECK(year_start_utc(1970) == 0);
+  CHECK(year_start_utc(2025) == y2025);
+  CHECK(year_start_utc(2028) == y2028);
+  CHECK(civil_year(y2025) == 2025);
+  CHECK(civil_year(y2025 - 1) == 2024);
+  CHECK(civil_year(-1) == 1969);
+  CHECK_THAT(decimal_year(y2025), WithinAbs(2025.0, 1e-12));
+  CHECK_THAT(decimal_year(y2025 + 182.5 * 86400), WithinAbs(2025.5, 1e-12));
+  CHECK_THAT(decimal_year(y2028 + 183 * 86400), WithinAbs(2028.5, 1e-12));
+  CHECK(decimal_year(y2028 - 0.001) < 2028.0);
+}

@@ -4,12 +4,15 @@ include(Catch)
 add_executable(sunradar_test
   src/reference_data.cpp
   src/test_events.cpp
+  src/test_magnetic.cpp
   src/test_path.cpp
   src/test_sun.cpp
   src/test_version.cpp
+  src/test_view.cpp
   src/internal/test_noaa_model.cpp
   src/internal/test_refraction.cpp
-  src/internal/test_time.cpp)
+  src/internal/test_time.cpp
+  src/internal/test_wmm.cpp)
 
 target_compile_definitions(sunradar_test PRIVATE
   SUNRADAR_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
