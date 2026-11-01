@@ -5,6 +5,8 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-01
+
 - A sky view without camera. It follows the orientation of the phone (rotation vector
   sensor) and shows the horizon, the cardinal points, the path of the sun today with the
   full hours, and the sun now.
