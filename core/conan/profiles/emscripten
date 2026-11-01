@@ -1,4 +1,4 @@
-{# WebAssembly build of the core, for the PWA (M8). Conan fetches emsdk.
+{# WebAssembly build of the core, for the PWA (M9). Conan fetches emsdk.
    The exception mode is an ABI, so every dependency gets the same flag. #}
 {% set emsdk_version = "3.1.73" %}
 
@@ -19,3 +19,6 @@ tools.build:cflags=['-fwasm-exceptions']
 tools.build:cxxflags=['-fwasm-exceptions']
 tools.build:exelinkflags=['-fwasm-exceptions']
 tools.build:sharedlinkflags=['-fwasm-exceptions']
+# The build folder and the preset get the OS in the name (build/emscripten-wasm-release,
+# conan-emscripten-wasm-release), so they do not collide with the host build.
+tools.cmake.cmake_layout:build_folder_vars=['settings.os', 'settings.arch', 'settings.build_type']

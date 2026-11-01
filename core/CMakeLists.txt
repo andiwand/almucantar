@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(SUNRADAR_TESTS "Build the C++ tests" ON)
 option(SUNRADAR_PYTHON "Build the Python binding" OFF)
 option(SUNRADAR_JNI "Build the JNI binding for the Android AAR" OFF)
+option(SUNRADAR_WASM "Build the WebAssembly binding for the npm package" OFF)
 option(SUNRADAR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(SUNRADAR_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -73,8 +74,13 @@ target_link_libraries(sunradar PRIVATE sunradar::options)
 # The bindings and static libraries in shared objects need position-independent code.
 set_target_properties(sunradar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if(SUNRADAR_TESTS)
+# The WASM binding has its own tests (node), also without the C++ tests. CTest finds tests
+# only if enable_testing() is in this file.
+if(SUNRADAR_TESTS OR SUNRADAR_WASM)
   enable_testing()
+endif()
+
+if(SUNRADAR_TESTS)
   add_subdirectory(test)
 endif()
 
@@ -84,6 +90,10 @@ endif()
 
 if(SUNRADAR_JNI)
   add_subdirectory(android/jni)
+endif()
+
+if(SUNRADAR_WASM)
+  add_subdirectory(wasm)
 endif()
 
 # Install the public headers only. The internal headers stay in the source tree.

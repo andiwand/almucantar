@@ -16,6 +16,7 @@ The design is in [`../PLAN.md`](../PLAN.md) section 5.
 | `tools/wmm/` | The WMM2025 coefficient file, its source, and the generator. See its `README.md` for WMM2030. |
 | `python/` | The Python binding. See [`python/AGENTS.md`](python/AGENTS.md). |
 | `android/` | The JNI binding and the AAR. See [`android/AGENTS.md`](android/AGENTS.md). |
+| `wasm/` | The WebAssembly binding and the npm package. See [`wasm/AGENTS.md`](wasm/AGENTS.md). |
 | `third_party/astronomy-engine/` | Astronomy Engine (MIT), vendored. Do not edit; see its `README.md`. |
 | `cmake/` | Compiler options and the check of the public headers. |
 | `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`. |
@@ -55,7 +56,7 @@ Run these commands in `core/`.
    ../.venv/bin/clang-tidy -p build/Debug src/sunradar/sun.cpp
    ```
 
-CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WARNINGS_AS_ERRORS`,
+CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WASM`, `SUNRADAR_WARNINGS_AS_ERRORS`,
 `SUNRADAR_SANITIZE`. Add a new `.cpp` to `SUNRADAR_SOURCE_FILES`.
 
 ## The public API
