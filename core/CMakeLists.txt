@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(sunradar
   VERSION 0.1.0
   DESCRIPTION "Sun position, sun path and projection for a camera overlay"
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,10 +22,12 @@ include(cmake/compiler_options.cmake)
 set(SUNRADAR_SOURCE_FILES
   src/sunradar/heading.cpp
   src/sunradar/magnetic.cpp
+  src/sunradar/moon.cpp
   src/sunradar/search.cpp
   src/sunradar/sun.cpp
   src/sunradar/version.cpp
   src/sunradar/view.cpp
+  src/sunradar/internal/astronomy_engine.cpp
   src/sunradar/internal/events.cpp
   src/sunradar/internal/noaa_model.cpp
   src/sunradar/internal/path.cpp
@@ -38,7 +40,15 @@ set(SUNRADAR_SOURCE_FILES
   src/sunradar/internal/wmm.cpp
   src/sunradar/internal/wmm_coefficients.cpp)
 
-add_library(sunradar ${SUNRADAR_SOURCE_FILES})
+# Astronomy Engine (MIT, vendored). An object library, so its code goes into libsunradar and a
+# consumer links one library. Our strict warnings do not apply to it.
+add_library(astronomy_engine OBJECT third_party/astronomy-engine/astronomy.c)
+set_target_properties(astronomy_engine PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99)
+if(NOT MSVC)
+  target_link_libraries(astronomy_engine PRIVATE m)
+endif()
+
+add_library(sunradar ${SUNRADAR_SOURCE_FILES} $<TARGET_OBJECTS:astronomy_engine>)
 add_library(sunradar::sunradar ALIAS sunradar)
 
 # The build tree exposes src/, so the tests can include the internal headers. The
@@ -54,6 +64,10 @@ if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
   set(SUNRADAR_VERSION_STRING "${SKBUILD_PROJECT_VERSION_FULL}")
 endif()
 target_compile_definitions(sunradar PRIVATE SUNRADAR_VERSION="${SUNRADAR_VERSION_STRING}")
+target_include_directories(sunradar SYSTEM PRIVATE third_party/astronomy-engine)
+if(NOT MSVC AND NOT APPLE)
+  target_link_libraries(sunradar PUBLIC m)
+endif()
 target_link_libraries(sunradar PRIVATE sunradar::options)
 
 # The bindings and static libraries in shared objects need position-independent code.

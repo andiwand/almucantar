@@ -173,6 +173,23 @@ class SunradarTest {
     }
 
     @Test
+    fun moonAndAzimuthTimes() {
+        val t = 1767225600.0
+        val airless = moonPosition(t, vienna, MoonOptions(refraction = false))
+        assertTrue(moonPosition(t, vienna).altitudeDeg >= airless.altitudeDeg)
+        assertTrue(moonIlluminatedFraction(1767441600.0) > 0.99)
+
+        val ae = sunPosition(1782039420.0, vienna, SunOptions(model = SolarModel.ASTRONOMY_ENGINE))
+        assertEquals(sunPosition(1782039420.0, vienna).altitudeDeg, ae.altitudeDeg, 0.03)
+
+        val at = dayStart + 9.5 * 3600
+        val crossings =
+            findAzimuthTimes(vienna, sunPosition(at, vienna).azimuthDeg, dayStart, dayStart + day)
+        assertEquals(1, crossings.size)
+        assertEquals(at, crossings[0].unixUtc, 1.0)
+    }
+
+    @Test
     fun invalidArgumentsThrowIllegalArgumentException() {
         val e =
             assertThrows(IllegalArgumentException::class.java) {

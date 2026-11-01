@@ -45,4 +45,20 @@ struct TimeMatch {
                                                 double start_utc, double end_utc,
                                                 const SearchOptions& options = {});
 
+/// The sun has a given azimuth.
+struct AzimuthCrossing {
+  double unix_utc = 0;
+  Horizontal sun;  ///< the position of the sun at `unix_utc`
+};
+
+/// Finds the times between `start_utc` and `end_utc` when the sun has the azimuth
+/// `azimuth_deg`, for the question "when is the sun in this direction?". Usually there is one
+/// time per day (above or below the horizon), but there can be none or more near the poles and
+/// the tropics. `max_separation_deg` is not used. Throws `std::invalid_argument` if
+/// `end_utc <= start_utc`, or if an argument is not finite or not in its range.
+[[nodiscard]] std::vector<AzimuthCrossing> find_azimuth_times(const Observer& observer,
+                                                              double azimuth_deg, double start_utc,
+                                                              double end_utc,
+                                                              const SearchOptions& options = {});
+
 }  // namespace sunradar

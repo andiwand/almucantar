@@ -40,7 +40,9 @@ data class ScreenPoint(val x: Double = 0.0, val y: Double = 0.0)
 /** The model that calculates the position of the sun. */
 enum class SolarModel {
     /** NOAA solar calculator (Meeus). */
-    NOAA
+    NOAA,
+    /** Astronomy Engine: more precise and slower. */
+    ASTRONOMY_ENGINE,
 }
 
 enum class DayKind {
@@ -163,3 +165,8 @@ data class HeadingEstimate(
 data class HeadingMeasurement(val offsetDeg: Double, val varianceDeg2: Double)
 
 data class MagnetometerOptions(val sensorSigmaDeg: Double = 2.0)
+
+data class MoonOptions(val refraction: Boolean = true, val atmosphere: Atmosphere = Atmosphere())
+
+/** The sun has a given azimuth. */
+data class AzimuthCrossing(val unixUtc: Double, val sun: Horizontal)

@@ -19,6 +19,8 @@
 //   Vector3        [3]  x, y, z
 //   HeadingEstimate, HeadingMeasurement [2]  offset_deg, variance_deg2
 //   MagnetometerOptions [1]  sensor_sigma_deg
+//   MoonOptions    [3]  refraction, pressure_hpa, temperature_c
+//   AzimuthCrossing [3] unix_utc, azimuth_deg, altitude_deg (results, for each crossing)
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -358,6 +360,39 @@ SUNRADAR_JNI(headingFromDirection)
         view(Doubles(env, v, 17, "view")), {.x = p[0], .y = p[1]}, true_azimuth_deg, sigma_deg);
     return to_java(env, {r.offset_deg, r.variance_deg2});
   });
+}
+
+SUNRADAR_JNI(findAzimuthTimes)
+(JNIEnv* env, jclass, jdoubleArray obs, jdouble azimuth_deg, jdouble start, jdouble end,
+ jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const auto crossings =
+        find_azimuth_times(observer(Doubles(env, obs, 2, "observer")), azimuth_deg, start, end,
+                           search_options(Doubles(env, opts, 7, "options")));
+    std::vector<double> out;
+    for (const AzimuthCrossing& c : crossings) {
+      out.push_back(c.unix_utc);
+      out.push_back(c.sun.azimuth_deg);
+      out.push_back(c.sun.altitude_deg);
+    }
+    return to_java(env, out);
+  });
+}
+
+SUNRADAR_JNI(moonPosition)
+(JNIEnv* env, jclass, jdouble unix_utc, jdoubleArray obs, jdoubleArray opts)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles o(env, opts, 3, "options");
+    const Horizontal h = moon_position(
+        unix_utc, observer(Doubles(env, obs, 2, "observer")),
+        {.refraction = to_bool(o[0]), .atmosphere = {.pressure_hpa = o[1], .temperature_c = o[2]}});
+    return to_java(env, {h.azimuth_deg, h.altitude_deg});
+  });
+}
+
+SUNRADAR_JNI(moonIlluminatedFraction)(JNIEnv* env, jclass, jdouble unix_utc)->jdouble {
+  return guarded<jdouble>(env, 0.0, [&] { return moon_illuminated_fraction(unix_utc); });
 }
 
 // The C++ defaults of the option structs and of Camera, in the layouts above, so the

@@ -33,6 +33,9 @@ const std::vector<ReferencePosition>& airless_positions();
 /// The refracted positions at the same times (sun_refracted.csv).
 const std::vector<ReferencePosition>& refracted_positions();
 
+/// The airless apparent positions of the moon in 2026 (moon_airless.csv).
+const std::vector<ReferencePosition>& moon_positions();
+
 /// Rise, transit, and set times for 2026 (sun_events.csv).
 const std::vector<ReferenceEvent>& events();
 

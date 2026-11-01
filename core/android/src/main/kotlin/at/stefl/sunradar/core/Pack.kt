@@ -87,3 +87,6 @@ internal fun MagnetometerOptions.pack() = doubleArrayOf(sensorSigmaDeg)
 internal fun DoubleArray.toHeadingEstimate() = HeadingEstimate(this[0], this[1])
 
 internal fun DoubleArray.toHeadingMeasurement() = HeadingMeasurement(this[0], this[1])
+
+internal fun MoonOptions.pack() =
+    doubleArrayOf(refraction.pack(), atmosphere.pressureHpa, atmosphere.temperatureC)

@@ -116,3 +116,29 @@ TEST_CASE("the search functions reject invalid arguments", "[search]") {
   CHECK_THROWS_AS(find_dates(vienna, d, t, t + 10 * kDay, {.max_separation_deg = nan}),
                   std::invalid_argument);
 }
+
+TEST_CASE("find_azimuth_times finds the time of an azimuth", "[search]") {
+  const Observer vienna = test::site("vienna");
+  const double day = kYearStart + 120 * kDay;  // 2026-05-01
+  for (const double hour : {6.0, 9.5, 12.0, 16.25, 19.5}) {
+    const double t = day + hour * 3600;
+    const Horizontal sun = sun_position(t, vienna);
+    INFO("hour " << hour << " azimuth " << sun.azimuth_deg);
+    const auto crossings = find_azimuth_times(vienna, sun.azimuth_deg, day, day + kDay);
+    REQUIRE(crossings.size() == 1);
+    CHECK_THAT(crossings[0].unix_utc, WithinAbs(t, 1));
+    CHECK_THAT(crossings[0].sun.altitude_deg, WithinAbs(sun.altitude_deg, 0.01));
+  }
+  // The north at night: the sun is there below the horizon, at about local midnight.
+  const auto north = find_azimuth_times(vienna, 0, day, day + kDay);
+  REQUIRE(north.size() == 1);
+  CHECK(north[0].sun.altitude_deg < -10);
+  // The jump of the difference at ±180° is not a crossing: one crossing for each azimuth.
+  for (double azimuth = 0; azimuth < 360; azimuth += 7.5) {
+    INFO("azimuth " << azimuth);
+    CHECK(find_azimuth_times(vienna, azimuth, day, day + kDay).size() == 1);
+  }
+  CHECK_THROWS_AS(
+      find_azimuth_times(vienna, std::numeric_limits<double>::quiet_NaN(), day, day + kDay),
+      std::invalid_argument);
+}

@@ -82,6 +82,11 @@ const std::vector<ReferencePosition>& refracted_positions() {
   return kData;
 }
 
+const std::vector<ReferencePosition>& moon_positions() {
+  static const auto kData = read_positions("moon_airless.csv");
+  return kData;
+}
+
 const std::vector<ReferenceEvent>& events() {
   static const auto kData = [] {
     std::vector<ReferenceEvent> result;

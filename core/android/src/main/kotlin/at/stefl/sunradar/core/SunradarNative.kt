@@ -89,6 +89,24 @@ internal object SunradarNative {
         sigmaDeg: Double,
     ): DoubleArray
 
+    @JvmStatic
+    external fun findAzimuthTimes(
+        observer: DoubleArray,
+        azimuthDeg: Double,
+        startUtc: Double,
+        endUtc: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun moonPosition(
+        unixUtc: Double,
+        observer: DoubleArray,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic external fun moonIlluminatedFraction(unixUtc: Double): Double
+
     /** The C++ defaults of the option structs, Camera, View, and the heading, for the tests. */
     @JvmStatic external fun defaults(): DoubleArray
 }

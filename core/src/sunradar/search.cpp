@@ -1,8 +1,14 @@
 #include "sunradar/search.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 
+#include "sunradar/internal/math.hpp"
+#include "sunradar/internal/numeric.hpp"
+#include "sunradar/internal/refraction.hpp"
 #include "sunradar/internal/search.hpp"
+#include "sunradar/internal/solar_model.hpp"
 #include "sunradar/internal/validate.hpp"
 #include "sunradar/internal/vector.hpp"
 
@@ -80,6 +86,44 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
     if (before && after && s <= options.max_separation_deg) {
       result.push_back(daily[i]);
     }
+  }
+  return result;
+}
+
+std::vector<AzimuthCrossing> find_azimuth_times(const Observer& observer, const double azimuth_deg,
+                                                const double start_utc, const double end_utc,
+                                                const SearchOptions& options) {
+  require_finite(azimuth_deg, "azimuth_deg");
+  validate(observer, {.azimuth_deg = azimuth_deg, .altitude_deg = 0}, start_utc, end_utc, options);
+  require((end_utc - start_utc) / options.step_s <= kMaxSteps,
+          "the interval has too many search steps");
+
+  const internal::SolarModelImpl& model = internal::solar_model(options.model);
+  const auto position = [&](const double t) {
+    const Horizontal h = model.sun(t, observer);
+    return options.refraction ? internal::refracted(h, options.atmosphere) : h;
+  };
+  // The signed difference of the azimuths. It jumps from +180 to -180 when the sun is opposite
+  // the direction; such a sign change is not a crossing.
+  const auto difference = [&](const double t) {
+    return internal::wrap_180(position(t).azimuth_deg - azimuth_deg);
+  };
+
+  std::vector<AzimuthCrossing> result;
+  const double span = end_utc - start_utc;
+  const auto steps = static_cast<std::size_t>(std::max(1.0, std::ceil(span / options.step_s)));
+  const double step = span / static_cast<double>(steps);
+  double t_prev = start_utc;
+  double d_prev = difference(t_prev);
+  for (std::size_t i = 1; i <= steps; ++i) {
+    const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
+    const double d = difference(t);
+    if ((d < 0) != (d_prev < 0) && std::abs(d - d_prev) < 180) {
+      const double root = internal::bisect(difference, t_prev, t, d_prev, options.tolerance_s);
+      result.push_back({.unix_utc = root, .sun = position(root)});
+    }
+    t_prev = t;
+    d_prev = d;
   }
   return result;
 }

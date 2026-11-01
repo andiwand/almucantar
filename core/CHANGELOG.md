@@ -39,6 +39,10 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   `heading_from_direction()`. The variance of a magnetometer measurement grows with the
   difference between the measured and the WMM field strength and inclination, so a
   disturbance (for example steel) makes the filter trust the gyroscope. `Vector3` is new.
+- `moon_position()` and `moon_illuminated_fraction()` from Astronomy Engine (vendored, MIT),
+  and `SolarModel::astronomy_engine`, a second and more precise model of the sun.
+- `find_azimuth_times()` finds the times when the sun has a given azimuth ("when is the sun
+  in this direction?").
 - An invalid argument throws `std::invalid_argument`: a value that is not finite, a
   latitude outside [-90, 90], an empty interval, a step that is not positive, or a
   path with more than 1,000,000 points.
@@ -50,13 +54,15 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   because Horizons rounds its times to the minute.
 - The magnetic field agrees with the 100 official WMM2025 test values to 0.001 nT,
   and the declination to their rounding of 0.005°.
+- The moon agrees with JPL Horizons to 0.002°, and the sun of `astronomy_engine` to 0.002°
+  (`noaa`: 0.015°).
 - `project()` and `unproject()` are inverse to better than 1e-6 px, with distortion.
 
 ### Packages
 
 - The Python package `sunradar` (pybind11, scikit-build-core). It has the same
   functions and types as the C++ API, including the view, the magnetic
-  declination, the search, and the heading filter.
+  declination, the search, the heading filter, and the moon.
 - The Android AAR `at.stefl.sunradar:core-android` (JNI and a Kotlin API) for `arm64-v8a`
   and `x86_64`, with the same functions and types. An invalid argument throws
   `IllegalArgumentException`. `DirectionLine` and `Polylines` let an app project a path in

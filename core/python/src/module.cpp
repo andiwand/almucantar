@@ -66,6 +66,22 @@ void bind_types(const py::module_& m) {
       .def("__repr__", [](const Atmosphere& a) { return repr(a); });
 }
 
+void bind_moon(py::module_& m) {
+  using namespace sunradar;
+  const MoonOptions defaults;
+  py::class_<MoonOptions>(m, "MoonOptions")
+      .def(py::init([](const bool refraction, const Atmosphere& atmosphere) {
+             return MoonOptions{.refraction = refraction, .atmosphere = atmosphere};
+           }),
+           "refraction"_a = defaults.refraction, "atmosphere"_a = defaults.atmosphere)
+      .def_readwrite("refraction", &MoonOptions::refraction)
+      .def_readwrite("atmosphere", &MoonOptions::atmosphere);
+  m.def("moon_position", &moon_position, "unix_utc"_a, "observer"_a, "options"_a = MoonOptions{},
+        "Returns the apparent topocentric position of the center of the moon.");
+  m.def("moon_illuminated_fraction", &moon_illuminated_fraction, "unix_utc"_a,
+        "Returns the illuminated fraction of the disc of the moon, 0 (new) to 1 (full).");
+}
+
 void bind_heading(py::module_& m) {
   using namespace sunradar;
 
@@ -162,6 +178,15 @@ void bind_search(py::module_& m) {
   m.def("find_time", &find_time, "observer"_a, "direction"_a, "start_utc"_a, "end_utc"_a,
         "options"_a = SearchOptions{},
         "Finds the time between start_utc and end_utc when the sun is nearest to direction.");
+  py::class_<AzimuthCrossing>(m, "AzimuthCrossing", "The sun has a given azimuth.")
+      .def_readonly("unix_utc", &AzimuthCrossing::unix_utc)
+      .def_readonly("sun", &AzimuthCrossing::sun)
+      .def("__repr__", [](const AzimuthCrossing& c) {
+        return "AzimuthCrossing(unix_utc=" + num(c.unix_utc) + ", sun=" + repr(c.sun) + ")";
+      });
+  m.def("find_azimuth_times", &find_azimuth_times, "observer"_a, "azimuth_deg"_a, "start_utc"_a,
+        "end_utc"_a, "options"_a = SearchOptions{},
+        "Finds the times between start_utc and end_utc when the sun has the azimuth azimuth_deg.");
   m.def("find_dates", &find_dates, "observer"_a, "direction"_a, "start_utc"_a, "end_utc"_a,
         "options"_a = SearchOptions{},
         "Finds the dates when the sun goes through direction, one 24-hour window at a time.");
@@ -280,7 +305,8 @@ void bind_sun(py::module_& m) {
   using namespace sunradar;
 
   py::enum_<SolarModel>(m, "SolarModel", "The model that calculates the position of the sun.")
-      .value("noaa", SolarModel::noaa, "NOAA solar calculator (Meeus)");
+      .value("noaa", SolarModel::noaa, "NOAA solar calculator (Meeus)")
+      .value("astronomy_engine", SolarModel::astronomy_engine, "Astronomy Engine (more precise)");
 
   py::enum_<DayKind>(m, "DayKind")
       .value("normal", DayKind::normal, "the sun crosses the threshold at least once")
@@ -375,6 +401,7 @@ PYBIND11_MODULE(_core, m) {
   bind_view(m);
   bind_search(m);
   bind_heading(m);
+  bind_moon(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");

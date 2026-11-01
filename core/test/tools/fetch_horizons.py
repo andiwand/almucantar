@@ -14,10 +14,15 @@ Files:
   Horizons (yellow light, standard atmosphere).
 - sun_events.csv: site, kind, unix_utc. kind is rise, transit, or set. Horizons
   defines rise and set as the refracted upper limb on the true horizon.
+- moon_airless.csv: site, unix_utc, azimuth_deg, altitude_deg. Apparent topocentric
+  position of the center of the moon, without refraction.
+
+To fetch only some files: python3 core/test/tools/fetch_horizons.py moon
 """
 
 import csv
 import pathlib
+import sys
 import urllib.parse
 import urllib.request
 
@@ -45,11 +50,14 @@ EVENT_SPAN = ("2026-01-01", "2027-01-01", "1 m")
 JD_UNIX_EPOCH = 2440587.5
 
 
-def query(site, start, stop, step, apparent, rts=False):
+MOON_SPAN = ("2026-01-01", "2027-01-01", "617 m")
+
+
+def query(site, start, stop, step, apparent, rts=False, body="10"):
     lon, lat = SITES[site]
     params = {
         "format": "text",
-        "COMMAND": "'10'",
+        "COMMAND": f"'{body}'",
         "OBJ_DATA": "'NO'",
         "MAKE_EPHEM": "'YES'",
         "EPHEM_TYPE": "'OBSERVER'",
@@ -116,7 +124,21 @@ def write_events():
     print("wrote", OUT / "sun_events.csv")
 
 
+def write_moon():
+    with open(OUT / "moon_airless.csv", "w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["site", "unix_utc", "azimuth_deg", "altitude_deg"])
+        for site in SITES:
+            start, stop, step = MOON_SPAN
+            for unix, _, az, alt in query(
+                site, start, stop, step, "AIRLESS", body="301"
+            ):
+                w.writerow([site, f"{unix:.3f}", f"{az:.9f}", f"{alt:.9f}"])
+    print("wrote", OUT / "moon_airless.csv")
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    write_positions()
-    write_events()
+    jobs = {"sun": write_positions, "events": write_events, "moon": write_moon}
+    for name in sys.argv[1:] or jobs:
+        jobs[name]()

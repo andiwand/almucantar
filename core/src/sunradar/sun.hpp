@@ -9,7 +9,8 @@ namespace sunradar {
 
 /// The model that calculates the position of the sun.
 enum class SolarModel : std::uint8_t {
-  noaa,  ///< NOAA solar calculator (Meeus); error ≤ 0.02° for 1950–2100
+  noaa,              ///< NOAA solar calculator (Meeus); error ≤ 0.02° for 1950–2100
+  astronomy_engine,  ///< Astronomy Engine (VSOP87); more precise and slower than noaa
 };
 
 /// The airless altitude of the center of the sun at the standard sunrise and

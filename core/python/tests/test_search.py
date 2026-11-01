@@ -43,3 +43,12 @@ def test_invalid_arguments():
         )
     with pytest.raises(ValueError, match="end_utc"):
         sunradar.find_time(VIENNA, sunradar.Horizontal(), YEAR_START, YEAR_START)
+
+
+def test_find_azimuth_times():
+    day = YEAR_START + 120 * DAY
+    t = day + 9.5 * 3600
+    sun = sunradar.sun_position(t, VIENNA)
+    crossings = sunradar.find_azimuth_times(VIENNA, sun.azimuth_deg, day, day + DAY)
+    assert len(crossings) == 1
+    assert crossings[0].unix_utc == pytest.approx(t, abs=1)

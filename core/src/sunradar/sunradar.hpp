@@ -4,6 +4,7 @@
 
 #include "sunradar/heading.hpp"   // IWYU pragma: export
 #include "sunradar/magnetic.hpp"  // IWYU pragma: export
+#include "sunradar/moon.hpp"      // IWYU pragma: export
 #include "sunradar/search.hpp"    // IWYU pragma: export
 #include "sunradar/sun.hpp"       // IWYU pragma: export
 #include "sunradar/types.hpp"     // IWYU pragma: export

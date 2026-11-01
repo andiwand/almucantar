@@ -147,3 +147,33 @@ fun headingFromDirection(
 ): HeadingMeasurement =
     SunradarNative.headingFromDirection(view.pack(), point.pack(), trueAzimuthDeg, sigmaDeg)
         .toHeadingMeasurement()
+
+/** Finds the times between the two times when the sun has the azimuth [azimuthDeg]. */
+fun findAzimuthTimes(
+    observer: Observer,
+    azimuthDeg: Double,
+    startUtc: Double,
+    endUtc: Double,
+    options: SearchOptions = SearchOptions(),
+): List<AzimuthCrossing> {
+    val r =
+        SunradarNative.findAzimuthTimes(
+            observer.pack(),
+            azimuthDeg,
+            startUtc,
+            endUtc,
+            options.pack(),
+        )
+    return List(r.size / 3) { AzimuthCrossing(r[3 * it], r.toHorizontal(3 * it + 1)) }
+}
+
+/** Returns the apparent topocentric position of the center of the moon. */
+fun moonPosition(
+    unixUtc: Double,
+    observer: Observer,
+    options: MoonOptions = MoonOptions(),
+): Horizontal = SunradarNative.moonPosition(unixUtc, observer.pack(), options.pack()).toHorizontal()
+
+/** Returns the illuminated fraction of the disc of the moon, 0 (new) to 1 (full). */
+fun moonIlluminatedFraction(unixUtc: Double): Double =
+    SunradarNative.moonIlluminatedFraction(unixUtc)
