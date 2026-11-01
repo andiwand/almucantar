@@ -240,7 +240,7 @@ The heading indoors is the main error (section 2). The core supports these metho
 The platform also gives the accuracy status of the magnetometer
 (`SENSOR_STATUS_ACCURACY_*`), and the UI shows a warning.
 
-### 5.4a Proposal: a heading filter, from the thesis on magnetometer calibration
+### 5.4a The heading filter, from the thesis on magnetometer calibration (done in M7)
 
 Source: <https://github.com/andiwand/magnetic-calibration-thesis> (particle filter for
 the online calibration of the magnetometer in smartphones). Its pipeline is:
@@ -514,7 +514,7 @@ contain the same core.
 | M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. Not yet checked on a real phone. |
 | M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. Open: the outdoor check of 2° on a real phone. |
-| M7 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |
+| M7 | Heading filter (core) with game rotation vector, magnetometer, and sun tap; UI rework | implemented: the filter and its measurements are tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone, the moon tap (needs Astronomy Engine), and the map bearing (needs a map UI). |
 | M8 | Date slider, auto mode UI, polish | usable in a real flat visit |
 | M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |

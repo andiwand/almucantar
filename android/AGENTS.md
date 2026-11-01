@@ -12,7 +12,8 @@ API of the AAR.
 | `app/src/main/kotlin/at/stefl/sunradar/MainActivity.kt` | The activity and the location permission. |
 | `.../SkyScreen.kt` | The sky view (Compose): horizon, cardinal points, path, hour marks, sun, crosshair with the auto-mode time, and the status text. |
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
-| `.../Sensors.kt` | `TYPE_ROTATION_VECTOR`. M7 replaces it with the game rotation vector and the heading filter of the core. |
+| `.../HeadingTracker.kt` | The game rotation vector, the magnetometer (once per second), and the heading filter of the core. `apply()` takes a calibration, for example a sun tap. |
+| `.../SkyDrawing.kt` | Drawing helpers: upright labels, the arrow at the screen border, dashed lines. |
 | `.../Location.kt` | The place: the device location (coarse), else the city of the time zone, else Vienna. The town name comes from the geocoder of the device. |
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
 | `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |

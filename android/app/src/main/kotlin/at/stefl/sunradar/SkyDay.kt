@@ -7,11 +7,12 @@ import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.PathOptions
 import at.stefl.sunradar.core.sunEvents
 import at.stefl.sunradar.core.sunPath
+import at.stefl.sunradar.core.sunPosition
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** A mark on the path at a full hour of local time. */
+/** A mark on the path at a full hour of local time, or at a sunrise or a sunset. */
 data class HourMark(val direction: Horizontal, val label: String)
 
 /**
@@ -46,17 +47,26 @@ class SkyDay(val observer: Observer, val startUtc: Double, val endUtc: Double, z
             .filter { ((it.unixUtc - startUtc) % 3600.0) == 0.0 && it.position.altitudeDeg > -6 }
             .map { HourMark(it.position, formatHour(it.unixUtc, zone)) }
 
-    /** For example "Sunrise 04:53, sunset 21:00", or "Polar day". */
+    private val events = sunEvents(observer, startUtc, endUtc)
+
+    /** The sunrises and sunsets, as marks on the horizon ("↑ 07:37", "↓ 17:30"). */
+    val horizonMarks: List<HourMark> =
+        events.crossings.map {
+            HourMark(
+                sunPosition(it.unixUtc, observer),
+                (if (it.rising) "↑ " else "↓ ") + formatTime(it.unixUtc, zone),
+            )
+        }
+
+    /** For example "↑ 04:53 · ↓ 21:00", or "Polar day". */
     val summary: String =
-        sunEvents(observer, startUtc, endUtc).let { events ->
-            when (events.kind) {
-                DayKind.POLAR_DAY -> "Polar day"
-                DayKind.POLAR_NIGHT -> "Polar night"
-                DayKind.NORMAL ->
-                    events.crossings.joinToString(", ") {
-                        (if (it.rising) "Sunrise " else "Sunset ") + formatTime(it.unixUtc, zone)
-                    }
-            }
+        when (events.kind) {
+            DayKind.POLAR_DAY -> "Polar day: the sun does not set"
+            DayKind.POLAR_NIGHT -> "Polar night: the sun does not rise"
+            DayKind.NORMAL ->
+                events.crossings.joinToString(" · ") {
+                    (if (it.rising) "Sunrise " else "Sunset ") + formatTime(it.unixUtc, zone)
+                }
         }
 
     companion object {
