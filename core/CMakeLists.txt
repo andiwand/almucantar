@@ -12,6 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(SUNRADAR_TESTS "Build the C++ tests" ON)
 option(SUNRADAR_PYTHON "Build the Python binding" OFF)
+option(SUNRADAR_JNI "Build the JNI binding for the Android AAR" OFF)
 option(SUNRADAR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(SUNRADAR_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -64,6 +65,10 @@ endif()
 
 if(SUNRADAR_PYTHON)
   add_subdirectory(python)
+endif()
+
+if(SUNRADAR_JNI)
+  add_subdirectory(android/jni)
 endif()
 
 # Install the public headers only. The internal headers stay in the source tree.

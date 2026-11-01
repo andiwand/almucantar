@@ -1,0 +1,43 @@
+# Builds libsunradar_jni.so for each ABI and uploads it as the artifact
+# native-android-<abi>. The workflows core-android.yml and android.yml call it.
+name: native-android
+
+on:
+  workflow_call:
+
+env:
+  CONAN_VERSION: "2.26.1"
+  NDK_VERSION: "28.2.13676358"
+
+jobs:
+  build:
+    name: libsunradar_jni (${{ matrix.abi }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [armv8, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Conan
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+
+      - name: Install the NDK
+        run: |
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" > /dev/null
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Build
+        run: python3 core/android/build_native.py --abi ${{ matrix.abi }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-android-${{ matrix.abi }}
+          path: core/android/native/prebuilt/jniLibs

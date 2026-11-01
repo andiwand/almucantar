@@ -17,14 +17,23 @@ class SunradarConan(ConanFile):
         "shared": [True, False],
         "with_tests": [True, False],
         "with_python": [True, False],
+        "with_jni": [True, False],
     }
     default_options = {
         "shared": False,
         "with_tests": True,
         "with_python": False,
+        "with_jni": False,
     }
 
-    exports_sources = ["LICENSE", "cmake/*", "python/*", "src/*", "CMakeLists.txt"]
+    exports_sources = [
+        "LICENSE",
+        "android/jni/*",
+        "cmake/*",
+        "python/*",
+        "src/*",
+        "CMakeLists.txt",
+    ]
 
     def requirements(self):
         if self.options.with_python:
@@ -41,6 +50,7 @@ class SunradarConan(ConanFile):
         tc = CMakeToolchain(self)
         tc.cache_variables["SUNRADAR_TESTS"] = bool(self.options.with_tests)
         tc.cache_variables["SUNRADAR_PYTHON"] = bool(self.options.with_python)
+        tc.cache_variables["SUNRADAR_JNI"] = bool(self.options.with_jni)
         tc.generate()
         CMakeDeps(self).generate()
 

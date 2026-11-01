@@ -15,6 +15,7 @@ The design is in [`../PLAN.md`](../PLAN.md) section 5.
 | `test/data/` | Reference data: JPL Horizons (`test/tools/fetch_horizons.py` makes it) and the official WMM2025 test values. |
 | `tools/wmm/` | The WMM2025 coefficient file, its source, and the generator. See its `README.md` for WMM2030. |
 | `python/` | The Python binding. See [`python/AGENTS.md`](python/AGENTS.md). |
+| `android/` | The JNI binding and the AAR. See [`android/AGENTS.md`](android/AGENTS.md). |
 | `cmake/` | Compiler options and the check of the public headers. |
 | `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`. |
 | `pyproject.toml` | The Python package build (scikit-build-core). |
@@ -53,7 +54,7 @@ Run these commands in `core/`.
    ../.venv/bin/clang-tidy -p build/Debug src/sunradar/sun.cpp
    ```
 
-CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_WARNINGS_AS_ERRORS`,
+CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WARNINGS_AS_ERRORS`,
 `SUNRADAR_SANITIZE`. Add a new `.cpp` to `SUNRADAR_SOURCE_FILES`.
 
 ## The public API

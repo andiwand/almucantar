@@ -6,7 +6,10 @@
 
    The NDK path comes from ANDROID_NDK_HOME. If that is not set, the profile
    uses ANDROID_HOME (or the default SDK location on macOS) and the NDK
-   version below. #}
+   version below.
+
+   The AAR has one native library, so it links the C++ library statically
+   (c++_static), and the AAR does not ship libc++_shared.so. #}
 {% set ndk_version = "28.2.13676358" %}
 {% set api_level = "28" %}
 {% set default_sdk = os.path.expanduser("~/Library/Android/sdk") if platform.system() == "Darwin" else os.path.expanduser("~/Android/Sdk") %}
@@ -21,7 +24,7 @@ build_type=Release
 compiler=clang
 compiler.version=19
 compiler.cppstd=20
-compiler.libcxx=c++_shared
+compiler.libcxx=c++_static
 
 [conf]
 tools.android:ndk_path={{ndk_path}}

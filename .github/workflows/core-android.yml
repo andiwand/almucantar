@@ -1,0 +1,85 @@
+name: core-android
+
+on:
+  push:
+    branches: [main]
+    paths: ["core/**", ".github/workflows/core-android.yml", ".github/workflows/native-android.yml"]
+  pull_request:
+    paths: ["core/**", ".github/workflows/core-android.yml", ".github/workflows/native-android.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    uses: ./.github/workflows/native-android.yml
+
+  aar:
+    name: AAR (build, lint, format)
+    needs: native
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: core/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          merge-multiple: true
+          path: core/android/native/prebuilt/jniLibs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, lint, and check the format
+        run: ./gradlew assembleRelease lintDebug spotlessCheck -Psunradar.abis=
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-android-aar
+          path: core/android/build/outputs/aar/*.aar
+
+  instrumented:
+    name: instrumented tests (emulator, API 34)
+    needs: native
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: core/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          merge-multiple: true
+          path: core/android/native/prebuilt/jniLibs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          working-directory: core/android
+          script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=

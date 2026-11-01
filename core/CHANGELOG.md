@@ -45,4 +45,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 - The Python package `sunradar` (pybind11, scikit-build-core). It has the same
   functions and types as the C++ API, including the view, the magnetic
-  declination, and the search. An invalid argument raises `ValueError`.
+  declination, and the search.
+- The Android AAR `at.stefl.sunradar:core-android` (JNI and a Kotlin API) for `arm64-v8a`
+  and `x86_64`, with the same functions and types. An invalid argument throws
+  `IllegalArgumentException`. `DirectionLine` and `Polylines` let an app project a path in
+  each frame without conversions. An invalid argument raises `ValueError`.

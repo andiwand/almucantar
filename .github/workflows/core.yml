@@ -92,7 +92,7 @@ jobs:
       - name: Install dependencies
         run: >
           conan install . --build=missing -s build_type=Debug -s compiler.cppstd=20
-          -o "&:with_python=True"
+          -o "&:with_python=True" -o "&:with_jni=True"
           -c tools.build:compiler_executables="{'c': 'clang', 'cpp': 'clang++'}"
 
       - name: Configure
@@ -100,7 +100,8 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          git ls-files 'src/*.cpp' 'python/src/*.cpp' | xargs -n 1 -P 4 clang-tidy -p build/Debug --quiet
+          git ls-files 'src/*.cpp' 'python/src/*.cpp' 'android/jni/*.cpp' |
+            xargs -n 1 -P 4 clang-tidy -p build/Debug --quiet
 
   android:
     name: build (android, ${{ matrix.abi }})
