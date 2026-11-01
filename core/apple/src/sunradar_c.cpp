@@ -4,10 +4,12 @@
 
 #include "sunradar_c.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <iterator>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -134,6 +136,35 @@ void fill(const std::vector<Polyline>& lines, sr_polylines* out) {
   out->line_count = counts.size();
 }
 
+static_assert(SR_HEADING_FILTER_SIZE == kHeadingFilterSize);
+
+HeadingFilterOptions to_cpp(const sr_heading_filter_options& o) {
+  return {.drift_deg2_per_s = o.drift_deg2_per_s,
+          .bias_drift_ut2_per_s = o.bias_drift_ut2_per_s,
+          .disturbance_sigma_ut = o.disturbance_sigma_ut,
+          .disturbance_time_s = o.disturbance_time_s,
+          .noise_sigma_ut = o.noise_sigma_ut};
+}
+
+HeadingFilter to_cpp(const sr_heading_filter* f) {
+  if (f == nullptr) throw std::invalid_argument("filter is null");
+  HeadingFilter out{.offset_deg = f->offset_deg,
+                    .bias_ut = {.x = f->bias_ut.x, .y = f->bias_ut.y, .z = f->bias_ut.z},
+                    .disturbance_ut = {.x = f->disturbance_ut.x,
+                                       .y = f->disturbance_ut.y,
+                                       .z = f->disturbance_ut.z},
+                    .covariance = {}};
+  std::ranges::copy(f->covariance, out.covariance.begin());
+  return out;
+}
+
+void to_c(const HeadingFilter& f, sr_heading_filter* out) {
+  out->offset_deg = f.offset_deg;
+  out->bias_ut = {f.bias_ut.x, f.bias_ut.y, f.bias_ut.z};
+  out->disturbance_ut = {f.disturbance_ut.x, f.disturbance_ut.y, f.disturbance_ut.z};
+  std::ranges::copy(f.covariance, std::begin(out->covariance));
+}
+
 }  // namespace
 
 extern "C" {
@@ -165,6 +196,11 @@ sr_magnetometer_options sr_default_magnetometer_options(void) {
 sr_heading_estimate sr_default_heading_estimate(void) {
   const HeadingEstimate d;
   return {d.offset_deg, d.variance_deg2};
+}
+sr_heading_filter_options sr_default_heading_filter_options(void) {
+  const HeadingFilterOptions d;
+  return {d.drift_deg2_per_s, d.bias_drift_ut2_per_s, d.disturbance_sigma_ut, d.disturbance_time_s,
+          d.noise_sigma_ut};
 }
 sr_camera sr_default_camera(void) { return to_c(Camera{}); }
 sr_view sr_default_view(void) {
@@ -381,6 +417,45 @@ sr_status sr_heading_from_direction(sr_view v, sr_screen_point p, double az, dou
     require_out(out);
     const HeadingMeasurement r = heading_from_direction(to_cpp(v), to_cpp(p), az, sigma);
     *out = {r.offset_deg, r.variance_deg2};
+  });
+}
+
+sr_status sr_heading_filter_start(sr_vector3 b, double sigma, sr_heading_filter_options opt,
+                                  sr_heading_filter* out) {
+  return guarded([&] {
+    require_out(out);
+    to_c(heading_filter_start({.x = b.x, .y = b.y, .z = b.z}, sigma, to_cpp(opt)), out);
+  });
+}
+
+sr_status sr_heading_filter_predict(const sr_heading_filter* f, double dt,
+                                    sr_heading_filter_options opt, sr_heading_filter* out) {
+  return guarded([&] {
+    require_out(out);
+    to_c(heading_filter_predict(to_cpp(f), dt, to_cpp(opt)), out);
+  });
+}
+
+sr_status sr_heading_filter_update(const sr_heading_filter* f, sr_heading_measurement m,
+                                   sr_heading_filter* out) {
+  return guarded([&] {
+    require_out(out);
+    to_c(heading_filter_update(to_cpp(f),
+                               {.offset_deg = m.offset_deg, .variance_deg2 = m.variance_deg2}),
+         out);
+  });
+}
+
+sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* f, sr_quaternion q,
+                                                sr_vector3 field, sr_observer o, double t,
+                                                sr_heading_filter_options opt,
+                                                sr_heading_filter* out) {
+  return guarded([&] {
+    require_out(out);
+    to_c(heading_filter_update_magnetometer(to_cpp(f), to_cpp(q),
+                                            {.x = field.x, .y = field.y, .z = field.z}, to_cpp(o),
+                                            t, to_cpp(opt)),
+         out);
   });
 }
 

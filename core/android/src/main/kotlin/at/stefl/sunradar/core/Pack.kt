@@ -88,5 +88,33 @@ internal fun DoubleArray.toHeadingEstimate() = HeadingEstimate(this[0], this[1])
 
 internal fun DoubleArray.toHeadingMeasurement() = HeadingMeasurement(this[0], this[1])
 
+internal fun HeadingFilter.pack() =
+    doubleArrayOf(
+        offsetDeg,
+        biasUt.x,
+        biasUt.y,
+        biasUt.z,
+        disturbanceUt.x,
+        disturbanceUt.y,
+        disturbanceUt.z,
+    ) + covariance.toDoubleArray()
+
+internal fun DoubleArray.toHeadingFilter() =
+    HeadingFilter(
+        this[0],
+        Vector3(this[1], this[2], this[3]),
+        Vector3(this[4], this[5], this[6]),
+        copyOfRange(7, size).toList(),
+    )
+
+internal fun HeadingFilterOptions.pack() =
+    doubleArrayOf(
+        driftDeg2PerS,
+        biasDriftUt2PerS,
+        disturbanceSigmaUt,
+        disturbanceTimeS,
+        noiseSigmaUt,
+    )
+
 internal fun MoonOptions.pack() =
     doubleArrayOf(refraction.pack(), atmosphere.pressureHpa, atmosphere.temperatureC)

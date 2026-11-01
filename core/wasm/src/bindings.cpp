@@ -277,6 +277,55 @@ HeadingMeasurement heading_from_direction_js(const ViewJs& v, const ScreenPoint&
   return guarded([&] { return heading_from_direction(v.get(), p, az, sigma); });
 }
 
+/// A HeadingFilter crosses as a plain object with the covariance as a JS array.
+val to_js(const HeadingFilter& f) {
+  val out = val::object();
+  out.set("offsetDeg", f.offset_deg);
+  out.set("biasUt", f.bias_ut);
+  out.set("disturbanceUt", f.disturbance_ut);
+  val covariance = val::array();
+  for (const double c : f.covariance) {
+    covariance.call<void>("push", c);
+  }
+  out.set("covariance", covariance);
+  return out;
+}
+
+HeadingFilter heading_filter_from_js(const val& v) {
+  HeadingFilter f{.offset_deg = v["offsetDeg"].as<double>(),
+                  .bias_ut = v["biasUt"].as<Vector3>(),
+                  .disturbance_ut = v["disturbanceUt"].as<Vector3>(),
+                  .covariance = {}};
+  const val covariance = v["covariance"];
+  if (covariance["length"].as<std::size_t>() != f.covariance.size()) {
+    throw std::invalid_argument("covariance has the wrong length");
+  }
+  for (std::size_t i = 0; i < f.covariance.size(); ++i)
+    f.covariance[i] = covariance[i].as<double>();
+  return f;
+}
+
+val heading_filter_start_js(const Vector3& bias, double sigma, const HeadingFilterOptions& opt) {
+  return guarded([&] { return to_js(heading_filter_start(bias, sigma, opt)); });
+}
+
+val heading_filter_predict_js(const val& f, double dt, const HeadingFilterOptions& opt) {
+  return guarded([&] { return to_js(heading_filter_predict(heading_filter_from_js(f), dt, opt)); });
+}
+
+val heading_filter_update_js(const val& f, const HeadingMeasurement& m) {
+  return guarded([&] { return to_js(heading_filter_update(heading_filter_from_js(f), m)); });
+}
+
+val heading_filter_update_magnetometer_js(const val& f, const Quaternion& q, const Vector3& field,
+                                          const Observer& o, double t,
+                                          const HeadingFilterOptions& opt) {
+  return guarded([&] {
+    return to_js(
+        heading_filter_update_magnetometer(heading_filter_from_js(f), q, field, o, t, opt));
+  });
+}
+
 /// The C++ defaults of the option structs, the view, and the heading filter, for index.js.
 val defaults_js() {
   val d = val::object();
@@ -291,6 +340,8 @@ val defaults_js() {
   d.set("view", ViewJs{});
   d.set("sunriseAltitudeDeg", kSunriseAltitudeDeg);
   d.set("headingDriftDeg2PerS", kDefaultHeadingDriftDeg2PerS);
+  d.set("headingFilterOptions", HeadingFilterOptions{});
+  d.set("headingFilterSize", kHeadingFilterSize);
   return d;
 }
 
@@ -370,6 +421,12 @@ EMSCRIPTEN_BINDINGS(sunradar) {
       .field("varianceDeg2", &HeadingMeasurement::variance_deg2);
   value_object<MagnetometerOptions>("MagnetometerOptions")
       .field("sensorSigmaDeg", &MagnetometerOptions::sensor_sigma_deg);
+  value_object<HeadingFilterOptions>("HeadingFilterOptions")
+      .field("driftDeg2PerS", &HeadingFilterOptions::drift_deg2_per_s)
+      .field("biasDriftUt2PerS", &HeadingFilterOptions::bias_drift_ut2_per_s)
+      .field("disturbanceSigmaUt", &HeadingFilterOptions::disturbance_sigma_ut)
+      .field("disturbanceTimeS", &HeadingFilterOptions::disturbance_time_s)
+      .field("noiseSigmaUt", &HeadingFilterOptions::noise_sigma_ut);
 
   function("version", &version_js);
   function("defaults", &defaults_js);
@@ -391,4 +448,8 @@ EMSCRIPTEN_BINDINGS(sunradar) {
   function("headingUpdate", &heading_update_js);
   function("headingFromMagnetometer", &heading_from_magnetometer_js);
   function("headingFromDirection", &heading_from_direction_js);
+  function("headingFilterStart", &heading_filter_start_js);
+  function("headingFilterPredict", &heading_filter_predict_js);
+  function("headingFilterUpdate", &heading_filter_update_js);
+  function("headingFilterUpdateMagnetometer", &heading_filter_update_magnetometer_js);
 }

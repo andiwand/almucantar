@@ -108,4 +108,24 @@ final class SunradarTests: XCTestCase {
         let declination = try magneticDeclinationDeg(observer: vienna, unixUtc: dayStart)
         XCTAssertEqual(m.offsetDeg, (declination + 360).truncatingRemainder(dividingBy: 360), accuracy: 1e-6)
     }
+
+    func testHeadingFilterWithBias() throws {
+        var f = try headingFilterStart(biasUt: Vector3(x: 1, y: 2, z: 3), biasSigmaUt: 0.5)
+        XCTAssertEqual(f.varianceDeg2, unknownHeadingVarianceDeg2)
+        XCTAssertEqual(f.covariance.count, headingFilterSize * headingFilterSize)
+        XCTAssertEqual(f.biasUt.y, 2)
+        // A field to the north of the frame (device -z) and down (device -y), plus the bias.
+        let t = 1_767_225_600.0
+        f = try headingFilterPredict(f, dtS: 1)
+        f = try headingFilterUpdateMagnetometer(
+            f, deviceToFrame: northUpright, fieldUt: Vector3(x: 1, y: -38, z: -17), observer: vienna, unixUtc: t)
+        XCTAssertEqual(f.offsetDeg, try magneticDeclinationDeg(observer: vienna, unixUtc: t), accuracy: 5)
+        f = try headingFilterUpdate(f, HeadingMeasurement(offsetDeg: 10, varianceDeg2: 0.01))
+        XCTAssertEqual(f.offsetDeg, 10, accuracy: 0.1)
+        XCTAssertEqual(f.estimate.offsetDeg, f.offsetDeg)
+        XCTAssertThrowsError(try headingFilterStart(biasUt: Vector3(x: 0, y: 0, z: 0), biasSigmaUt: 0))
+        var bad = f
+        bad.covariance = [1]
+        XCTAssertThrowsError(try headingFilterPredict(bad, dtS: 1))
+    }
 }

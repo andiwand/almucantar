@@ -269,6 +269,78 @@ public struct HeadingMeasurement: Equatable, Sendable {
     }
 }
 
+/// The noise model of a HeadingFilter.
+public struct HeadingFilterOptions: Equatable, Sendable {
+    /// The growth of the variance of the offset, because the yaw of the frame drifts.
+    public var driftDeg2PerS: Double
+    /// The growth of the variance of each bias component (1 µT² in 10 minutes).
+    public var biasDriftUt2PerS: Double
+    /// The size of a local disturbance of the field, per component.
+    public var disturbanceSigmaUt: Double
+    /// The correlation time of a local disturbance.
+    public var disturbanceTimeS: Double
+    /// The noise of one magnetometer sample, per component.
+    public var noiseSigmaUt: Double
+    public init(
+        driftDeg2PerS: Double = HeadingFilterOptions.c.drift_deg2_per_s,
+        biasDriftUt2PerS: Double = HeadingFilterOptions.c.bias_drift_ut2_per_s,
+        disturbanceSigmaUt: Double = HeadingFilterOptions.c.disturbance_sigma_ut,
+        disturbanceTimeS: Double = HeadingFilterOptions.c.disturbance_time_s,
+        noiseSigmaUt: Double = HeadingFilterOptions.c.noise_sigma_ut
+    ) {
+        self.driftDeg2PerS = driftDeg2PerS
+        self.biasDriftUt2PerS = biasDriftUt2PerS
+        self.disturbanceSigmaUt = disturbanceSigmaUt
+        self.disturbanceTimeS = disturbanceTimeS
+        self.noiseSigmaUt = noiseSigmaUt
+    }
+    @usableFromInline static let c = sr_default_heading_filter_options()
+    var c: sr_heading_filter_options {
+        sr_heading_filter_options(
+            drift_deg2_per_s: driftDeg2PerS, bias_drift_ut2_per_s: biasDriftUt2PerS,
+            disturbance_sigma_ut: disturbanceSigmaUt, disturbance_time_s: disturbanceTimeS,
+            noise_sigma_ut: noiseSigmaUt)
+    }
+}
+
+/// The number of values in the state of a HeadingFilter.
+public let headingFilterSize = Int(SR_HEADING_FILTER_SIZE)
+
+/// The heading filter with the magnetometer: the offset of the frame to true north, the hard-iron
+/// bias in the device frame, and a local disturbance in East-North-Up, with their covariance (row
+/// by row, in that order). Make it with headingFilterStart().
+public struct HeadingFilter: Equatable, Sendable {
+    public var offsetDeg: Double
+    public var biasUt: Vector3
+    public var disturbanceUt: Vector3
+    public var covariance: [Double]
+
+    /// The variance of the offset.
+    public var varianceDeg2: Double { covariance[0] }
+    /// The offset and its variance.
+    public var estimate: HeadingEstimate { HeadingEstimate(offsetDeg: offsetDeg, varianceDeg2: varianceDeg2) }
+
+    init(_ c: sr_heading_filter) {
+        var copy = c
+        offsetDeg = c.offset_deg
+        biasUt = Vector3(x: c.bias_ut.x, y: c.bias_ut.y, z: c.bias_ut.z)
+        disturbanceUt = Vector3(x: c.disturbance_ut.x, y: c.disturbance_ut.y, z: c.disturbance_ut.z)
+        covariance = withUnsafeBytes(of: &copy.covariance) { Array($0.bindMemory(to: Double.self)) }
+    }
+
+    var c: sr_heading_filter {
+        var out = sr_heading_filter()
+        out.offset_deg = offsetDeg
+        out.bias_ut = sr_vector3(x: biasUt.x, y: biasUt.y, z: biasUt.z)
+        out.disturbance_ut = sr_vector3(x: disturbanceUt.x, y: disturbanceUt.y, z: disturbanceUt.z)
+        withUnsafeMutableBytes(of: &out.covariance) { raw in
+            let values = raw.bindMemory(to: Double.self)
+            for i in 0..<min(values.count, covariance.count) { values[i] = covariance[i] }
+        }
+        return out
+    }
+}
+
 /// An error of the core: an invalid argument, or another error. The message names the argument.
 public struct SunradarError: Error, CustomStringConvertible, Sendable {
     public enum Kind: Sendable { case invalidArgument, other }

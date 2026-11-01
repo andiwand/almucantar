@@ -40,6 +40,17 @@ export interface TimeMatch { unixUtc: number; separationDeg: number; sun: Horizo
 export interface AzimuthCrossing { unixUtc: number; sun: Horizontal }
 export interface HeadingEstimate { offsetDeg: number; varianceDeg2: number }
 export interface HeadingMeasurement { offsetDeg: number; varianceDeg2: number }
+/** The noise model of a HeadingFilter. */
+export interface HeadingFilterOptions {
+  driftDeg2PerS: number; biasDriftUt2PerS: number; disturbanceSigmaUt: number;
+  disturbanceTimeS: number; noiseSigmaUt: number;
+}
+/**
+ * The heading filter with the magnetometer: the offset, the hard-iron bias (device frame), and
+ * the local disturbance (East-North-Up), with the covariance row by row in that order. The
+ * first value of the covariance is the variance of the offset.
+ */
+export interface HeadingFilter { offsetDeg: number; biasUt: Vector3; disturbanceUt: Vector3; covariance: number[] }
 
 type Partial2<T> = { [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K] };
 
@@ -59,6 +70,8 @@ export interface Sunradar {
     readonly view: Readonly<View>;
     readonly sunriseAltitudeDeg: number;
     readonly headingDriftDeg2PerS: number;
+    readonly headingFilterOptions: Readonly<HeadingFilterOptions>;
+    readonly headingFilterSize: number;
   };
   sunPosition(unixUtc: number, observer: Observer, options?: Partial2<SunOptions>): Horizontal;
   sunEvents(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<EventOptions>): DayEvents;
@@ -79,6 +92,10 @@ export interface Sunradar {
   headingUpdate(estimate: HeadingEstimate, measurement: HeadingMeasurement): HeadingEstimate;
   headingFromMagnetometer(deviceToFrame: Quaternion, fieldUt: Vector3, observer: Observer, unixUtc: number, options?: Partial<MagnetometerOptions>): HeadingMeasurement;
   headingFromDirection(view: Partial2<View>, point: ScreenPoint, trueAzimuthDeg: number, sigmaDeg: number): HeadingMeasurement;
+  headingFilterStart(biasUt: Vector3, biasSigmaUt: number, options?: Partial<HeadingFilterOptions>): HeadingFilter;
+  headingFilterPredict(filter: HeadingFilter, dtS: number, options?: Partial<HeadingFilterOptions>): HeadingFilter;
+  headingFilterUpdate(filter: HeadingFilter, measurement: HeadingMeasurement): HeadingFilter;
+  headingFilterUpdateMagnetometer(filter: HeadingFilter, deviceToFrame: Quaternion, fieldUt: Vector3, observer: Observer, unixUtc: number, options?: Partial<HeadingFilterOptions>): HeadingFilter;
 }
 
 /** Loads the WebAssembly module. Options go to the Emscripten module (for example locateFile). */

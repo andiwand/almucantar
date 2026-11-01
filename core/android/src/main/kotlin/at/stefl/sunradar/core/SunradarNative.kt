@@ -90,6 +90,33 @@ internal object SunradarNative {
     ): DoubleArray
 
     @JvmStatic
+    external fun headingFilterStart(
+        bias: DoubleArray,
+        biasSigmaUt: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun headingFilterPredict(
+        filter: DoubleArray,
+        dtS: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun headingFilterUpdate(filter: DoubleArray, measurement: DoubleArray): DoubleArray
+
+    @JvmStatic
+    external fun headingFilterUpdateMagnetometer(
+        filter: DoubleArray,
+        quaternion: DoubleArray,
+        field: DoubleArray,
+        observer: DoubleArray,
+        unixUtc: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
     external fun findAzimuthTimes(
         observer: DoubleArray,
         azimuthDeg: Double,

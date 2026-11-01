@@ -75,6 +75,23 @@ test("heading filter", () => {
   near(m.offsetDeg, 70, 1e-9);
 });
 
+test("heading filter with the magnetometer", () => {
+  let f = sunradar.headingFilterStart({ x: 1, y: 2, z: 3 }, 0.5);
+  assert.equal(f.covariance.length, sunradar.defaults.headingFilterSize ** 2);
+  assert.equal(f.covariance[0], 180 * 180);
+  assert.deepEqual(structuredClone(f), f);
+  // A field to the north of the frame (device -z) and down (device -y), plus the bias.
+  const t = 1767225600;
+  f = sunradar.headingFilterPredict(f, 1);
+  f = sunradar.headingFilterUpdateMagnetometer(f, northUpright, { x: 1, y: -38, z: -17 }, vienna, t);
+  near(f.offsetDeg, sunradar.magneticDeclinationDeg(vienna, t), 5);
+  f = sunradar.headingFilterUpdate(f, { offsetDeg: 10, varianceDeg2: 0.01 });
+  near(f.offsetDeg, 10, 0.1);
+  assert.throws(() => sunradar.headingFilterStart({ x: 0, y: 0, z: 0 }, 0), { name: "RangeError", message: /bias_sigma_ut/ });
+  assert.throws(() => sunradar.headingFilterPredict({ ...f, covariance: [1] }, 1), RangeError);
+  near(sunradar.defaults.headingFilterOptions.disturbanceTimeS, 120, 0);
+});
+
 test("values are plain objects that survive structuredClone", () => {
   const path = sunradar.sunPath(vienna, dayStart, dayStart + day, { stepS: 3600 });
   assert.deepEqual(structuredClone(path), path);

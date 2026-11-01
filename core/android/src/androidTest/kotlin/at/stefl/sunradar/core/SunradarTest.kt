@@ -45,7 +45,8 @@ class SunradarTest {
                 MagnetometerOptions().pack() +
                 HeadingEstimate().pack() +
                 MoonOptions().pack() +
-                doubleArrayOf(DEFAULT_HEADING_DRIFT_DEG2_PER_S)
+                doubleArrayOf(DEFAULT_HEADING_DRIFT_DEG2_PER_S) +
+                HeadingFilterOptions().pack()
         assertEquals(expected.toList(), SunradarNative.defaults().toList())
     }
 
@@ -172,6 +173,25 @@ class SunradarTest {
         val t = 1767225600.0
         val mag = headingFromMagnetometer(northUpright, Vector3(0.0, -40.0, -20.0), vienna, t)
         assertEquals(magneticDeclinationDeg(vienna, t), mag.offsetDeg, 1e-9)
+    }
+
+    @Test
+    fun headingFilterWithBias() {
+        var f = headingFilterStart(Vector3(1.0, 2.0, 3.0), 0.5)
+        assertEquals(UNKNOWN_HEADING_VARIANCE_DEG2, f.varianceDeg2, 0.0)
+        assertEquals(HEADING_FILTER_SIZE * HEADING_FILTER_SIZE, f.covariance.size)
+        assertEquals(2.0, f.biasUt.y, 0.0)
+        // The field of headingFilter, plus the bias: the offset is near the declination.
+        val t = 1767225600.0
+        f = headingFilterPredict(f, 1.0)
+        f = headingFilterUpdateMagnetometer(f, northUpright, Vector3(1.0, -38.0, -17.0), vienna, t)
+        assertEquals(magneticDeclinationDeg(vienna, t), f.offsetDeg, 5.0)
+        f = headingFilterUpdate(f, HeadingMeasurement(10.0, 0.01))
+        assertEquals(10.0, f.offsetDeg, 0.1)
+        assertEquals(f.offsetDeg, f.estimate.offsetDeg, 0.0)
+        assertThrows(IllegalArgumentException::class.java) {
+            headingFilterStart(Vector3(), 0.0)
+        }
     }
 
     @Test

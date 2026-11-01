@@ -14,6 +14,14 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- `HeadingFilter` with `heading_filter_start()`, `heading_filter_predict()`,
+  `heading_filter_update()`, and `heading_filter_update_magnetometer()`, in all bindings. The
+  filter estimates the heading offset, the hard-iron bias of the magnetometer, and a local
+  disturbance of the field together. A sun tap or a landmark therefore also corrects the bias,
+  and the magnetometer does not pull the offset back to its own wrong heading. The filter
+  accepts the raw field (Android `TYPE_MAGNETIC_FIELD_UNCALIBRATED`), so it can calibrate the
+  hard iron without the OS. `heading_from_magnetometer()` stays, but the apps do not use it.
+
 ## 0.1.0 - 2026-11-01
 
 ### API

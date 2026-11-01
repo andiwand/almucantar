@@ -139,6 +139,59 @@ void bind_heading(py::module_& m) {
   m.def("heading_from_direction", &heading_from_direction, "view"_a, "point"_a,
         "true_azimuth_deg"_a, "sigma_deg"_a,
         "The heading offset from a screen point that shows a known true azimuth.");
+
+  m.attr("HEADING_FILTER_SIZE") = kHeadingFilterSize;
+
+  const HeadingFilterOptions filter_defaults;
+  py::class_<HeadingFilterOptions>(m, "HeadingFilterOptions")
+      .def(py::init([](const double drift_deg2_per_s, const double bias_drift_ut2_per_s,
+                       const double disturbance_sigma_ut, const double disturbance_time_s,
+                       const double noise_sigma_ut) {
+             return HeadingFilterOptions{.drift_deg2_per_s = drift_deg2_per_s,
+                                         .bias_drift_ut2_per_s = bias_drift_ut2_per_s,
+                                         .disturbance_sigma_ut = disturbance_sigma_ut,
+                                         .disturbance_time_s = disturbance_time_s,
+                                         .noise_sigma_ut = noise_sigma_ut};
+           }),
+           "drift_deg2_per_s"_a = filter_defaults.drift_deg2_per_s,
+           "bias_drift_ut2_per_s"_a = filter_defaults.bias_drift_ut2_per_s,
+           "disturbance_sigma_ut"_a = filter_defaults.disturbance_sigma_ut,
+           "disturbance_time_s"_a = filter_defaults.disturbance_time_s,
+           "noise_sigma_ut"_a = filter_defaults.noise_sigma_ut)
+      .def_readwrite("drift_deg2_per_s", &HeadingFilterOptions::drift_deg2_per_s)
+      .def_readwrite("bias_drift_ut2_per_s", &HeadingFilterOptions::bias_drift_ut2_per_s)
+      .def_readwrite("disturbance_sigma_ut", &HeadingFilterOptions::disturbance_sigma_ut)
+      .def_readwrite("disturbance_time_s", &HeadingFilterOptions::disturbance_time_s)
+      .def_readwrite("noise_sigma_ut", &HeadingFilterOptions::noise_sigma_ut);
+
+  py::class_<HeadingFilter>(m, "HeadingFilter",
+                            "The heading filter with the magnetometer. Make it with "
+                            "heading_filter_start().")
+      .def(py::init<>())
+      .def_readwrite("offset_deg", &HeadingFilter::offset_deg)
+      .def_readwrite("bias_ut", &HeadingFilter::bias_ut)
+      .def_readwrite("disturbance_ut", &HeadingFilter::disturbance_ut)
+      .def_readwrite("covariance", &HeadingFilter::covariance)
+      .def_property_readonly(
+          "variance_deg2", [](const HeadingFilter& f) { return f.covariance[0]; },
+          "The variance of the offset.")
+      .def("__repr__", [](const HeadingFilter& f) {
+        return "HeadingFilter(offset_deg=" + num(f.offset_deg) +
+               ", variance_deg2=" + num(f.covariance[0]) + ")";
+      });
+
+  m.def("heading_filter_start", &heading_filter_start, "bias_ut"_a, "bias_sigma_ut"_a,
+        "options"_a = HeadingFilterOptions{},
+        "A heading filter with an unknown offset and a first guess of the bias.");
+  m.def("heading_filter_predict", &heading_filter_predict, "filter"_a, "dt_s"_a,
+        "options"_a = HeadingFilterOptions{},
+        "Moves the filter forward by dt_s: the variances grow, and the disturbance decays.");
+  m.def("heading_filter_update", &heading_filter_update, "filter"_a, "measurement"_a,
+        "Combines the filter with a measurement of the offset, for example a sun tap.");
+  m.def("heading_filter_update_magnetometer", &heading_filter_update_magnetometer, "filter"_a,
+        "device_to_frame"_a, "field_ut"_a, "observer"_a, "unix_utc"_a,
+        "options"_a = HeadingFilterOptions{},
+        "Combines the filter with one magnetometer sample (about one per second).");
 }
 
 void bind_search(py::module_& m) {

@@ -51,6 +51,23 @@ int main(void) {
   CHECK(count == 1);
   sr_free(crossings);
 
+  /* The heading filter: a field to the north of the frame (device -z) and down (device -y),
+     plus a bias of (1, 2, 3) µT. Then a sun tap. */
+  sr_heading_filter filter;
+  const sr_heading_filter_options filter_options = sr_default_heading_filter_options();
+  CHECK(sr_heading_filter_start((sr_vector3){1, 2, 3}, 0.5, filter_options, &filter) == SR_OK);
+  CHECK(filter.covariance[0] == sr_unknown_heading_variance_deg2());
+  CHECK(sr_heading_filter_predict(&filter, 1, filter_options, &filter) == SR_OK);
+  CHECK(sr_heading_filter_update_magnetometer(&filter, view.device_to_enu,
+                                              (sr_vector3){1, -38, -17}, vienna, 1767225600,
+                                              filter_options, &filter) == SR_OK);
+  double declination = 0;
+  CHECK(sr_magnetic_declination_deg(vienna, 1767225600, &declination) == SR_OK);
+  CHECK(fabs(filter.offset_deg - declination) < 5);
+  CHECK(sr_heading_filter_update(&filter, (sr_heading_measurement){10, 0.01}, &filter) == SR_OK);
+  CHECK(fabs(filter.offset_deg - 10) < 0.1);
+  CHECK(sr_heading_filter_predict(NULL, 1, filter_options, &filter) == SR_INVALID_ARGUMENT);
+
   /* An invalid argument gives a status and a message, not an exception. */
   const sr_observer invalid = {91, 0};
   CHECK(sr_sun_position(0, invalid, sr_default_sun_options(), &sun) == SR_INVALID_ARGUMENT);

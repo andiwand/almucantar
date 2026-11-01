@@ -169,6 +169,43 @@ data class HeadingMeasurement(val offsetDeg: Double, val varianceDeg2: Double)
 
 data class MagnetometerOptions(val sensorSigmaDeg: Double = 2.0)
 
+/** The number of values in the state of a [HeadingFilter]. */
+const val HEADING_FILTER_SIZE: Int = 7
+
+/** The noise model of a [HeadingFilter]. */
+data class HeadingFilterOptions(
+    /** The growth of the variance of the offset, because the yaw of the frame drifts. */
+    val driftDeg2PerS: Double = DEFAULT_HEADING_DRIFT_DEG2_PER_S,
+    /** The growth of the variance of each bias component (1 µT² in 10 minutes). */
+    val biasDriftUt2PerS: Double = 1.0 / 600.0,
+    /** The size of a local disturbance of the field, per component. */
+    val disturbanceSigmaUt: Double = 3.0,
+    /** The correlation time of a local disturbance. */
+    val disturbanceTimeS: Double = 120.0,
+    /** The noise of one magnetometer sample, per component. */
+    val noiseSigmaUt: Double = 1.0,
+)
+
+/**
+ * The heading filter with the magnetometer: the offset of the frame to true north, the hard-iron
+ * bias of the magnetometer in the device frame, and a local disturbance in East-North-Up, with
+ * their covariance (row by row, in that order). Make it with [headingFilterStart].
+ */
+data class HeadingFilter(
+    val offsetDeg: Double,
+    val biasUt: Vector3,
+    val disturbanceUt: Vector3,
+    val covariance: List<Double>,
+) {
+    /** The variance of the offset. */
+    val varianceDeg2: Double
+        get() = covariance[0]
+
+    /** The offset and its variance. */
+    val estimate: HeadingEstimate
+        get() = HeadingEstimate(offsetDeg, varianceDeg2)
+}
+
 data class MoonOptions(val refraction: Boolean = true, val atmosphere: Atmosphere = Atmosphere())
 
 /** The sun has a given azimuth. */

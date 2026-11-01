@@ -185,3 +185,56 @@ public func headingFromDirection(_ view: View, point: ScreenPoint, trueAzimuthDe
     try check(sr_heading_from_direction(view.c, point.c, trueAzimuthDeg, sigmaDeg, &out))
     return HeadingMeasurement(out)
 }
+
+/// A heading filter with an unknown offset. `biasUt` is the first guess of the hard-iron bias (0
+/// for a field that the OS calibrated), and `biasSigmaUt` is its error.
+public func headingFilterStart(
+    biasUt: Vector3, biasSigmaUt: Double, options: HeadingFilterOptions = HeadingFilterOptions()
+) throws -> HeadingFilter {
+    var out = sr_heading_filter()
+    try check(
+        sr_heading_filter_start(sr_vector3(x: biasUt.x, y: biasUt.y, z: biasUt.z), biasSigmaUt, options.c, &out))
+    return HeadingFilter(out)
+}
+
+/// Moves the filter forward by `dtS`: the variances grow, and the disturbance decays.
+public func headingFilterPredict(
+    _ filter: HeadingFilter, dtS: Double, options: HeadingFilterOptions = HeadingFilterOptions()
+) throws -> HeadingFilter {
+    try checkCovariance(filter)
+    var input = filter.c
+    var out = sr_heading_filter()
+    try check(sr_heading_filter_predict(&input, dtS, options.c, &out))
+    return HeadingFilter(out)
+}
+
+/// Combines the filter with a measurement of the offset, for example a sun tap.
+public func headingFilterUpdate(_ filter: HeadingFilter, _ measurement: HeadingMeasurement) throws -> HeadingFilter {
+    try checkCovariance(filter)
+    var input = filter.c
+    var out = sr_heading_filter()
+    try check(sr_heading_filter_update(&input, measurement.c, &out))
+    return HeadingFilter(out)
+}
+
+/// Combines the filter with one magnetometer sample (`fieldUt` in the device frame, in µT, with or
+/// without the hard-iron bias). Give the filter about one sample per second.
+public func headingFilterUpdateMagnetometer(
+    _ filter: HeadingFilter, deviceToFrame: Quaternion, fieldUt: Vector3, observer: Observer, unixUtc: Double,
+    options: HeadingFilterOptions = HeadingFilterOptions()
+) throws -> HeadingFilter {
+    try checkCovariance(filter)
+    var input = filter.c
+    var out = sr_heading_filter()
+    try check(
+        sr_heading_filter_update_magnetometer(
+            &input, deviceToFrame.c, sr_vector3(x: fieldUt.x, y: fieldUt.y, z: fieldUt.z), observer.c, unixUtc,
+            options.c, &out))
+    return HeadingFilter(out)
+}
+
+private func checkCovariance(_ filter: HeadingFilter) throws {
+    if filter.covariance.count != headingFilterSize * headingFilterSize {
+        throw SunradarError(kind: .invalidArgument, message: "covariance has the wrong length")
+    }
+}

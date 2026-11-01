@@ -19,6 +19,9 @@
 //   Vector3        [3]  x, y, z
 //   HeadingEstimate, HeadingMeasurement [2]  offset_deg, variance_deg2
 //   MagnetometerOptions [1]  sensor_sigma_deg
+//   HeadingFilter [55]  offset_deg, bias_ut[3], disturbance_ut[3], covariance[49]
+//   HeadingFilterOptions [5]  drift_deg2_per_s, bias_drift_ut2_per_s, disturbance_sigma_ut,
+//                       disturbance_time_s, noise_sigma_ut
 //   MoonOptions    [3]  refraction, pressure_hpa, temperature_c
 //   AzimuthCrossing [3] unix_utc, azimuth_deg, altitude_deg (results, for each crossing)
 //
@@ -110,6 +113,34 @@ Camera camera(const Doubles& a, const std::size_t o) {
                 .k3 = a[o + 8],
                 .p1 = a[o + 9],
                 .p2 = a[o + 10]};
+}
+
+constexpr std::size_t kFilterLength = 7 + kHeadingFilterSize * kHeadingFilterSize;
+
+HeadingFilter heading_filter(const Doubles& a) {
+  HeadingFilter f{.offset_deg = a[0],
+                  .bias_ut = {.x = a[1], .y = a[2], .z = a[3]},
+                  .disturbance_ut = {.x = a[4], .y = a[5], .z = a[6]},
+                  .covariance = {}};
+  for (std::size_t i = 0; i < f.covariance.size(); ++i) {
+    f.covariance[i] = a[7 + i];
+  }
+  return f;
+}
+
+std::vector<double> pack(const HeadingFilter& f) {
+  std::vector<double> out{f.offset_deg,       f.bias_ut.x,        f.bias_ut.y,       f.bias_ut.z,
+                          f.disturbance_ut.x, f.disturbance_ut.y, f.disturbance_ut.z};
+  out.insert(out.end(), f.covariance.begin(), f.covariance.end());
+  return out;
+}
+
+HeadingFilterOptions heading_filter_options(const Doubles& a) {
+  return {.drift_deg2_per_s = a[0],
+          .bias_drift_ut2_per_s = a[1],
+          .disturbance_sigma_ut = a[2],
+          .disturbance_time_s = a[3],
+          .noise_sigma_ut = a[4]};
 }
 
 View view(const Doubles& a) {
@@ -362,6 +393,51 @@ SUNRADAR_JNI(headingFromDirection)
   });
 }
 
+SUNRADAR_JNI(headingFilterStart)
+(JNIEnv* env, jclass, jdoubleArray bias, jdouble bias_sigma_ut, jdoubleArray opts)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles b(env, bias, 3, "bias");
+    return to_java(
+        env, pack(heading_filter_start({.x = b[0], .y = b[1], .z = b[2]}, bias_sigma_ut,
+                                       heading_filter_options(Doubles(env, opts, 5, "options")))));
+  });
+}
+
+SUNRADAR_JNI(headingFilterPredict)
+(JNIEnv* env, jclass, jdoubleArray filter, jdouble dt_s, jdoubleArray opts)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    return to_java(env, pack(heading_filter_predict(
+                            heading_filter(Doubles(env, filter, kFilterLength, "filter")), dt_s,
+                            heading_filter_options(Doubles(env, opts, 5, "options")))));
+  });
+}
+
+SUNRADAR_JNI(headingFilterUpdate)
+(JNIEnv* env, jclass, jdoubleArray filter, jdoubleArray measurement)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles m(env, measurement, 2, "measurement");
+    return to_java(env, pack(heading_filter_update(
+                            heading_filter(Doubles(env, filter, kFilterLength, "filter")),
+                            {.offset_deg = m[0], .variance_deg2 = m[1]})));
+  });
+}
+
+SUNRADAR_JNI(headingFilterUpdateMagnetometer)
+(JNIEnv* env, jclass, jdoubleArray filter, jdoubleArray quaternion, jdoubleArray field,
+ jdoubleArray obs, jdouble unix_utc, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles q(env, quaternion, 4, "quaternion");
+    const Doubles f(env, field, 3, "field");
+    return to_java(
+        env, pack(heading_filter_update_magnetometer(
+                 heading_filter(Doubles(env, filter, kFilterLength, "filter")),
+                 {.w = q[0], .x = q[1], .y = q[2], .z = q[3]}, {.x = f[0], .y = f[1], .z = f[2]},
+                 observer(Doubles(env, obs, 2, "observer")), unix_utc,
+                 heading_filter_options(Doubles(env, opts, 5, "options")))));
+  });
+}
+
 SUNRADAR_JNI(findAzimuthTimes)
 (JNIEnv* env, jclass, jdoubleArray obs, jdouble azimuth_deg, jdouble start, jdouble end,
  jdoubleArray opts)
@@ -405,6 +481,7 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
     const SearchOptions q;
     const Camera c;
     const View v;
+    const HeadingFilterOptions f;
     return to_java(env, {static_cast<double>(s.model),
                          s.refraction ? 1.0 : 0.0,
                          s.atmosphere.pressure_hpa,
@@ -448,6 +525,11 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          MoonOptions{}.refraction ? 1.0 : 0.0,
                          MoonOptions{}.atmosphere.pressure_hpa,
                          MoonOptions{}.atmosphere.temperature_c,
-                         kDefaultHeadingDriftDeg2PerS});
+                         kDefaultHeadingDriftDeg2PerS,
+                         f.drift_deg2_per_s,
+                         f.bias_drift_ut2_per_s,
+                         f.disturbance_sigma_ut,
+                         f.disturbance_time_s,
+                         f.noise_sigma_ut});
   });
 }

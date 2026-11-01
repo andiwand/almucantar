@@ -177,3 +177,48 @@ fun moonPosition(
 /** Returns the illuminated fraction of the disc of the moon, 0 (new) to 1 (full). */
 fun moonIlluminatedFraction(unixUtc: Double): Double =
     SunradarNative.moonIlluminatedFraction(unixUtc)
+
+/**
+ * A heading filter with an unknown offset. [biasUt] is the first guess of the hard-iron bias (the
+ * bias of the OS, or 0 for a calibrated field), and [biasSigmaUt] is its error.
+ */
+fun headingFilterStart(
+    biasUt: Vector3,
+    biasSigmaUt: Double,
+    options: HeadingFilterOptions = HeadingFilterOptions(),
+): HeadingFilter =
+    SunradarNative.headingFilterStart(biasUt.pack(), biasSigmaUt, options.pack()).toHeadingFilter()
+
+/** Moves the filter forward by [dtS]: the variances grow, and the disturbance decays. */
+fun headingFilterPredict(
+    filter: HeadingFilter,
+    dtS: Double,
+    options: HeadingFilterOptions = HeadingFilterOptions(),
+): HeadingFilter =
+    SunradarNative.headingFilterPredict(filter.pack(), dtS, options.pack()).toHeadingFilter()
+
+/** Combines the filter with a measurement of the offset, for example a sun tap. */
+fun headingFilterUpdate(filter: HeadingFilter, measurement: HeadingMeasurement): HeadingFilter =
+    SunradarNative.headingFilterUpdate(filter.pack(), measurement.pack()).toHeadingFilter()
+
+/**
+ * Combines the filter with one magnetometer sample ([fieldUt] in the device frame, in µT, with or
+ * without the hard-iron bias). Give the filter about one sample per second.
+ */
+fun headingFilterUpdateMagnetometer(
+    filter: HeadingFilter,
+    deviceToFrame: Quaternion,
+    fieldUt: Vector3,
+    observer: Observer,
+    unixUtc: Double,
+    options: HeadingFilterOptions = HeadingFilterOptions(),
+): HeadingFilter =
+    SunradarNative.headingFilterUpdateMagnetometer(
+            filter.pack(),
+            deviceToFrame.pack(),
+            fieldUt.pack(),
+            observer.pack(),
+            unixUtc,
+            options.pack(),
+        )
+        .toHeadingFilter()

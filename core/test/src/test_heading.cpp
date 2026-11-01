@@ -154,3 +154,147 @@ TEST_CASE("the heading filter converges on magnetometer measurements", "[heading
   CHECK_THAT(e.offset_deg, WithinAbs(offset, 1e-3));
   CHECK(e.variance_deg2 < 1);
 }
+
+namespace {
+
+/// The magnetometer sample of a device in `pose`, with a hard-iron bias in the device frame.
+Vector3 sample(const test::Pose& pose, const Axis& field_enu, const Vector3 bias) {
+  const Vector3 v = in_device(pose, field_enu);
+  return {v.x + bias.x, v.y + bias.y, v.z + bias.z};
+}
+
+/// One second of the filter: predict, then one magnetometer sample. The frame has azimuths
+/// that are `offset` less than the true azimuths.
+HeadingFilter step(const HeadingFilter& f, const Observer& observer, const double offset,
+                   const double azimuth, const double pitch, const double roll,
+                   const Axis& field_enu, const Vector3 bias) {
+  const test::Pose pose = upright_pose(azimuth, pitch, roll);
+  return heading_filter_update_magnetometer(heading_filter_predict(f, 1),
+                                            upright_pose(azimuth - offset, pitch, roll).q,
+                                            sample(pose, field_enu, bias), observer, kT);
+}
+
+double angle_error(const double a, const double b) {
+  return std::abs(std::remainder(a - b, 360.0));
+}
+
+}  // namespace
+
+TEST_CASE("heading_filter_start has an unknown offset and the given bias", "[heading]") {
+  const HeadingFilter f = heading_filter_start({.x = 1, .y = 2, .z = 3}, 10);
+  CHECK(f.covariance[0] == kUnknownHeadingVarianceDeg2);
+  CHECK(f.bias_ut.y == 2);
+  CHECK(f.covariance[1 * kHeadingFilterSize + 1] == 100);
+  CHECK(f.covariance[4 * kHeadingFilterSize + 4] == 9);  // disturbance (3 µT)²
+  CHECK(f.covariance[1] == 0);
+  CHECK_THROWS_AS(heading_filter_start({}, 0), std::invalid_argument);
+  CHECK_THROWS_AS(heading_filter_start({}, 1, {.disturbance_time_s = 0}), std::invalid_argument);
+}
+
+TEST_CASE("heading_filter_predict grows the variances and decays the disturbance", "[heading]") {
+  HeadingFilter f = heading_filter_start({}, 1);
+  f.covariance[0] = 4;
+  f.disturbance_ut = {.x = 2, .y = 0, .z = 0};
+  const HeadingFilter p = heading_filter_predict(f, 60);
+  CHECK_THAT(p.covariance[0], WithinAbs(5, 1e-12));  // 1 square degree per minute
+  CHECK_THAT(p.covariance[1 * kHeadingFilterSize + 1], WithinAbs(1.1, 1e-12));
+  CHECK_THAT(p.disturbance_ut.x, WithinAbs(2 * std::exp(-0.5), 1e-12));
+  // The variance of the disturbance stays at (3 µT)².
+  CHECK_THAT(p.covariance[4 * kHeadingFilterSize + 4], WithinAbs(9, 1e-9));
+  CHECK(heading_filter_predict(f, 1e9).covariance[0] == kUnknownHeadingVarianceDeg2);
+  CHECK_THROWS_AS(heading_filter_predict(f, -1), std::invalid_argument);
+  HeadingFilter bad = f;
+  bad.covariance[0] = 0;
+  CHECK_THROWS_AS(heading_filter_predict(bad, 1), std::invalid_argument);
+}
+
+TEST_CASE("heading_filter_update with a direction is a Kalman update on the circle", "[heading]") {
+  HeadingFilter f = heading_filter_start({}, 1);
+  f.offset_deg = 359;
+  f.covariance[0] = 1;
+  const HeadingFilter u = heading_filter_update(f, {.offset_deg = 1, .variance_deg2 = 1});
+  CHECK(angle_error(u.offset_deg, 0) < 1e-9);
+  CHECK_THAT(u.covariance[0], WithinAbs(0.5, 1e-12));
+  CHECK_THROWS_AS(heading_filter_update(f, {.offset_deg = 1, .variance_deg2 = 0}),
+                  std::invalid_argument);
+}
+
+TEST_CASE("the magnetic heading filter converges without a bias", "[heading]") {
+  const Observer vienna = test::site("vienna");
+  const Axis field = earth_field_enu(vienna);
+  const double offset = 250;
+  HeadingFilter f = heading_filter_start({}, 2);
+  // The first sample already gives the offset, also when it is far from the start value.
+  f = step(f, vienna, offset, 0, 5, 0, field, {});
+  CHECK(angle_error(f.offset_deg, offset) < 1);
+  for (int second = 1; second < 60; ++second)
+    f = step(f, vienna, offset, 10.0 * second, 5, 0, field, {});
+  CHECK(angle_error(f.offset_deg, offset) < 0.5);
+  // A disturbance of 3 µT is about 8° in Vienna (H = 21 µT), and it is correlated for 120 s. So
+  // one minute of samples does not give much better than that.
+  const double sigma = std::sqrt(f.covariance[0]);
+  CHECK(sigma > 3);
+  CHECK(sigma < 9);
+}
+
+TEST_CASE("the magnetic heading filter learns a hard-iron bias from rotations", "[heading]") {
+  const Observer vienna = test::site("vienna");
+  const Axis field = earth_field_enu(vienna);
+  const double offset = 40;
+  const Vector3 bias{.x = 25, .y = -15, .z = 40};
+  // The OS guess of the bias is 10 µT wrong in each component.
+  HeadingFilter f = heading_filter_start({.x = 35, .y = -5, .z = 30}, 20);
+  for (int second = 0; second < 300; ++second) {
+    // The user turns around and tilts the device up, down, and to the side.
+    const double t = second;
+    f = step(f, vienna, offset, 7.0 * t, 40 * std::sin(t / 9), 30 * std::sin(t / 13), field, bias);
+  }
+  INFO("offset " << f.offset_deg << " bias " << f.bias_ut.x << " " << f.bias_ut.y << " "
+                 << f.bias_ut.z);
+  CHECK(angle_error(f.offset_deg, offset) < 1);
+  CHECK_THAT(f.bias_ut.x, WithinAbs(bias.x, 1));
+  CHECK_THAT(f.bias_ut.y, WithinAbs(bias.y, 1));
+  CHECK_THAT(f.bias_ut.z, WithinAbs(bias.z, 1));
+}
+
+TEST_CASE("a sun tap moves the bias, so the magnetometer does not pull the offset back",
+          "[heading]") {
+  const Observer vienna = test::site("vienna");
+  const Axis field = earth_field_enu(vienna);
+  const double offset = 40;
+  // A bias that the filter does not know, and a device that the user holds still, so the
+  // rotations cannot show the bias. The magnetometer gives a wrong offset.
+  const Vector3 bias{.x = 12, .y = 0, .z = -8};
+  HeadingFilter f = heading_filter_start({}, 5);
+  for (int second = 0; second < 600; ++second) f = step(f, vienna, offset, 120, 10, 0, field, bias);
+  const double error_before = angle_error(f.offset_deg, offset);
+  INFO("error before the tap " << error_before);
+  REQUIRE(error_before > 5);
+
+  // The user taps the sun.
+  f = heading_filter_update(f, {.offset_deg = offset, .variance_deg2 = 0.25});
+  CHECK(angle_error(f.offset_deg, offset) < 0.5);
+  // Ten more minutes in the same pose: the offset stays, because the bias explains the field.
+  for (int second = 0; second < 600; ++second) f = step(f, vienna, offset, 120, 10, 0, field, bias);
+  INFO("offset after 10 minutes " << f.offset_deg);
+  CHECK(angle_error(f.offset_deg, offset) < 1);
+  // The user then turns around: the offset stays correct.
+  for (int second = 0; second < 120; ++second)
+    f = step(f, vienna, offset, 120 + 3.0 * second, 10, 0, field, bias);
+  CHECK(angle_error(f.offset_deg, offset) < 1);
+}
+
+TEST_CASE("a short disturbance moves the offset only a little", "[heading]") {
+  const Observer vienna = test::site("vienna");
+  Axis field = earth_field_enu(vienna);
+  const double offset = 40;
+  HeadingFilter f = heading_filter_start({}, 2);
+  for (int second = 0; second < 300; ++second)
+    f = step(f, vienna, offset, 2.0 * second, 10 * std::sin(second / 7.0), 0, field, {});
+  REQUIRE(angle_error(f.offset_deg, offset) < 0.5);
+  // 10 seconds next to steel: 10 µT to the east. Alone, this moves the heading by about 25°.
+  field[0] += 10;
+  for (int second = 0; second < 10; ++second) f = step(f, vienna, offset, 0, 0, 0, field, {});
+  INFO("offset " << f.offset_deg);
+  CHECK(angle_error(f.offset_deg, offset) < 5);
+}

@@ -281,6 +281,32 @@ proposal for sunradar:
 - The public API stays without state: the filter state is a value type, and an update
   is a pure function, for example `HeadingState update(HeadingState, Measurement)`.
 
+**Revision: the bias in the state (`HeadingFilter`).** The first filter had one state (the
+offset) and took the magnetometer as a white measurement with σ = 2°. In a field test, a sun
+tap was gone after about a minute: the magnetometer has a constant error (residual hard iron),
+and the filter averaged that error back in each second. The filter now has 7 states:
+
+- the offset θ (deg), the hard-iron bias **b** in the device frame (3, µT), and a local
+  disturbance **d** in East-North-Up (3, µT), with a full covariance.
+- The magnetometer model is `m = R(q)ᵀ · Rz(−θ) · (F_WMM + d) + b + noise`. The update is an
+  iterated EKF (5 iterations), with the start of the linearization at the offset of the sample
+  when θ is not known (σ > 30°). A sample far from the prediction (NIS > 16.3) gets a larger
+  noise.
+- **b** is a random walk with a very small growth (1 µT² in 10 min). The rotations and the
+  WMM field make it observable, so the filter calibrates the hard iron itself (step 2 of the
+  thesis, with a Kalman filter in place of the particle filter). The Android app gives it the
+  raw field (`TYPE_MAGNETIC_FIELD_UNCALIBRATED`), and the OS bias is only the prior. Without
+  the raw field (iOS, or an old Android device), the filter takes the calibrated field with a
+  prior of 0 and estimates the error that is left.
+- **d** is a first-order Gauss–Markov process (σ = 3 µT, τ = 120 s). It models that the error
+  of the magnetometer is correlated in time. So the magnetometer alone gives about
+  σ_d / H ≈ 8° per τ, and not 2° per second.
+- A sun tap is a scalar update of θ. Through the covariance between θ and **b**, it also
+  corrects **b**: true north gives the expected field in the device frame, and the difference
+  to the measured field is the bias. The magnetometer then agrees with the tap.
+- Not modeled: the soft iron. If the error changes with the orientation after a tap, this is
+  the next step (a 3 × 3 matrix in the state, or a calibration with many orientations).
+
 ### 5.5 Camera model and projection
 
 ```cpp

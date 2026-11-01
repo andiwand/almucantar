@@ -113,6 +113,20 @@ typedef struct sr_heading_measurement {
 typedef struct sr_magnetometer_options {
   double sensor_sigma_deg;
 } sr_magnetometer_options;
+/* The number of values in the state of a heading filter. */
+#define SR_HEADING_FILTER_SIZE 7
+/* The heading filter with the magnetometer. The covariance is row by row, in the order offset,
+   bias x, y, z, disturbance east, north, up. Make it with sr_heading_filter_start(). */
+typedef struct sr_heading_filter {
+  double offset_deg;
+  sr_vector3 bias_ut;
+  sr_vector3 disturbance_ut;
+  double covariance[SR_HEADING_FILTER_SIZE * SR_HEADING_FILTER_SIZE];
+} sr_heading_filter;
+typedef struct sr_heading_filter_options {
+  double drift_deg2_per_s, bias_drift_ut2_per_s, disturbance_sigma_ut, disturbance_time_s,
+      noise_sigma_ut;
+} sr_heading_filter_options;
 
 /* The C++ defaults. */
 sr_sun_options sr_default_sun_options(void);
@@ -122,6 +136,7 @@ sr_search_options sr_default_search_options(void);
 sr_moon_options sr_default_moon_options(void);
 sr_magnetometer_options sr_default_magnetometer_options(void);
 sr_heading_estimate sr_default_heading_estimate(void);
+sr_heading_filter_options sr_default_heading_filter_options(void);
 sr_camera sr_default_camera(void);
 sr_view sr_default_view(void);
 double sr_sunrise_altitude_deg(void);
@@ -167,6 +182,17 @@ sr_status sr_heading_from_magnetometer(sr_quaternion device_to_frame, sr_vector3
                                        sr_heading_measurement* out);
 sr_status sr_heading_from_direction(sr_view view, sr_screen_point point, double true_azimuth_deg,
                                     double sigma_deg, sr_heading_measurement* out);
+sr_status sr_heading_filter_start(sr_vector3 bias_ut, double bias_sigma_ut,
+                                  sr_heading_filter_options options, sr_heading_filter* out);
+sr_status sr_heading_filter_predict(const sr_heading_filter* filter, double dt_s,
+                                    sr_heading_filter_options options, sr_heading_filter* out);
+sr_status sr_heading_filter_update(const sr_heading_filter* filter,
+                                   sr_heading_measurement measurement, sr_heading_filter* out);
+sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* filter,
+                                                sr_quaternion device_to_frame, sr_vector3 field_ut,
+                                                sr_observer observer, double unix_utc,
+                                                sr_heading_filter_options options,
+                                                sr_heading_filter* out);
 
 #ifdef __cplusplus
 }

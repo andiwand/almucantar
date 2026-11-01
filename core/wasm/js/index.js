@@ -67,5 +67,12 @@ export async function load(moduleOptions = {}) {
       m.headingFromMagnetometer(deviceToFrame, fieldUt, observer, unixUtc, merge(d.magnetometerOptions, options)),
     headingFromDirection: (v, point, trueAzimuthDeg, sigmaDeg) =>
       m.headingFromDirection(view(v), point, trueAzimuthDeg, sigmaDeg),
+    headingFilterStart: (biasUt, biasSigmaUt, options) =>
+      m.headingFilterStart(biasUt, biasSigmaUt, merge(d.headingFilterOptions, options)),
+    headingFilterPredict: (filter, dtS, options) =>
+      m.headingFilterPredict(filter, dtS, merge(d.headingFilterOptions, options)),
+    headingFilterUpdate: (filter, measurement) => m.headingFilterUpdate(filter, measurement),
+    headingFilterUpdateMagnetometer: (filter, deviceToFrame, fieldUt, observer, unixUtc, options) =>
+      m.headingFilterUpdateMagnetometer(filter, deviceToFrame, fieldUt, observer, unixUtc, merge(d.headingFilterOptions, options)),
   });
 }
