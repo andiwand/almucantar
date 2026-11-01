@@ -52,8 +52,10 @@ if(NOT node_ok)
   message(WARNING "No node 18 or later (found '${node}' ${node_version}); the WASM tests are skipped. "
                   "Set SUNRADAR_NODE.")
 else()
+  # The test files explicitly: node 22 does not take a directory for --test, node 20 does.
+  file(GLOB test_files "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.test.mjs")
   add_test(NAME sunradar_wasm_node
-    COMMAND "${node}" --test "${CMAKE_CURRENT_SOURCE_DIR}/tests/"
+    COMMAND "${node}" --test ${test_files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   set_tests_properties(sunradar_wasm_node PROPERTIES
     ENVIRONMENT "SUNRADAR_WASM_DIST=${SUNRADAR_WASM_DIST}")
