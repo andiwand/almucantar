@@ -17,6 +17,7 @@ API of the AAR.
 | `.../TimePanel.kt` | The date and time sliders. |
 | `.../MapPicker.kt` | A small OpenStreetMap tile map to pick a landmark. It follows the OSM tile policy: a User-Agent that names the app, the attribution, and tiles in memory only. |
 | `.../Geo.kt` | Bearing and distance on a sphere. |
+| `.../SunDetector.kt` | Finds saturated regions in the Y plane of a camera frame. Pure Kotlin, tested in `app/src/test/`. `CameraPreview.kt` runs it in an `ImageAnalysis` and maps the regions to the view with sensorToView * (sensorToBuffer)^-1. |
 | `.../Location.kt` | The place: the device location (coarse), else the city of the time zone, else Vienna. The town name comes from the geocoder of the device. |
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
 | `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |

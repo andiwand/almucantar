@@ -22,7 +22,7 @@ main use: you visit a flat and want to know when the sun shines through a window
 
 1. Android first (native, Kotlin).
 2. PWA second, with the same C++ core compiled to WebAssembly.
-3. iOS maybe later, with the same C++ core.
+3. iOS (M11), with the same C++ core.
 
 ## 2. Precision budget
 
@@ -517,10 +517,10 @@ contain the same core.
 | M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. Open: the outdoor check of 2° on a real phone. |
 | M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone. |
 | M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
-| M8b | Sun detection in the camera image: find the brightest saturated blob near the predicted position of the sun, draw a box around it, and wait for the user to confirm it with a tap. Then the alignment needs no exact tap, and the app can propose it. | planned (proposal of the user after the first trials) |
+| M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. Open: a test with the real sun. |
 | M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |
-| later | `core/apple` Swift package, iOS app | if we decide to do iOS |
+| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | the same features as the Android app; the instrumented tests of the binding pass in XCTest |
 
 The Python binding comes early (M2), because it is the easiest binding to test. It
 also checks that the public API is easy to bind before the API grows, and it gives a
@@ -544,9 +544,10 @@ fast way to plot paths and to compare models.
 
 ## 12. Open questions
 
-- Do we need iOS later? If yes, `core/apple` gives a Swift package, and the app is
-  native Swift. If we want external users of the Swift package, `Package.swift` must
-  be at the root of the monorepo.
+- iOS is planned (M11): `core/apple` gives a Swift package, and the app is native Swift.
+  If we want external users of the Swift package, `Package.swift` must be at the root of
+  the monorepo. The Swift API can use Swift C++ interop (Swift 5.9 and later) instead of
+  the Objective-C layer of OpenDocument.core; we decide that when M11 starts.
 - The names of the packages: `sunradar` on PyPI and `@sunradar/core` on npm are proposals.
   Check that the names are free. The Maven group is `at.stefl.sunradar` (decided).
 - Do we publish the C++ package to a Conan remote? Only if someone outside this

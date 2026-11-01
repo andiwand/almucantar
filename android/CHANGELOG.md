@@ -33,6 +33,13 @@ The changes in the Android app that a user notices. Each release has the tag
   also lists the dates when the sun is in the crosshair.
 - Time and date: the "Time" panel moves the view to another date (±6 months) and time.
   The paths of the solstices show as faint guide lines.
+- Sun detection: in camera mode, a box marks the sun in the image ("Sun ✓" when the overlay
+  agrees within 1°, else "Sun · tap to align"). A tap on the box aligns the heading.
+- "Align" explains each option ("The sun is below the horizon", "Needs your location"), and
+  the alignment with the sun or the moon switches the camera on by itself.
+- The vertical line goes from the horizon to the crossing with the path.
+- The camera preview now follows a rotation of the screen without a restart (the target
+  rotation of the use cases was not set before).
 - Align with the moon (tap it), or with a landmark: pick it on an OpenStreetMap map, point
   the crosshair at it, and press "Aligned". The moon shows on the overlay.
 - The crosshair no longer shows "The sun does not pass here today". Instead, the app marks

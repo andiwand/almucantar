@@ -1,27 +1,37 @@
 package at.stefl.sunradar
 
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.util.Log
+import android.util.Size
 import android.util.SizeF
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "SunradarCamera"
 
@@ -35,12 +45,31 @@ private const val TAG = "SunradarCamera"
  */
 @OptIn(ExperimentalCamera2Interop::class)
 @Composable
-fun CameraPreview(modifier: Modifier, displayRotation: Int, onCamera: (ViewCamera?) -> Unit) {
+fun CameraPreview(
+    modifier: Modifier,
+    displayRotation: Int,
+    detectSun: Boolean,
+    onBlobs: (List<ViewBlob>) -> Unit,
+    onCamera: (ViewCamera?) -> Unit,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
+    // The use cases, so a rotation can update them without a rebind. The activity is not recreated
+    // on a rotation (configChanges), so nobody else sets the new target rotation.
+    val useCases = remember { mutableStateOf<Pair<Preview, ImageAnalysis>?>(null) }
+    LaunchedEffect(displayRotation, useCases.value) {
+        useCases.value?.let { (preview, analysis) ->
+            preview.targetRotation = displayRotation
+            analysis.targetRotation = displayRotation
+        }
+    }
+    // Read by the analyzer thread, so the detection can switch on and off without a rebind.
+    val detect = remember { AtomicBoolean(false) }
+    detect.set(detectSun)
+    LaunchedEffect(detectSun) { if (!detectSun) onBlobs(emptyList()) }
 
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)
@@ -93,10 +122,15 @@ fun CameraPreview(modifier: Modifier, displayRotation: Int, onCamera: (ViewCamer
                         )
                 }
                 val preview =
-                    builder.build().also { it.surfaceProvider = previewView.surfaceProvider }
+                    builder.setTargetRotation(displayRotation).build().also {
+                        it.surfaceProvider = previewView.surfaceProvider
+                    }
+                val analysis = sunAnalysis(previewView, detect, onBlobs)
+                analysis.targetRotation = displayRotation
                 calibration = readCalibration(characteristics, distorted = canSwitchOff)
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, selector, preview)
+                provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis)
+                useCases.value = preview to analysis
                 update()
             },
             ContextCompat.getMainExecutor(context),
@@ -111,6 +145,71 @@ fun CameraPreview(modifier: Modifier, displayRotation: Int, onCamera: (ViewCamer
     }
 
     AndroidView(factory = { previewView }, modifier = modifier)
+}
+
+/** A bright region of the camera image, in the pixels of the preview view. */
+data class ViewBlob(val center: Offset, val radius: Float)
+
+private val analysisExecutor = Executors.newSingleThreadExecutor()
+
+/**
+ * Small frames for the sun detection. The analyzer finds the saturated regions in the Y plane, and
+ * maps them to the view: view = sensorToView * (sensorToBuffer)^-1 * buffer. The matrices contain
+ * the crop, the scale, and the rotation of both streams.
+ */
+private fun sunAnalysis(
+    previewView: PreviewView,
+    detect: AtomicBoolean,
+    onBlobs: (List<ViewBlob>) -> Unit,
+): ImageAnalysis {
+    val analysis =
+        ImageAnalysis.Builder()
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        ResolutionStrategy(
+                            Size(640, 480),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                        )
+                    )
+                    .build()
+            )
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+    var bytes = ByteArray(0)
+    val main = ContextCompat.getMainExecutor(previewView.context)
+    analysis.setAnalyzer(analysisExecutor) { image ->
+        try {
+            if (detect.get()) {
+                val plane = image.planes[0]
+                val buffer = plane.buffer
+                if (bytes.size < buffer.remaining()) bytes = ByteArray(buffer.remaining())
+                val length = buffer.remaining()
+                buffer.get(bytes, 0, length)
+                val blobs = SunDetector.findBlobs(bytes, image.width, image.height, plane.rowStride)
+                val sensorToBuffer = Matrix(image.imageInfo.sensorToBufferTransformMatrix)
+                main.execute {
+                    val sensorToView = previewView.sensorToViewTransform ?: return@execute
+                    val bufferToView = Matrix()
+                    if (!sensorToBuffer.invert(bufferToView)) return@execute
+                    bufferToView.postConcat(sensorToView)
+                    onBlobs(
+                        blobs.map {
+                            val p = floatArrayOf(it.centerX.toFloat(), it.centerY.toFloat())
+                            bufferToView.mapPoints(p)
+                            ViewBlob(
+                                Offset(p[0], p[1]),
+                                bufferToView.mapRadius(it.radius.toFloat()),
+                            )
+                        }
+                    )
+                }
+            }
+        } finally {
+            image.close()
+        }
+    }
+    return analysis
 }
 
 @OptIn(ExperimentalCamera2Interop::class)

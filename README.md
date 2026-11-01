@@ -15,7 +15,7 @@ This repository is a monorepo. Each directory is a self-contained project.
 | `core/android/` | the Android AAR `at.stefl.sunradar:core-android` | in progress |
 | `android/` | the Android app (Kotlin, Jetpack Compose) | planned (M4) |
 | `pwa/` | the PWA (TypeScript, the core as WebAssembly) | planned (M8) |
-| `ios/` | the iOS app | maybe later |
+| `ios/` | the iOS app | planned (M11) |
 
 Agents: read [`AGENTS.md`](AGENTS.md) first.
 

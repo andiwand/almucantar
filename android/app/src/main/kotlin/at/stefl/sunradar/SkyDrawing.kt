@@ -156,3 +156,16 @@ fun DrawScope.drawArrow(at: Offset, direction: Offset, size: Float, color: Color
         }
     drawPath(path, color)
 }
+
+/** The angle between two directions, in degrees. */
+fun angleBetweenDeg(a: Horizontal, b: Horizontal): Double {
+    val u = enu(a)
+    val v = enu(b)
+    val dot = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]).coerceIn(-1.0, 1.0)
+    val cross =
+        hypot(
+            hypot(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2]),
+            u[0] * v[1] - u[1] * v[0],
+        )
+    return Math.toDegrees(atan2(cross, dot))
+}

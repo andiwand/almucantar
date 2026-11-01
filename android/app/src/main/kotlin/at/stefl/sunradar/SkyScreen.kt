@@ -39,10 +39,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
@@ -94,6 +97,15 @@ private const val BODY_TAP_MAX_ALTITUDE_ERROR_DEG = 5.0
 
 /** The moon must be at least this bright to be found in the camera image. */
 private const val MIN_MOON_FRACTION = 0.1
+
+/** A region of the camera image that is probably the sun. */
+data class DetectedSun(val blob: ViewBlob, val separationDeg: Double)
+
+/** A saturated region with a larger angular radius than this is not the sun (0.27°). */
+private const val MAX_SUN_BLOB_RADIUS_DEG = 3.0
+
+/** Within this angle of the prediction, the detected sun counts as aligned. */
+private const val ALIGNED_DEG = 1.0
 
 /** The things that the user can align the heading with. */
 enum class AlignTarget {
@@ -165,7 +177,32 @@ fun SkyScreen(locationGranted: Boolean) {
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraOn = it
+            if (!it) message = "The alignment with the sun or the moon needs the camera."
         }
+    // Starts an alignment with the sun or the moon. These need the camera image, so the camera
+    // switches on first (with the permission prompt, if needed).
+    var pendingAlign by remember { mutableStateOf<AlignTarget?>(null) }
+    val startBodyAlign = { target: AlignTarget ->
+        message = null
+        if (cameraOn) {
+            aligning = target
+        } else if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            cameraOn = true
+            aligning = target
+        } else {
+            pendingAlign = target
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+    LaunchedEffect(cameraOn) {
+        if (cameraOn && pendingAlign != null) {
+            aligning = pendingAlign
+            pendingAlign = null
+        }
+    }
     val toggleCamera = {
         aligning = null
         if (cameraOn) {
@@ -180,6 +217,7 @@ fun SkyScreen(locationGranted: Boolean) {
         }
     }
 
+    var blobs by remember { mutableStateOf<List<ViewBlob>>(emptyList()) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val q = tracker.deviceToFrame
     val view =
@@ -232,9 +270,51 @@ fun SkyScreen(locationGranted: Boolean) {
             }
     }
 
+    // The detected sun: the saturated region nearest to the predicted sun, within the error of the
+    // heading. A region larger than a few degrees is an overexposed sky, not the sun.
+    val detected =
+        view
+            ?.takeIf { cameraOn && sunNow.altitudeDeg > 0 }
+            ?.let { v ->
+                val maxSeparation = maxOf(10.0, 3 * sqrt(tracker.estimate.varianceDeg2))
+                blobs
+                    .mapNotNull { blob ->
+                        val direction =
+                            unproject(
+                                v,
+                                ScreenPoint(blob.center.x.toDouble(), blob.center.y.toDouble()),
+                            )
+                        val edge =
+                            unproject(
+                                v,
+                                ScreenPoint(
+                                    (blob.center.x + blob.radius).toDouble(),
+                                    blob.center.y.toDouble(),
+                                ),
+                            )
+                        val separation = angleBetweenDeg(direction, sunNow)
+                        if (
+                            angleBetweenDeg(direction, edge) > MAX_SUN_BLOB_RADIUS_DEG ||
+                                separation > maxSeparation
+                        ) {
+                            null
+                        } else {
+                            DetectedSun(blob, separation)
+                        }
+                    }
+                    .minByOrNull { it.separationDeg }
+            }
+
+    val screenDensity = LocalDensity.current.density
     val onTap = { at: Offset ->
         val target = aligning
-        if (view != null && (target == AlignTarget.SUN || target == AlignTarget.MOON)) {
+        val sunBox = detected?.takeIf {
+            (at - it.blob.center).getDistance() < it.blob.radius + 48 * screenDensity
+        }
+        if (view != null && sunBox != null) {
+            message = alignWithBody(tracker, view, sunBox.blob.center, sunNow, "sun")
+            aligning = null
+        } else if (view != null && (target == AlignTarget.SUN || target == AlignTarget.MOON)) {
             message =
                 if (target == AlignTarget.SUN) {
                     alignWithBody(tracker, view, at, sunNow, "sun")
@@ -257,7 +337,14 @@ fun SkyScreen(locationGranted: Boolean) {
 
         Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
             if (cameraOn) {
-                CameraPreview(Modifier.fillMaxSize(), displayRotation) { viewCamera = it }
+                CameraPreview(
+                    Modifier.fillMaxSize(),
+                    displayRotation,
+                    detectSun = sunNow.altitudeDeg > 0,
+                    onBlobs = { blobs = it },
+                ) {
+                    viewCamera = it
+                }
             }
             if (view != null && center != null) {
                 Canvas(
@@ -265,6 +352,7 @@ fun SkyScreen(locationGranted: Boolean) {
                         detectTapGestures { onTap(it) }
                     }
                 ) {
+                    detected?.let { drawDetectedSun(it) }
                     drawSky(
                         view,
                         day,
@@ -340,36 +428,42 @@ fun SkyScreen(locationGranted: Boolean) {
                                 expanded = alignMenu,
                                 onDismissRequest = { alignMenu = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("With the sun (tap it)") },
-                                    enabled = cameraOn && sunNow.altitudeDeg > 0,
-                                    onClick = {
-                                        alignMenu = false
-                                        message = null
-                                        aligning = AlignTarget.SUN
+                                val sunUp = sunNow.altitudeDeg > 0
+                                val moonUsable =
+                                    moonNow.altitudeDeg > 0 && moonFraction >= MIN_MOON_FRACTION
+                                val located = place.source == PlaceSource.DEVICE
+                                AlignItem(
+                                    "With the sun",
+                                    if (sunUp) "Tap the sun in the camera image"
+                                    else "The sun is below the horizon",
+                                    enabled = sunUp,
+                                ) {
+                                    alignMenu = false
+                                    startBodyAlign(AlignTarget.SUN)
+                                }
+                                AlignItem(
+                                    "With the moon",
+                                    when {
+                                        moonNow.altitudeDeg <= 0 -> "The moon is below the horizon"
+                                        moonFraction < MIN_MOON_FRACTION ->
+                                            "The moon is too dim (new moon)"
+                                        else -> "Tap the moon in the camera image"
                                     },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("With the moon (tap it)") },
-                                    enabled =
-                                        cameraOn &&
-                                            moonNow.altitudeDeg > 0 &&
-                                            moonFraction >= MIN_MOON_FRACTION,
-                                    onClick = {
-                                        alignMenu = false
-                                        message = null
-                                        aligning = AlignTarget.MOON
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("With a landmark on the map") },
-                                    enabled = place.source == PlaceSource.DEVICE,
-                                    onClick = {
-                                        alignMenu = false
-                                        message = null
-                                        pickingLandmark = true
-                                    },
-                                )
+                                    enabled = moonUsable,
+                                ) {
+                                    alignMenu = false
+                                    startBodyAlign(AlignTarget.MOON)
+                                }
+                                AlignItem(
+                                    "With a landmark",
+                                    if (located) "Pick it on a map, then aim at it"
+                                    else "Needs your location (allow location access)",
+                                    enabled = located,
+                                ) {
+                                    alignMenu = false
+                                    message = null
+                                    pickingLandmark = true
+                                }
                             }
                         }
                     }
@@ -377,6 +471,25 @@ fun SkyScreen(locationGranted: Boolean) {
             }
         }
     }
+}
+
+/** A menu item with a second line that says what happens, or why it is not possible now. */
+@Composable
+private fun AlignItem(title: String, detail: String, enabled: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Column {
+                Text(title)
+                Text(
+                    detail,
+                    fontSize = 12.sp,
+                    color = if (enabled) Color(0xFFBBBBBB) else Color(0xFFFFB74D),
+                )
+            }
+        },
+        enabled = enabled,
+        onClick = onClick,
+    )
 }
 
 private fun alignHint(target: AlignTarget) =
@@ -545,6 +658,29 @@ private fun Readout(
     }
 }
 
+/** A box around the detected sun, with a hint to tap it. */
+private fun DrawScope.drawDetectedSun(sun: DetectedSun) {
+    val px = density
+    val r = sun.blob.radius + 14 * px
+    val color = if (sun.separationDeg <= ALIGNED_DEG) Color(0xFFA5D6A7) else Color(0xFFFFE082)
+    drawRoundRect(
+        color,
+        topLeft = sun.blob.center - Offset(r, r),
+        size = androidx.compose.ui.geometry.Size(2 * r, 2 * r),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(8 * px),
+        style = Stroke(2.5f * px),
+    )
+    val label = if (sun.separationDeg <= ALIGNED_DEG) "Sun ✓" else "Sun · tap to align"
+    drawIntoCanvas {
+        it.nativeCanvas.drawText(
+            label,
+            sun.blob.center.x,
+            sun.blob.center.y - r - 8 * px,
+            labelPaint(13 * px),
+        )
+    }
+}
+
 private fun DrawScope.drawSky(
     view: View,
     day: SkyDay,
@@ -605,7 +741,10 @@ private fun DrawScope.drawSky(
 
     // The vertical line through the crosshair (constant azimuth), and where it crosses the path.
     if (crossing != null) {
-        val vertical = (-10..89).map { Horizontal(center.azimuthDeg, it.toDouble()) }
+        // From the horizon to the crossing with the path (up, or down if it is below the horizon).
+        val end = crossing.sun.altitudeDeg
+        val steps = maxOf(2, abs(end).toInt() + 1)
+        val vertical = (0..steps).map { Horizontal(center.azimuthDeg, end * it / steps) }
         drawPolylines(
             projectLine(view, DirectionLine.of(vertical)),
             SkyColors.nearest,

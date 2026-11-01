@@ -15,7 +15,7 @@ the sun is at a given place in the sky. The repository is a monorepo:
 | `core/` | The C++ library with all its bindings (Python and Android now; WASM and Apple later). | yes |
 | `android/` | The Android app. It uses `core/android` as a composite build, and contains no C++. | yes |
 | `pwa/` | The PWA (M9). It uses `core/wasm`. | later |
-| `ios/` | The iOS app, maybe later. It uses `core/apple`. | later |
+| `ios/` | The iOS app (M11). It will use `core/apple`. | later |
 | `scripts/` | Repository tools: `format`, and the pinned versions of the dev tools. | no |
 | `.github/workflows/` | One workflow per project and per package, with path filters. | no |
 

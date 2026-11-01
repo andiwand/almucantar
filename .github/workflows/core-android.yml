@@ -75,13 +75,29 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # The emulator sometimes does not boot on hosted runners. The Automated Test Device image
+      # (aosp_atd) is made for CI and boots faster, and a second attempt runs if the first fails.
       - name: Run the instrumented tests
+        id: attempt1
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
-          # The emulator sometimes boots slowly on hosted runners.
+          target: aosp_atd
           emulator-boot-timeout: 900
+          disable-animations: true
+          working-directory: core/android
+          script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=
+
+      - name: Run the instrumented tests (second attempt)
+        if: steps.attempt1.outcome == 'failure'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: aosp_atd
+          emulator-boot-timeout: 900
+          disable-animations: true
           working-directory: core/android
           script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=
