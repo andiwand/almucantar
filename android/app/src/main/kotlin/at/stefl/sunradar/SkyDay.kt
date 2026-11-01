@@ -9,6 +9,7 @@ import at.stefl.sunradar.core.sunEvents
 import at.stefl.sunradar.core.sunPath
 import at.stefl.sunradar.core.sunPosition
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -93,3 +94,10 @@ fun solsticeGuides(observer: Observer, year: Int, zone: ZoneId): List<DirectionL
             )
             .daySegments
     }
+
+/**
+ * The Unix time of the wall clock time [minuteOfDay] on [date]. It is not midnight + minutes,
+ * because a day with a DST change has 23 or 25 hours.
+ */
+fun wallClockTime(date: LocalDate, minuteOfDay: Int, zone: ZoneId): Double =
+    date.atTime(minuteOfDay / 60, minuteOfDay % 60).atZone(zone).toEpochSecond().toDouble()

@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,8 +78,18 @@ internal fun latitude(worldY: Double, zoom: Int) =
 
 /** The tiles in memory, shared by all maps of the process. */
 private object TileCache {
-    val bitmaps = LruCache<String, Bitmap>(256)
+    /** About 32 MB of tiles (a tile of 256 × 256 pixels has 256 KB). */
+    val bitmaps =
+        object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
+            override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+        }
     val loading = mutableSetOf<String>()
+    /** The time of the last failed load of each tile, so an offline map does not retry at once. */
+    val failed = mutableMapOf<String, Long>()
+    const val RETRY_MS = 30_000L
+
+    fun mayLoad(key: String) =
+        (System.currentTimeMillis() - (failed[key] ?: 0L)) > RETRY_MS && loading.add(key)
 
     suspend fun load(z: Int, x: Int, y: Int): Bitmap? =
         withContext(Dispatchers.IO) {
@@ -108,6 +119,8 @@ fun MapPicker(center: Observer, onPick: (Observer?) -> Unit) {
     var landmark by remember { mutableStateOf<Observer?>(null) }
     var version by remember { mutableIntStateOf(0) } // redraw when a tile arrives
     val scope = rememberCoroutineScope()
+    // The zoom of the pinch since the last zoom step: each event gives only a small factor.
+    var pinch by remember { mutableFloatStateOf(1f) }
 
     fun setZoom(newZoom: Int) {
         val z = newZoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
@@ -124,8 +137,11 @@ fun MapPicker(center: Observer, onPick: (Observer?) -> Unit) {
                     detectTransformGestures { _, pan, gestureZoom, _ ->
                         cx -= pan.x
                         cy -= pan.y
-                        if (gestureZoom > 1.25f) setZoom(zoom + 1)
-                        if (gestureZoom < 0.8f) setZoom(zoom - 1)
+                        pinch *= gestureZoom
+                        if (pinch > 1.5f || pinch < 1 / 1.5f) {
+                            setZoom(if (pinch > 1) zoom + 1 else zoom - 1)
+                            pinch = 1f
+                        }
                     }
                 }
                 .pointerInput(Unit) {
@@ -161,11 +177,17 @@ fun MapPicker(center: Observer, onPick: (Observer?) -> Unit) {
                                 ),
                             dstSize = IntSize(TILE_SIZE, TILE_SIZE),
                         )
-                    } else if (TileCache.loading.add(key)) {
+                    } else if (TileCache.mayLoad(key)) {
                         val z = zoom
                         scope.launch {
-                            TileCache.load(z, x, ty)?.let { TileCache.bitmaps.put(key, it) }
-                            TileCache.loading.remove(key)
+                            try {
+                                val tile = TileCache.load(z, x, ty)
+                                if (tile != null) TileCache.bitmaps.put(key, tile)
+                                else TileCache.failed[key] = System.currentTimeMillis()
+                            } finally {
+                                // Also if the user leaves the map during the load.
+                                TileCache.loading.remove(key)
+                            }
                             version++
                         }
                     }

@@ -126,7 +126,11 @@ struct SkyScreen: SwiftUI.View {
 
     var body: some SwiftUI.View {
         GeometryReader { geometry in
-            let size = geometry.size
+            // The canvas and the camera ignore the safe area, so the view uses the full screen.
+            let insets = geometry.safeAreaInsets
+            let size = CGSize(
+                width: geometry.size.width + insets.leading + insets.trailing,
+                height: geometry.size.height + insets.top + insets.bottom)
             let selectedDate = calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!
             let observer = location.observer
             let day = dayCache.day(observer: observer, date: selectedDate, calendar: calendar)
@@ -191,7 +195,7 @@ struct SkyScreen: SwiftUI.View {
                     }
                 }
             }
-            .task(id: center.map { "\(Int($0.azimuthDeg * 2)):\(Int($0.altitudeDeg * 2))" } ?? "") {
+            .task(id: center.map { "\(Int($0.azimuthDeg * 2)):\(Int($0.altitudeDeg * 2)):\(observer)" } ?? "") {
                 await searchDates(center: usable ? center : nil)
             }
         }
@@ -234,8 +238,11 @@ struct SkyScreen: SwiftUI.View {
     private func selectedTime(day: SkyDay) -> Double {
         if minuteOfDay == nil && dayOffset == 0 { return now.timeIntervalSince1970 }
         let components = calendar.dateComponents([.hour, .minute], from: now)
-        let minute = minuteOfDay ?? Double(components.hour! * 60 + components.minute!)
-        return day.start + minute * 60
+        let minute = minuteOfDay.map { Int($0) } ?? components.hour! * 60 + components.minute!
+        // The wall clock time, not midnight + minutes: a day with a DST change has 23 or 25 hours.
+        let start = Date(timeIntervalSince1970: day.start)
+        return (calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: start) ?? start)
+            .timeIntervalSince1970
     }
 
     /// The detection runs with the camera on and the sun up.
@@ -337,16 +344,20 @@ struct SkyScreen: SwiftUI.View {
         }
     }
 
+    /// The old dates stay until the new ones are ready, so sensor noise does not make them flicker.
     private func searchDates(center: Horizontal?) async {
-        dates = []
-        guard let center, center.altitudeDeg >= 0 else { return }
+        guard let center, center.altitudeDeg >= 0 else {
+            dates = []
+            return
+        }
         try? await Task.sleep(nanoseconds: 400_000_000)
         if Task.isCancelled { return }
         let start = calendar.startOfDay(for: Date()).timeIntervalSince1970
         let observer = location.observer
-        dates = await Task.detached {
+        let found = await Task.detached {
             (try? findDates(observer: observer, direction: center, startUtc: start, endUtc: start + 365 * 86400)) ?? []
         }.value
+        if !Task.isCancelled { dates = found }
     }
 
     // MARK: - Drawing

@@ -74,6 +74,8 @@ fun CameraPreview(
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)
         var calibration: SensorCalibration? = null
+        // The provider can arrive after the dispose (Camera, then Sky at once): then do nothing.
+        var disposed = false
         val update = {
             val matrix = previewView.sensorToViewTransform
             val c = calibration
@@ -101,9 +103,14 @@ fun CameraPreview(
         }
 
         future.addListener(
-            {
+            listener@{
+                if (disposed) return@listener
                 val provider = future.get()
                 val selector = CameraSelector.DEFAULT_BACK_CAMERA
+                if (!provider.hasCamera(selector)) {
+                    Log.w(TAG, "the device has no back camera")
+                    return@listener
+                }
                 val info = provider.getCameraInfo(selector)
                 val characteristics = Camera2CameraInfo.from(info)
                 val modes =
@@ -137,6 +144,7 @@ fun CameraPreview(
         )
 
         onDispose {
+            disposed = true
             previewView.removeOnLayoutChangeListener(layoutListener)
             previewView.previewStreamState.removeObservers(lifecycleOwner)
             if (future.isDone) future.get().unbindAll()

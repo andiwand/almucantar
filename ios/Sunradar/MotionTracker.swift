@@ -44,7 +44,7 @@ final class MotionTracker: ObservableObject {
     private func update(_ motion: CMDeviceMotion) {
         let a = motion.attitude.quaternion
         var q = Sunradar.Quaternion(w: a.w, x: a.x, y: a.y, z: a.z)
-        if conjugate == nil { conjugate = Self.needsConjugate(q, gravity: motion.gravity) }
+        if conjugate == nil { conjugate = Self.needsConjugate(q, gravity: motion.gravity) }  // nil until the tilt is clear
         if conjugate == true { q = Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z) }
 
         if let last = lastTimestamp, let predicted = try? headingPredict(estimate, dtS: motion.timestamp - last) {
@@ -67,13 +67,16 @@ final class MotionTracker: ObservableObject {
     }
 
     /// The gravity of CoreMotion points down, in the device frame. With the correct direction of
-    /// the quaternion, rotating "down" of the frame into the device frame gives that vector.
-    static func needsConjugate(_ q: Sunradar.Quaternion, gravity: CMAcceleration) -> Bool {
+    /// the quaternion, rotating "down" of the frame into the device frame gives that vector. The
+    /// two directions give almost the same vector if the device is nearly flat, so the function
+    /// decides only if they differ clearly (a tilt of more than about 30°), else it returns nil.
+    static func needsConjugate(_ q: Sunradar.Quaternion, gravity: CMAcceleration) -> Bool? {
         let down = (x: 0.0, y: 0.0, z: -1.0)
-        // The inverse rotation (frame to device) of the quaternion q (device to frame).
-        let inverse = rotate(Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z), down)
-        let dot = inverse.x * gravity.x + inverse.y * gravity.y + inverse.z * gravity.z
-        return dot < 0
+        let dot = { (v: (x: Double, y: Double, z: Double)) in v.x * gravity.x + v.y * gravity.y + v.z * gravity.z }
+        // q rotates from the device to the frame, so its inverse rotates "down" into the device.
+        let asGiven = dot(rotate(Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z), down))
+        let conjugated = dot(rotate(q, down))
+        return abs(asGiven - conjugated) > 0.5 ? conjugated > asGiven : nil
     }
 
     static func rotate(_ q: Sunradar.Quaternion, _ v: (x: Double, y: Double, z: Double)) -> (x: Double, y: Double, z: Double) {

@@ -45,7 +45,7 @@ data class Place(
     val name: String? = null,
 )
 
-private val VIENNA = Place(Observer(48.2082, 16.3738), PlaceSource.DEFAULT, name = "Vienna")
+internal val VIENNA = Place(Observer(48.2082, 16.3738), PlaceSource.DEFAULT, name = "Vienna")
 
 /** The place without a location: the city of the time zone, or Vienna. */
 fun fallbackPlace(context: Context, zone: ZoneId = ZoneId.systemDefault()): Place =
@@ -59,9 +59,13 @@ fun fallbackPlace(context: Context, zone: ZoneId = ZoneId.systemDefault()): Plac
  * the time zone. The name comes from the geocoder of the device, if it has one.
  */
 @Composable
-fun rememberPlace(locationGranted: Boolean): State<Place> {
+fun rememberPlace(locationGranted: Boolean, zone: ZoneId): State<Place> {
     val context = LocalContext.current
-    val state = remember { mutableStateOf(fallbackPlace(context)) }
+    val state = remember { mutableStateOf(fallbackPlace(context, zone)) }
+    // A new time zone gives a new fallback city, but a device location stays.
+    LaunchedEffect(zone) {
+        if (state.value.source != PlaceSource.DEVICE) state.value = fallbackPlace(context, zone)
+    }
     LaunchedEffect(locationGranted) {
         if (!locationGranted || !hasPermission(context)) {
             return@LaunchedEffect

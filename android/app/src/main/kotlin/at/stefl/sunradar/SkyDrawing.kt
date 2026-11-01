@@ -41,7 +41,13 @@ object SkyColors {
 }
 
 /** A text paint with a dark shadow, so the text is readable on a camera image. */
+private val labelPaints = mutableMapOf<Pair<Float, Boolean>, Paint>()
+
+/** A paint for labels. The paints are kept, because each frame needs them; do not change one. */
 fun labelPaint(sizePx: Float, bold: Boolean = true) =
+    labelPaints.getOrPut(sizePx to bold) { newLabelPaint(sizePx, bold) }
+
+private fun newLabelPaint(sizePx: Float, bold: Boolean) =
     Paint().apply {
         isAntiAlias = true
         color = Color.White.toArgb()

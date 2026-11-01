@@ -26,11 +26,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,10 +45,8 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -123,9 +123,9 @@ enum class AlignTarget {
 @Composable
 fun SkyScreen(locationGranted: Boolean) {
     val tracker = rememberHeadingTracker()
-    val place by rememberPlace(locationGranted)
-    val zone = remember { ZoneId.systemDefault() }
-    tracker.observer = place.observer
+    val zone = rememberTimeZone()
+    val place by rememberPlace(locationGranted, zone)
+    SideEffect { tracker.observer = place.observer }
 
     var now by remember { mutableDoubleStateOf(System.currentTimeMillis() / 1000.0) }
     LaunchedEffect(Unit) {
@@ -147,7 +147,7 @@ fun SkyScreen(locationGranted: Boolean) {
         if (minuteOfDay == null && dayOffset == 0) {
             now
         } else {
-            date.atStartOfDay(zone).toEpochSecond() + 60.0 * (minuteOfDay ?: liveMinute)
+            wallClockTime(date, minuteOfDay ?: liveMinute, zone)
         }
 
     val day =
@@ -162,9 +162,7 @@ fun SkyScreen(locationGranted: Boolean) {
     val guides =
         remember(place.observer, date.year) { solsticeGuides(place.observer, date.year, zone) }
 
-    // The activity handles rotations itself, so reading the configuration recomposes after one.
-    LocalConfiguration.current
-    val displayRotation = LocalView.current.display?.rotation ?: 0
+    val displayRotation = rememberDisplayRotation()
 
     val context = LocalContext.current
     var cameraOn by remember { mutableStateOf(false) }
@@ -174,14 +172,20 @@ fun SkyScreen(locationGranted: Boolean) {
     var pickingLandmark by remember { mutableStateOf(false) }
     var landmark by remember { mutableStateOf<Observer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var pendingAlign by remember { mutableStateOf<AlignTarget?>(null) }
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraOn = it
-            if (!it) message = "The alignment with the sun or the moon needs the camera."
+            if (!it) {
+                message =
+                    if (pendingAlign != null)
+                        "The alignment with the sun or the moon needs the camera."
+                    else "The camera is not allowed."
+                pendingAlign = null
+            }
         }
     // Starts an alignment with the sun or the moon. These need the camera image, so the camera
     // switches on first (with the permission prompt, if needed).
-    var pendingAlign by remember { mutableStateOf<AlignTarget?>(null) }
     val startBodyAlign = { target: AlignTarget ->
         message = null
         if (cameraOn) {
@@ -235,33 +239,41 @@ fun SkyScreen(locationGranted: Boolean) {
             )
         }
     // The sun and the moon now (for the alignment) and at the selected time (for the overlay).
-    val sunNow = sunPosition(now, day.observer)
-    val moonNow = moonPosition(now, day.observer)
-    val moonFraction = moonIlluminatedFraction(now)
-    val sun = sunPosition(time, day.observer)
-    val moon = moonPosition(time, day.observer)
+    // They change once per second at most, so they are not calculated for each sensor event.
+    val sunNow = remember(now, day.observer) { sunPosition(now, day.observer) }
+    val moonNow = remember(now, day.observer) { moonPosition(now, day.observer) }
+    val moonFraction = remember(now) { moonIlluminatedFraction(now) }
+    val sun = remember(time, day.observer) { sunPosition(time, day.observer) }
+    val moon =
+        remember(time, day.observer) {
+            moonPosition(time, day.observer).takeIf { moonIlluminatedFraction(time) >= 0.02 }
+        }
     val center = view?.let { unproject(it, ScreenPoint(it.camera.width / 2, it.camera.height / 2)) }
     val crosshairUsable = center != null && abs(center.altitudeDeg) <= MAX_CROSSHAIR_ALTITUDE_DEG
+    // The search runs again only if the azimuth changes by 0.05° (about 12 s on the path).
+    val azimuthKey = center?.takeIf { crosshairUsable }?.let { (it.azimuthDeg * 20).roundToInt() }
     val crossing =
-        if (crosshairUsable) {
-            findAzimuthTimes(day.observer, center!!.azimuthDeg, day.startUtc, day.endUtc)
-                .firstOrNull()
-        } else {
-            null
+        remember(azimuthKey, day) {
+            azimuthKey?.let {
+                findAzimuthTimes(day.observer, it / 20.0, day.startUtc, day.endUtc).firstOrNull()
+            }
         }
 
     // The dates in the next 12 months when the sun goes through the crosshair. The search takes
-    // some
-    // milliseconds, so it runs in the background when the crosshair has been still for a moment.
+    // some milliseconds, so it runs in the background when the crosshair has been still for a
+    // moment. The old dates stay until the new ones are ready, so sensor noise does not make them
+    // flicker.
     var crosshairDates by remember { mutableStateOf<List<TimeMatch>>(emptyList()) }
     val crosshairKey =
         center
             ?.takeIf { crosshairUsable }
             ?.let { (it.azimuthDeg * 2).roundToInt() to (it.altitudeDeg * 2).roundToInt() }
     LaunchedEffect(crosshairKey, place.observer, today) {
-        crosshairDates = emptyList()
-        val direction = center ?: return@LaunchedEffect
-        if (crosshairKey == null || direction.altitudeDeg < 0) return@LaunchedEffect
+        val direction = center
+        if (direction == null || crosshairKey == null || direction.altitudeDeg < 0) {
+            crosshairDates = emptyList()
+            return@LaunchedEffect
+        }
         delay(400)
         val start = today.atStartOfDay(zone).toEpochSecond().toDouble()
         crosshairDates =
@@ -325,6 +337,9 @@ fun SkyScreen(locationGranted: Boolean) {
         }
     }
 
+    // The tap handler of the newest composition, with the current view and detected sun.
+    val currentOnTap by rememberUpdatedState(onTap)
+
     MaterialTheme(colorScheme = darkColorScheme()) {
         if (pickingLandmark) {
             MapPicker(place.observer) {
@@ -348,8 +363,8 @@ fun SkyScreen(locationGranted: Boolean) {
             }
             if (view != null && center != null) {
                 Canvas(
-                    Modifier.fillMaxSize().pointerInput(aligning) {
-                        detectTapGestures { onTap(it) }
+                    Modifier.fillMaxSize().pointerInput(Unit) {
+                        detectTapGestures { currentOnTap(it) }
                     }
                 ) {
                     detected?.let { drawDetectedSun(it) }
@@ -358,9 +373,9 @@ fun SkyScreen(locationGranted: Boolean) {
                         day,
                         guides,
                         sun,
-                        moon.takeIf { moonFraction >= 0.02 },
+                        moon,
                         center,
-                        crossing.takeIf { crosshairUsable },
+                        crossing,
                         landmark
                             ?.takeIf { aligning == AlignTarget.LANDMARK }
                             ?.let {

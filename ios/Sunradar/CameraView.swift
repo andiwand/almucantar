@@ -43,6 +43,9 @@ struct CameraView: UIViewRepresentable {
         /// configuration.
         let detect = OSAllocatedUnfairLock(initialState: false)
         private let session = AVCaptureSession()
+        /// One serial queue for the configuration, the start, and the stop of the session, so a
+        /// fast stop cannot come before the start.
+        private let sessionQueue = DispatchQueue(label: "at.stefl.sunradar.session")
         private let frames = DispatchQueue(label: "at.stefl.sunradar.frames")
         private var device: AVCaptureDevice?
 
@@ -51,13 +54,13 @@ struct CameraView: UIViewRepresentable {
             previewLayer.session = session
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 guard granted else { return }
-                DispatchQueue.global(qos: .userInitiated).async { self.configure() }
+                self.sessionQueue.async { self.configure() }
             }
         }
 
-        func stop() { session.stopRunning() }
+        func stop() { sessionQueue.async { self.session.stopRunning() } }
 
-        private func configure() {
+        nonisolated private func configure() {
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                 let input = try? AVCaptureDeviceInput(device: device)
             else { return }
@@ -73,8 +76,12 @@ struct CameraView: UIViewRepresentable {
             if session.canAddOutput(output) { session.addOutput(output) }
             session.commitConfiguration()
             session.startRunning()
-            self.device = device
-            DispatchQueue.main.async { self.updateCamera() }
+            DispatchQueue.main.async {
+                self.device = device
+                // The connection exists only now, so the first layout could not rotate it.
+                self.updateConnectionRotation()
+                self.updateCamera()
+            }
         }
 
         override func layoutSubviews() {
@@ -114,7 +121,7 @@ struct CameraView: UIViewRepresentable {
                     cy: Double(center.y)))
         }
 
-        func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
             guard detect.withLock({ $0 }), let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
             CVPixelBufferLockBaseAddress(buffer, .readOnly)
             defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }

@@ -5,13 +5,13 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleStartEffect
 import at.stefl.sunradar.core.HeadingEstimate
 import at.stefl.sunradar.core.HeadingMeasurement
 import at.stefl.sunradar.core.Observer
@@ -53,7 +53,7 @@ class HeadingTracker {
         private set
 
     /** The place, for the declination and the expected field. The screen sets it. */
-    var observer: Observer = DEFAULT_PLACE_OBSERVER
+    var observer: Observer = VIENNA.observer
 
     private var lastOrientationNs = 0L
     private var lastMagnetometerUpdateNs = 0L
@@ -92,18 +92,17 @@ class HeadingTracker {
     fun apply(measurement: HeadingMeasurement) {
         estimate = headingUpdate(estimate, measurement)
     }
-
-    companion object {
-        val DEFAULT_PLACE_OBSERVER = Observer(48.2082, 16.3738)
-    }
 }
 
-/** Creates a [HeadingTracker] and connects it to the sensors while the composition is active. */
+/**
+ * Creates a [HeadingTracker] and connects it to the sensors while the activity is started, so the
+ * sensors stop in the background.
+ */
 @Composable
 fun rememberHeadingTracker(): HeadingTracker {
     val context = LocalContext.current
     val tracker = remember { HeadingTracker() }
-    DisposableEffect(context) {
+    LifecycleStartEffect(context) {
         val manager = context.getSystemService(SensorManager::class.java)
         val game = manager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
         val rotation = game ?: manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
@@ -138,7 +137,7 @@ fun rememberHeadingTracker(): HeadingTracker {
                 manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI)
             }
         }
-        onDispose { manager?.unregisterListener(listener) }
+        onStopOrDispose { manager?.unregisterListener(listener) }
     }
     return tracker
 }

@@ -109,8 +109,8 @@ fun viewCamera(
     val s = sqrt(abs(a * e - b * d))
     if (s <= 0) return null
     // R, snapped to 0 and ±1.
-    val r = doubleArrayOf(a / s, b / s, d / s, e / s).map { it.roundToInt() }
     val exact = doubleArrayOf(a / s, b / s, d / s, e / s)
+    val r = exact.map { it.roundToInt() }
     if (r.indices.any { abs(exact[it] - r[it]) > 1e-3 }) return null
     if (abs(r[0]) + abs(r[1]) != 1 || abs(r[2]) + abs(r[3]) != 1) return null
 
