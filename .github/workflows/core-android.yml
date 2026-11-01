@@ -81,5 +81,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # The emulator sometimes boots slowly on hosted runners.
+          emulator-boot-timeout: 900
           working-directory: core/android
           script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=

@@ -8,74 +8,18 @@
 #include <stdexcept>
 #include <vector>
 
+#include "poses.hpp"
 #include "reference_data.hpp"
 #include "sunradar/view.hpp"
 
 using Catch::Matchers::WithinAbs;
 using namespace sunradar;
+using sunradar::test::from_axes;
+using sunradar::test::upright;
 
 namespace {
 
 constexpr double kDeg = std::numbers::pi / 180.0;
-
-using Axis = std::array<double, 3>;  // East, North, Up
-
-/// The quaternion of a device whose x, y, and z axes point to `x`, `y`, and `z` in
-/// the East-North-Up frame (a rotation matrix with these columns).
-Quaternion from_axes(const Axis& x, const Axis& y, const Axis& z) {
-  const double m00 = x[0], m01 = y[0], m02 = z[0];
-  const double m10 = x[1], m11 = y[1], m12 = z[1];
-  const double m20 = x[2], m21 = y[2], m22 = z[2];
-  const double trace = m00 + m11 + m22;
-  if (trace > 0) {
-    const double s = 2 * std::sqrt(trace + 1);
-    return {s / 4, (m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s};
-  }
-  if (m00 > m11 && m00 > m22) {
-    const double s = 2 * std::sqrt(1 + m00 - m11 - m22);
-    return {(m21 - m12) / s, s / 4, (m01 + m10) / s, (m02 + m20) / s};
-  }
-  if (m11 > m22) {
-    const double s = 2 * std::sqrt(1 + m11 - m00 - m22);
-    return {(m02 - m20) / s, (m01 + m10) / s, s / 4, (m12 + m21) / s};
-  }
-  const double s = 2 * std::sqrt(1 + m22 - m00 - m11);
-  return {(m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, s / 4};
-}
-
-/// A device held upright with the back camera to azimuth `azimuth_deg`, pitched up by
-/// `pitch_deg`, and rolled by `roll_deg` (clockwise as the user sees the screen). The
-/// device is rotated in its own plane so that the screen content is upright for
-/// `rotation`.
-Quaternion upright(const double azimuth_deg, const double pitch_deg = 0, const double roll_deg = 0,
-                   const ScreenRotation rotation = ScreenRotation::rotation_0) {
-  const double a = azimuth_deg * kDeg, p = pitch_deg * kDeg, r = roll_deg * kDeg;
-  // The camera axes of the user: forward, right, and up.
-  const Axis f{std::sin(a) * std::cos(p), std::cos(a) * std::cos(p), std::sin(p)};
-  const Axis right0{std::cos(a), -std::sin(a), 0};
-  const Axis up0{-std::sin(a) * std::sin(p), -std::cos(a) * std::sin(p), std::cos(p)};
-  Axis right{}, up{};
-  for (std::size_t i = 0; i < 3; ++i) {
-    right[i] = std::cos(r) * right0[i] - std::sin(r) * up0[i];
-    up[i] = std::sin(r) * right0[i] + std::cos(r) * up0[i];
-  }
-  const Axis back{-f[0], -f[1], -f[2]};  // device +z points out of the screen
-  const auto neg = [](const Axis& v) { return Axis{-v[0], -v[1], -v[2]}; };
-  switch (rotation) {
-    case ScreenRotation::rotation_0:
-      return from_axes(right, up, back);
-    // Android Display.getRotation(): rotation_90 means that the device is turned 90°
-    // counterclockwise, so the device top (+y) points to the left of the user and the device
-    // right side (+x) points up.
-    case ScreenRotation::rotation_90:  // device +x = up, device +y = left
-      return from_axes(up, neg(right), back);
-    case ScreenRotation::rotation_180:  // device +x = left, device +y = down
-      return from_axes(neg(right), neg(up), back);
-    case ScreenRotation::rotation_270:  // device +x = down, device +y = right
-      return from_axes(neg(up), right, back);
-  }
-  return {};
-}
 
 View view_facing(const double azimuth_deg, const double pitch_deg = 0, const double roll_deg = 0,
                  const ScreenRotation rotation = ScreenRotation::rotation_0) {

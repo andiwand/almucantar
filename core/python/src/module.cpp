@@ -66,6 +66,64 @@ void bind_types(const py::module_& m) {
       .def("__repr__", [](const Atmosphere& a) { return repr(a); });
 }
 
+void bind_heading(py::module_& m) {
+  using namespace sunradar;
+
+  py::class_<Vector3>(m, "Vector3", "A vector for sensor values.")
+      .def(py::init([](const double x, const double y, const double z) {
+             return Vector3{.x = x, .y = y, .z = z};
+           }),
+           "x"_a = 0.0, "y"_a = 0.0, "z"_a = 0.0)
+      .def_readwrite("x", &Vector3::x)
+      .def_readwrite("y", &Vector3::y)
+      .def_readwrite("z", &Vector3::z);
+
+  m.attr("UNKNOWN_HEADING_VARIANCE_DEG2") = kUnknownHeadingVarianceDeg2;
+
+  py::class_<HeadingEstimate>(m, "HeadingEstimate")
+      .def(py::init([](const double offset_deg, const double variance_deg2) {
+             return HeadingEstimate{.offset_deg = offset_deg, .variance_deg2 = variance_deg2};
+           }),
+           "offset_deg"_a = 0.0, "variance_deg2"_a = kUnknownHeadingVarianceDeg2)
+      .def_readwrite("offset_deg", &HeadingEstimate::offset_deg)
+      .def_readwrite("variance_deg2", &HeadingEstimate::variance_deg2)
+      .def("__repr__", [](const HeadingEstimate& e) {
+        return "HeadingEstimate(offset_deg=" + num(e.offset_deg) +
+               ", variance_deg2=" + num(e.variance_deg2) + ")";
+      });
+
+  py::class_<HeadingMeasurement>(m, "HeadingMeasurement")
+      .def(py::init([](const double offset_deg, const double variance_deg2) {
+             return HeadingMeasurement{.offset_deg = offset_deg, .variance_deg2 = variance_deg2};
+           }),
+           "offset_deg"_a, "variance_deg2"_a)
+      .def_readwrite("offset_deg", &HeadingMeasurement::offset_deg)
+      .def_readwrite("variance_deg2", &HeadingMeasurement::variance_deg2)
+      .def("__repr__", [](const HeadingMeasurement& e) {
+        return "HeadingMeasurement(offset_deg=" + num(e.offset_deg) +
+               ", variance_deg2=" + num(e.variance_deg2) + ")";
+      });
+
+  py::class_<MagnetometerOptions>(m, "MagnetometerOptions")
+      .def(py::init([](const double sensor_sigma_deg) {
+             return MagnetometerOptions{.sensor_sigma_deg = sensor_sigma_deg};
+           }),
+           "sensor_sigma_deg"_a = MagnetometerOptions{}.sensor_sigma_deg)
+      .def_readwrite("sensor_sigma_deg", &MagnetometerOptions::sensor_sigma_deg);
+
+  m.def("heading_predict", &heading_predict, "estimate"_a, "dt_s"_a,
+        "drift_deg2_per_s"_a = 1.0 / 60.0,
+        "Increases the variance for the time dt_s, because the yaw of the frame drifts.");
+  m.def("heading_update", &heading_update, "estimate"_a, "measurement"_a,
+        "Combines the estimate with a measurement (a Kalman update on the circle).");
+  m.def("heading_from_magnetometer", &heading_from_magnetometer, "device_to_frame"_a, "field_ut"_a,
+        "observer"_a, "unix_utc"_a, "options"_a = MagnetometerOptions{},
+        "The heading offset from a magnetometer, with a variance from the field disturbance.");
+  m.def("heading_from_direction", &heading_from_direction, "view"_a, "point"_a,
+        "true_azimuth_deg"_a, "sigma_deg"_a,
+        "The heading offset from a screen point that shows a known true azimuth.");
+}
+
 void bind_search(py::module_& m) {
   using namespace sunradar;
 
@@ -316,6 +374,7 @@ PYBIND11_MODULE(_core, m) {
   bind_sun(m);
   bind_view(m);
   bind_search(m);
+  bind_heading(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");

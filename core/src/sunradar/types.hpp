@@ -24,6 +24,13 @@ struct Quaternion {
   double z = 0;
 };
 
+/// A vector in three dimensions, for sensor values. The frame and the unit depend on the use.
+struct Vector3 {
+  double x = 0;
+  double y = 0;
+  double z = 0;
+};
+
 /// A point on the screen, in pixels. The origin is the top left corner, x goes right,
 /// and y goes down.
 struct ScreenPoint {

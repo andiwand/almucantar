@@ -2,8 +2,10 @@ find_package(Catch2 3 REQUIRED)
 include(Catch)
 
 add_executable(sunradar_test
+  src/poses.cpp
   src/reference_data.cpp
   src/test_events.cpp
+  src/test_heading.cpp
   src/test_magnetic.cpp
   src/test_path.cpp
   src/test_search.cpp

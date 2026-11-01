@@ -62,6 +62,33 @@ internal object SunradarNative {
         options: DoubleArray,
     ): DoubleArray
 
-    /** The C++ defaults of the option structs, Camera, and View, for the tests. */
+    @JvmStatic
+    external fun headingPredict(
+        estimate: DoubleArray,
+        dtS: Double,
+        driftDeg2PerS: Double,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun headingUpdate(estimate: DoubleArray, measurement: DoubleArray): DoubleArray
+
+    @JvmStatic
+    external fun headingFromMagnetometer(
+        quaternion: DoubleArray,
+        field: DoubleArray,
+        observer: DoubleArray,
+        unixUtc: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun headingFromDirection(
+        view: DoubleArray,
+        point: DoubleArray,
+        trueAzimuthDeg: Double,
+        sigmaDeg: Double,
+    ): DoubleArray
+
+    /** The C++ defaults of the option structs, Camera, View, and the heading, for the tests. */
     @JvmStatic external fun defaults(): DoubleArray
 }

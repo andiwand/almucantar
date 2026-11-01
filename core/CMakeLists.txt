@@ -20,6 +20,7 @@ include(GNUInstallDirs)
 include(cmake/compiler_options.cmake)
 
 set(SUNRADAR_SOURCE_FILES
+  src/sunradar/heading.cpp
   src/sunradar/magnetic.cpp
   src/sunradar/search.cpp
   src/sunradar/sun.cpp

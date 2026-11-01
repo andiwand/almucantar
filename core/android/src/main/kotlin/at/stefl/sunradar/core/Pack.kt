@@ -73,3 +73,17 @@ internal fun DoubleArray.toHorizontal(offset: Int = 0) = Horizontal(this[offset]
 
 internal fun DoubleArray.toTimeMatch(offset: Int = 0) =
     TimeMatch(this[offset], this[offset + 1], toHorizontal(offset + 2))
+
+internal fun Quaternion.pack() = doubleArrayOf(w, x, y, z)
+
+internal fun Vector3.pack() = doubleArrayOf(x, y, z)
+
+internal fun HeadingEstimate.pack() = doubleArrayOf(offsetDeg, varianceDeg2)
+
+internal fun HeadingMeasurement.pack() = doubleArrayOf(offsetDeg, varianceDeg2)
+
+internal fun MagnetometerOptions.pack() = doubleArrayOf(sensorSigmaDeg)
+
+internal fun DoubleArray.toHeadingEstimate() = HeadingEstimate(this[0], this[1])
+
+internal fun DoubleArray.toHeadingMeasurement() = HeadingMeasurement(this[0], this[1])

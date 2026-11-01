@@ -15,6 +15,10 @@
 //   Camera        [11]  width, height, fx, fy, cx, cy, k1, k2, k3, p1, p2
 //   View          [17]  w, x, y, z, screen_rotation, heading_offset_deg, Camera[11]
 //   line         [2 n]  azimuth_deg, altitude_deg for each point
+//   Quaternion     [4]  w, x, y, z
+//   Vector3        [3]  x, y, z
+//   HeadingEstimate, HeadingMeasurement [2]  offset_deg, variance_deg2
+//   MagnetometerOptions [1]  sensor_sigma_deg
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -308,6 +312,54 @@ SUNRADAR_JNI(findDates)
   });
 }
 
+SUNRADAR_JNI(headingPredict)
+(JNIEnv* env, jclass, jdoubleArray estimate, jdouble dt_s, jdouble drift)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles e(env, estimate, 2, "estimate");
+    const HeadingEstimate r =
+        heading_predict({.offset_deg = e[0], .variance_deg2 = e[1]}, dt_s, drift);
+    return to_java(env, {r.offset_deg, r.variance_deg2});
+  });
+}
+
+SUNRADAR_JNI(headingUpdate)
+(JNIEnv* env, jclass, jdoubleArray estimate, jdoubleArray measurement)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles e(env, estimate, 2, "estimate");
+    const Doubles m(env, measurement, 2, "measurement");
+    const HeadingEstimate r = heading_update({.offset_deg = e[0], .variance_deg2 = e[1]},
+                                             {.offset_deg = m[0], .variance_deg2 = m[1]});
+    return to_java(env, {r.offset_deg, r.variance_deg2});
+  });
+}
+
+SUNRADAR_JNI(headingFromMagnetometer)
+(JNIEnv* env, jclass, jdoubleArray quaternion, jdoubleArray field, jdoubleArray obs,
+ jdouble unix_utc, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles q(env, quaternion, 4, "quaternion");
+    const Doubles f(env, field, 3, "field");
+    const Doubles o(env, opts, 1, "options");
+    const HeadingMeasurement r = heading_from_magnetometer(
+        {.w = q[0], .x = q[1], .y = q[2], .z = q[3]}, {.x = f[0], .y = f[1], .z = f[2]},
+        observer(Doubles(env, obs, 2, "observer")), unix_utc, {.sensor_sigma_deg = o[0]});
+    return to_java(env, {r.offset_deg, r.variance_deg2});
+  });
+}
+
+SUNRADAR_JNI(headingFromDirection)
+(JNIEnv* env, jclass, jdoubleArray v, jdoubleArray point, jdouble true_azimuth_deg,
+ jdouble sigma_deg)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles p(env, point, 2, "point");
+    const HeadingMeasurement r = heading_from_direction(
+        view(Doubles(env, v, 17, "view")), {.x = p[0], .y = p[1]}, true_azimuth_deg, sigma_deg);
+    return to_java(env, {r.offset_deg, r.variance_deg2});
+  });
+}
+
 // The C++ defaults of the option structs and of Camera, in the layouts above, so the
 // instrumented tests can check that the Kotlin defaults are the same.
 SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
@@ -354,6 +406,9 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          v.device_to_enu.y,
                          v.device_to_enu.z,
                          static_cast<double>(v.screen_rotation),
-                         v.heading_offset_deg});
+                         v.heading_offset_deg,
+                         MagnetometerOptions{}.sensor_sigma_deg,
+                         HeadingEstimate{}.offset_deg,
+                         HeadingEstimate{}.variance_deg2});
   });
 }

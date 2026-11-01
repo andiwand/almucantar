@@ -143,3 +143,23 @@ data class View(
 
 /** The result of [project]. [point] has a meaning only if [valid] is true. */
 data class Projection(val valid: Boolean, val point: ScreenPoint)
+
+/** A vector for sensor values. The frame and the unit depend on the use. */
+data class Vector3(val x: Double = 0.0, val y: Double = 0.0, val z: Double = 0.0)
+
+/** The variance of a heading that is not known at all, in square degrees. */
+const val UNKNOWN_HEADING_VARIANCE_DEG2: Double = 180.0 * 180.0
+
+/**
+ * The estimate of a heading filter: true azimuth = frame azimuth + [offsetDeg]. Use [offsetDeg] as
+ * [View.headingOffsetDeg].
+ */
+data class HeadingEstimate(
+    val offsetDeg: Double = 0.0,
+    val varianceDeg2: Double = UNKNOWN_HEADING_VARIANCE_DEG2,
+)
+
+/** One measurement of the heading offset. */
+data class HeadingMeasurement(val offsetDeg: Double, val varianceDeg2: Double)
+
+data class MagnetometerOptions(val sensorSigmaDeg: Double = 2.0)

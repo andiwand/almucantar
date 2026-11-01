@@ -105,3 +105,45 @@ fun findDates(
         )
     return List(r.size / 4) { r.toTimeMatch(4 * it) }
 }
+
+/** Increases the variance for the time [dtS], because the yaw of the frame drifts. */
+fun headingPredict(
+    estimate: HeadingEstimate,
+    dtS: Double,
+    driftDeg2PerS: Double = 1.0 / 60.0,
+): HeadingEstimate =
+    SunradarNative.headingPredict(estimate.pack(), dtS, driftDeg2PerS).toHeadingEstimate()
+
+/** Combines the estimate with a measurement (a Kalman update on the circle). */
+fun headingUpdate(estimate: HeadingEstimate, measurement: HeadingMeasurement): HeadingEstimate =
+    SunradarNative.headingUpdate(estimate.pack(), measurement.pack()).toHeadingEstimate()
+
+/**
+ * The heading offset from a magnetometer ([fieldUt] in the device frame, in µT), with a variance
+ * from the disturbance of the field. Give the filter at most about one measurement per second.
+ */
+fun headingFromMagnetometer(
+    deviceToFrame: Quaternion,
+    fieldUt: Vector3,
+    observer: Observer,
+    unixUtc: Double,
+    options: MagnetometerOptions = MagnetometerOptions(),
+): HeadingMeasurement =
+    SunradarNative.headingFromMagnetometer(
+            deviceToFrame.pack(),
+            fieldUt.pack(),
+            observer.pack(),
+            unixUtc,
+            options.pack(),
+        )
+        .toHeadingMeasurement()
+
+/** The heading offset from a screen point that shows a known true azimuth (for example the sun). */
+fun headingFromDirection(
+    view: View,
+    point: ScreenPoint,
+    trueAzimuthDeg: Double,
+    sigmaDeg: Double,
+): HeadingMeasurement =
+    SunradarNative.headingFromDirection(view.pack(), point.pack(), trueAzimuthDeg, sigmaDeg)
+        .toHeadingMeasurement()

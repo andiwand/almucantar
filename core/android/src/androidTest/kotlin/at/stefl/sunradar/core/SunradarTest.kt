@@ -41,7 +41,9 @@ class SunradarTest {
                 PathOptions().pack() +
                 SearchOptions().pack() +
                 Camera().pack() +
-                View().pack().copyOfRange(0, 6)
+                View().pack().copyOfRange(0, 6) +
+                MagnetometerOptions().pack() +
+                HeadingEstimate().pack()
         assertEquals(expected.toList(), SunradarNative.defaults().toList())
     }
 
@@ -152,6 +154,25 @@ class SunradarTest {
     }
 
     @Test
+    fun headingFilter() {
+        val e = headingUpdate(HeadingEstimate(10.0, 4.0), HeadingMeasurement(20.0, 4.0))
+        assertEquals(15.0, e.offsetDeg, 1e-12)
+        assertEquals(2.0, e.varianceDeg2, 1e-12)
+        assertEquals(5.0, headingPredict(HeadingEstimate(0.0, 4.0), 60.0).varianceDeg2, 1e-12)
+
+        // The center of the screen shows the azimuth 0 of the frame; truly it is 70.
+        val view = View(deviceToEnu = northUpright)
+        val m = headingFromDirection(view, ScreenPoint(500.0, 500.0), 70.0, 0.5)
+        assertEquals(70.0, m.offsetDeg, 1e-9)
+
+        // A field to the north of the frame (device -z) and down (device -y): the offset is the
+        // declination.
+        val t = 1767225600.0
+        val mag = headingFromMagnetometer(northUpright, Vector3(0.0, -40.0, -20.0), vienna, t)
+        assertEquals(magneticDeclinationDeg(vienna, t), mag.offsetDeg, 1e-9)
+    }
+
+    @Test
     fun invalidArgumentsThrowIllegalArgumentException() {
         val e =
             assertThrows(IllegalArgumentException::class.java) {
@@ -167,6 +188,9 @@ class SunradarTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             findDates(vienna, Horizontal(), dayStart, dayStart + 3600.0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            headingUpdate(HeadingEstimate(), HeadingMeasurement(0.0, 0.0))
         }
     }
 
