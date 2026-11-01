@@ -7,6 +7,8 @@ import Sunradar
 final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var observer = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
     @Published private(set) var text = "Vienna · no location"
+    /// The horizontal accuracy of the device location in metres, or nil without a location.
+    @Published private(set) var accuracyM: Double?
 
     private let manager = CLLocationManager()
 
@@ -22,6 +24,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         Task { @MainActor in
             self.observer = Observer(
                 latitudeDeg: location.coordinate.latitude, longitudeDeg: location.coordinate.longitude)
+            self.accuracyM = location.horizontalAccuracy
             self.text = String(
                 format: "%.3f°, %.3f° · ±%.0f m", location.coordinate.latitude, location.coordinate.longitude,
                 location.horizontalAccuracy)

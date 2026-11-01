@@ -10,10 +10,14 @@ features and the behavior.
 |---|---|
 | `project.yml` | The XcodeGen project. `xcodegen generate` writes `Sunradar.xcodeproj`, which is not in Git. |
 | `Sunradar/SunradarApp.swift` | The entry point. |
-| `Sunradar/SkyScreen.swift` | The sky view: the drawing, the readout, the time panel, the buttons, and the align with the sun. |
+| `Sunradar/SkyScreen.swift` | The sky view: the drawing, the readout, the time panel, the align menu, and the detected sun. |
+| `Sunradar/MapPicker.swift` | The MapKit map to pick a landmark. |
+| `Sunradar/SunDetector.swift` | The saturated regions of a luminance image (the same algorithm as on Android). |
+| `Sunradar/Geo.swift` | The bearing, the distance, and the angle between two directions. |
+| `SunradarTests/` | The unit tests of the detector and of `Geo`. |
 | `Sunradar/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
 | `Sunradar/LocationProvider.swift` | CoreLocation, with an accuracy of a kilometer. |
-| `Sunradar/CameraView.swift` | The AVFoundation preview and the camera model in the points of the view. |
+| `Sunradar/CameraView.swift` | The AVFoundation preview, the camera model in the points of the view, and the frames for the sun detection. |
 
 ## Build and run
 
@@ -26,7 +30,9 @@ features and the behavior.
      -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd build
    ```
 
-4. Install it with `xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Sunradar.app`.
+4. Run the tests: replace `build` with `test`, and give a simulator as the destination, for example
+   `-destination 'platform=iOS Simulator,name=iPhone 15'`.
+5. Install it with `xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Sunradar.app`.
 
 The simulator has no motion sensors and no camera. The app then shows a sky view that you
 move with a drag. Set the location with `xcrun simctl location booted set <lat>,<lon>`.
@@ -39,5 +45,7 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   top of the device is on the left), and `landscapeLeft` is `rotation270`. This is the same
   convention as `Display.getRotation()` on Android.
 - Labels stay upright relative to the horizon, the same as on Android.
+- The frames for the sun detection stay in the orientation of the sensor, so a point of a frame,
+  divided by the size of the frame, is a capture device point. `layerPointConverted` maps it to the view.
 - The camera model has no distortion, because AVFoundation gives no lens distortion for the
   preview.

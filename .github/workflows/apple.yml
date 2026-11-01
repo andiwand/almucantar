@@ -39,10 +39,11 @@ jobs:
       - name: Test the Swift package
         run: swift test
 
-      - name: Build the iOS app
+      - name: Build and test the iOS app
         working-directory: ios
         run: |
           xcodegen generate
+          device="$(xcrun simctl list devices available -j | python3 -c 'import json, sys
+          print(next(d["udid"] for r, ds in json.load(sys.stdin)["devices"].items() if "iOS" in r for d in ds if "iPhone" in d["name"]))')"
           xcodebuild -project Sunradar.xcodeproj -scheme SunradarApp \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd \
-            CODE_SIGNING_ALLOWED=NO build
+            -destination "id=${device}" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO test

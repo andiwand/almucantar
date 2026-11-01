@@ -29,6 +29,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    scheme:
+      testTargets: [SunradarAppTests]
     info:
       path: Sunradar/Info.plist
       properties:
@@ -42,3 +44,16 @@ targets:
         NSCameraUsageDescription: Sunradar shows the path of the sun on the camera image.
         NSLocationWhenInUseUsageDescription: Sunradar needs your place to calculate the position of the sun.
         NSMotionUsageDescription: Sunradar uses the motion sensors to know where the phone points.
+  SunradarAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [SunradarTests]
+    dependencies:
+      - target: SunradarApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        # The app has the product name Sunradar, not the name of its target.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Sunradar.app/Sunradar
+        BUNDLE_LOADER: $(TEST_HOST)
+        SWIFT_VERSION: "5.0"

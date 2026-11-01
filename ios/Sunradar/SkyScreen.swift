@@ -1,5 +1,6 @@
 import Sunradar
 import SwiftUI
+import simd
 
 /// The data of one local day: the path, the parts above the horizon, the hours, and the solstice
 /// paths, calculated once per day and place.
@@ -59,9 +60,36 @@ struct SkyDay {
     }
 }
 
+/// Keeps the last SkyDay, because the body runs for each frame of the motion sensor.
+@MainActor
+final class SkyDayCache {
+    private var key: (Observer, Date)?
+    private var day: SkyDay?
+
+    func day(observer: Observer, date: Date, calendar: Calendar) -> SkyDay {
+        let start = calendar.startOfDay(for: date)
+        if let key, let day, key.0 == observer, key.1 == start { return day }
+        let day = SkyDay(observer: observer, date: start, calendar: calendar)
+        (key, self.day) = ((observer, start), day)
+        return day
+    }
+}
+
+/// The things that the user can align the heading with.
+enum AlignTarget {
+    case sun, moon, landmark
+}
+
+/// A region of the camera image that is probably the sun.
+struct DetectedSun {
+    var blob: ViewBlob
+    var separationDeg: Double
+}
+
 /// The sky view: the path of the sun with the hours, the horizon, the solstice paths, and the
-/// time when the sun is in the direction of the crosshair. Without motion sensors (the
-/// simulator), drag to look around.
+/// time when the sun is in the direction of the crosshair, the moon, and a landmark. The user can
+/// align the heading with the sun, the moon, or a landmark; a detected sun gets a box to tap.
+/// Without motion sensors (the simulator), drag to look around.
 struct SkyScreen: SwiftUI.View {
     @StateObject private var motion = MotionTracker()
     @StateObject private var location = LocationProvider()
@@ -71,7 +99,11 @@ struct SkyScreen: SwiftUI.View {
     @State private var showTime = false
     @State private var cameraOn = false
     @State private var camera: Sunradar.Camera?
-    @State private var aligning = false
+    @State private var aligning: AlignTarget?
+    @State private var pickingLandmark = false
+    @State private var landmark: Observer?
+    @State private var blobs: [ViewBlob] = []
+    @State private var dayCache = SkyDayCache()
     @State private var message: String?
     @State private var dragAzimuth = 180.0
     @State private var dragPitch = 20.0
@@ -81,15 +113,31 @@ struct SkyScreen: SwiftUI.View {
     private let calendar = Calendar.current
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private static let maxCrosshairAltitude = 75.0
+    /// The angular error of a tap on the sun or the moon (both have a diameter of 0.5°).
+    private static let bodyTapSigmaDeg = 0.5
+    /// A tap more than this far from the altitude of the body is not the body.
+    private static let bodyTapMaxAltitudeErrorDeg = 5.0
+    /// The moon must be at least this bright to be found in the camera image.
+    private static let minMoonFraction = 0.1
+    /// A saturated region with a larger angular radius than this is not the sun (0.27°).
+    private static let maxSunBlobRadiusDeg = 3.0
+    /// Within this angle of the prediction, the detected sun counts as aligned.
+    private static let alignedDeg = 1.0
 
     var body: some SwiftUI.View {
         GeometryReader { geometry in
             let size = geometry.size
             let selectedDate = calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!
-            let day = SkyDay(observer: location.observer, date: selectedDate, calendar: calendar)
+            let observer = location.observer
+            let day = dayCache.day(observer: observer, date: selectedDate, calendar: calendar)
             let time = selectedTime(day: day)
             let view = makeView(size: size)
-            let sun = try? sunPosition(time, observer: location.observer)
+            let sun = try? sunPosition(time, observer: observer)
+            let moon = (try? moonIlluminatedFraction(time)).flatMap { $0 >= 0.02 ? try? moonPosition(time, observer: observer) : nil }
+            let landmarkDirection = landmark.map {
+                Horizontal(azimuthDeg: Geo.bearingDeg(from: observer, to: $0), altitudeDeg: 0)
+            }
+            let detected = detectSun(view: view)
             let center = try? unproject(view, ScreenPoint(x: view.camera.cx, y: view.camera.cy))
             let usable = center.map { abs($0.altitudeDeg) <= Self.maxCrosshairAltitude } ?? false
             let crossing =
@@ -100,16 +148,22 @@ struct SkyScreen: SwiftUI.View {
 
             ZStack {
                 Color(red: 0.043, green: 0.102, blue: 0.188).ignoresSafeArea()
-                if cameraOn { CameraView { camera = $0 }.ignoresSafeArea() }
+                if cameraOn {
+                    CameraView(detectSun: detecting, onBlobs: { blobs = $0 }) { camera = $0 }.ignoresSafeArea()
+                }
                 Canvas { context, _ in
-                    draw(&context, view: view, day: day, sun: sun, center: center, crossing: crossing)
+                    draw(
+                        &context, view: view, day: day, sun: sun, moon: moon, landmark: landmarkDirection, center: center,
+                        crossing: crossing)
+                    if let detected { drawDetected(&context, detected) }
                 }
                 .ignoresSafeArea()
-                .gesture(dragGesture(view: view))
+                .gesture(dragGesture(view: view, detected: detected))
 
                 VStack(alignment: .leading, spacing: 8) {
                     statusPanel(day: day)
                     if let message { panel { Text(message) } }
+                    if let aligning { panel { Text(hint(aligning)) } }
                     Spacer()
                     VStack(spacing: 8) {
                         if showTime { panel { timePanel } }
@@ -126,6 +180,17 @@ struct SkyScreen: SwiftUI.View {
             }
             .onReceive(timer) { now = $0 }
             .onChange(of: location.observer) { motion.observer = $0 }
+            .onChange(of: detecting) { if !$0 { blobs = [] } }
+            .fullScreenCover(isPresented: $pickingLandmark) {
+                MapPicker(observer: location.observer) { picked in
+                    pickingLandmark = false
+                    landmark = picked
+                    if picked != nil {
+                        cameraOn = true
+                        aligning = .landmark
+                    }
+                }
+            }
             .task(id: center.map { "\(Int($0.azimuthDeg * 2)):\(Int($0.altitudeDeg * 2))" } ?? "") {
                 await searchDates(center: usable ? center : nil)
             }
@@ -173,7 +238,30 @@ struct SkyScreen: SwiftUI.View {
         return day.start + minute * 60
     }
 
-    private func dragGesture(view: Sunradar.View) -> some Gesture {
+    /// The detection runs with the camera on and the sun up.
+    private var detecting: Bool {
+        cameraOn && ((try? sunPosition(now.timeIntervalSince1970, observer: location.observer))?.altitudeDeg ?? -1) > 0
+    }
+
+    /// The detected sun: the saturated region nearest to the predicted sun, within the error of
+    /// the heading. A region larger than a few degrees is an overexposed sky, not the sun.
+    private func detectSun(view: Sunradar.View) -> DetectedSun? {
+        guard detecting, let sun = try? sunPosition(now.timeIntervalSince1970, observer: location.observer) else {
+            return nil
+        }
+        let maxSeparation = max(10, 3 * sqrt(motion.estimate.varianceDeg2))
+        return blobs.compactMap { blob -> DetectedSun? in
+            guard let direction = try? unproject(view, ScreenPoint(x: blob.center.x, y: blob.center.y)),
+                let edge = try? unproject(view, ScreenPoint(x: blob.center.x + blob.radius, y: blob.center.y))
+            else { return nil }
+            let separation = Geo.angleBetweenDeg(direction, sun)
+            if Geo.angleBetweenDeg(direction, edge) > Self.maxSunBlobRadiusDeg || separation > maxSeparation { return nil }
+            return DetectedSun(blob: blob, separationDeg: separation)
+        }
+        .min { $0.separationDeg < $1.separationDeg }
+    }
+
+    private func dragGesture(view: Sunradar.View, detected: DetectedSun?) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard !motion.available || motion.deviceToFrame == nil else { return }
@@ -181,27 +269,71 @@ struct SkyScreen: SwiftUI.View {
                 dragPitch = min(80, max(-80, dragPitch + value.velocity.height * 0.0025))
             }
             .onEnded { value in
-                if aligning, abs(value.translation.width) < 10, abs(value.translation.height) < 10 {
-                    alignWithSun(view: view, at: value.location)
-                }
+                guard abs(value.translation.width) < 10, abs(value.translation.height) < 10 else { return }
+                tap(view: view, at: value.location, detected: detected)
             }
     }
 
-    private func alignWithSun(view: Sunradar.View, at point: CGPoint) {
-        aligning = false
+    private func tap(view: Sunradar.View, at point: CGPoint, detected: DetectedSun?) {
         let now = Date().timeIntervalSince1970
-        guard let sun = try? sunPosition(now, observer: location.observer),
-            let tapped = try? unproject(view, ScreenPoint(x: point.x, y: point.y))
-        else { return }
-        if abs(tapped.altitudeDeg - sun.altitudeDeg) > 5 {
-            message = "That point is not at the height of the sun. Tap the sun itself."
-            return
-        }
-        if let m = try? headingFromDirection(
-            view, point: ScreenPoint(x: point.x, y: point.y), trueAzimuthDeg: sun.azimuthDeg, sigmaDeg: 0.5)
+        let observer = location.observer
+        if let detected, hypot(point.x - detected.blob.center.x, point.y - detected.blob.center.y) < detected.blob.radius + 48,
+            let sun = try? sunPosition(now, observer: observer)
         {
-            motion.apply(m)
-            message = String(format: "Heading aligned with the sun (±%.1f°).", sqrt(motion.estimate.varianceDeg2))
+            message = alignWithBody(view: view, at: detected.blob.center, body: sun, name: "sun")
+            aligning = nil
+        } else if aligning == .sun, let sun = try? sunPosition(now, observer: observer) {
+            message = alignWithBody(view: view, at: point, body: sun, name: "sun")
+            aligning = nil
+        } else if aligning == .moon, let moon = try? moonPosition(now, observer: observer) {
+            message = alignWithBody(view: view, at: point, body: moon, name: "moon")
+            aligning = nil
+        }
+    }
+
+    /// Calibrates the heading with a tap on the sun or the moon. Returns the message for the user.
+    private func alignWithBody(view: Sunradar.View, at point: CGPoint, body: Horizontal, name: String) -> String {
+        let screen = ScreenPoint(x: point.x, y: point.y)
+        guard let tapped = try? unproject(view, screen) else { return "That point is not on the sky." }
+        let altitudeError = abs(tapped.altitudeDeg - body.altitudeDeg)
+        if altitudeError > Self.bodyTapMaxAltitudeErrorDeg {
+            return String(format: "That point is %.0f° from the height of the %@. Tap the %@ itself.", altitudeError, name, name)
+        }
+        return apply(
+            try? headingFromDirection(view, point: screen, trueAzimuthDeg: body.azimuthDeg, sigmaDeg: Self.bodyTapSigmaDeg),
+            name: name)
+    }
+
+    /// Calibrates the heading with a landmark in the crosshair. The error of the bearing comes from
+    /// the location error and from the distance: an error e at a distance d is atan(e / d).
+    private func alignWithLandmark(view: Sunradar.View) -> String {
+        guard let landmark else { return "No landmark." }
+        let observer = location.observer
+        let distance = Geo.distanceM(from: observer, to: landmark)
+        if distance < 50 { return "The landmark is too near. Choose one that is farther away." }
+        let positionError = (location.accuracyM ?? 50) + 5
+        let sigma = atan(positionError / distance) * 180 / .pi + 0.3
+        let center = ScreenPoint(x: view.camera.cx, y: view.camera.cy)
+        return apply(
+            try? headingFromDirection(
+                view, point: center, trueAzimuthDeg: Geo.bearingDeg(from: observer, to: landmark), sigmaDeg: sigma),
+            name: "landmark")
+    }
+
+    private func apply(_ measurement: HeadingMeasurement?, name: String) -> String {
+        guard let measurement else { return "The alignment failed." }
+        let change = (measurement.offsetDeg - motion.estimate.offsetDeg + 540).truncatingRemainder(dividingBy: 360) - 180
+        motion.apply(measurement)
+        return String(
+            format: "Heading aligned with the %@ (corrected by %.1f°, now ±%.1f°).", name, change,
+            sqrt(motion.estimate.varianceDeg2))
+    }
+
+    private func hint(_ target: AlignTarget) -> String {
+        switch target {
+        case .sun: "Tap the sun in the camera image."
+        case .moon: "Tap the moon in the camera image."
+        case .landmark: "Point the crosshair at the landmark, then press \"Aligned\"."
         }
     }
 
@@ -245,9 +377,34 @@ struct SkyScreen: SwiftUI.View {
         c.draw(Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(.white), at: CGPoint(x: 0, y: -gap))
     }
 
+    /// If `target` is not on the screen, the point on the border of the screen in the direction of
+    /// `target`, seen from `from` (the center of the view), and the unit direction to go on. Nil
+    /// if the target is visible.
+    private func edgeIndicator(_ view: Sunradar.View, from: Horizontal, to target: Horizontal) -> (CGPoint, CGPoint)? {
+        let bounds = CGRect(x: 0, y: 0, width: view.camera.width, height: view.camera.height).insetBy(dx: 28, dy: 28)
+        let inside = { (h: Horizontal) in point(view, h).map { bounds.contains($0) } ?? false }
+        if inside(target) { return nil }
+        let a = Geo.enu(from)
+        var b = Geo.enu(target)
+        // Directly behind the user, the way is not defined; take a way to the right.
+        if simd_length_squared(a + b) < 1e-6 {
+            b = Geo.enu(Horizontal(azimuthDeg: from.azimuthDeg + 179, altitudeDeg: from.altitudeDeg))
+        }
+        let along = { (t: Double) in Geo.horizontal(a + (b - a) * t) }
+        var (lo, hi) = (0.0, 1.0)
+        for _ in 0..<24 {
+            let mid = (lo + hi) / 2
+            if inside(along(mid)) { lo = mid } else { hi = mid }
+        }
+        guard let edge = point(view, along(lo)), let before = point(view, along(lo * 0.9)) else { return nil }
+        let (dx, dy) = (edge.x - before.x, edge.y - before.y)
+        let length = hypot(dx, dy)
+        return length > 0 ? (edge, CGPoint(x: dx / length, y: dy / length)) : nil
+    }
+
     private func draw(
-        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, sun: Horizontal?, center: Horizontal?,
-        crossing: AzimuthCrossing?
+        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, sun: Horizontal?, moon: Horizontal?,
+        landmark: Horizontal?, center: Horizontal?, crossing: AzimuthCrossing?
     ) {
         let yellow = Color(red: 1, green: 0.784, blue: 0.239)
         let blue = Color(red: 0.498, green: 0.847, blue: 1)
@@ -286,9 +443,31 @@ struct SkyScreen: SwiftUI.View {
                 context.stroke(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(blue), lineWidth: 2.5)
             }
         }
-        if let sun, let p = point(view, sun) {
+        // A landmark of the calibration: a marker on the horizon at its bearing.
+        if let landmark, let p = point(view, landmark) {
+            context.stroke(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)), with: .color(.red), lineWidth: 2.5)
+            label(&context, view, landmark, "landmark", gap: 16)
+        }
+        if let moon, let p = point(view, moon) {
+            context.fill(Path(ellipseIn: CGRect(x: p.x - 11, y: p.y - 11, width: 22, height: 22)), with: .color(Color(white: 0.88)))
+            label(&context, view, moon, "moon", gap: 20)
+        }
+        // The sun, or an arrow at the border of the screen that points to it.
+        let sunColor = Color(red: 1, green: 0.878, blue: 0.541)
+        if let sun, let center, let (at, direction) = edgeIndicator(view, from: center, to: sun) {
+            let back = CGPoint(x: at.x - direction.x * 18, y: at.y - direction.y * 18)
+            let side = CGPoint(x: -direction.y * 11, y: direction.x * 11)
+            var arrow = Path()
+            arrow.move(to: at)
+            arrow.addLine(to: CGPoint(x: back.x + side.x, y: back.y + side.y))
+            arrow.addLine(to: CGPoint(x: back.x - side.x, y: back.y - side.y))
+            arrow.closeSubpath()
+            context.fill(arrow, with: .color(sunColor))
+            let dot = CGPoint(x: at.x - direction.x * 26, y: at.y - direction.y * 26)
+            context.fill(Path(ellipseIn: CGRect(x: dot.x - 6, y: dot.y - 6, width: 12, height: 12)), with: .color(sunColor))
+        } else if let sun, let p = point(view, sun) {
             context.fill(Path(ellipseIn: CGRect(x: p.x - 26, y: p.y - 26, width: 52, height: 52)), with: .color(yellow.opacity(0.25)))
-            context.fill(Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28)), with: .color(Color(red: 1, green: 0.878, blue: 0.541)))
+            context.fill(Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28)), with: .color(sunColor))
         }
         let c = CGPoint(x: view.camera.cx, y: view.camera.cy)
         var cross = Path()
@@ -297,6 +476,20 @@ struct SkyScreen: SwiftUI.View {
         cross.move(to: CGPoint(x: c.x, y: c.y - 16))
         cross.addLine(to: CGPoint(x: c.x, y: c.y + 16))
         context.stroke(cross, with: .color(.white), lineWidth: 1.5)
+    }
+
+    /// A box around the detected sun, with a hint to tap it.
+    private func drawDetected(_ context: inout GraphicsContext, _ sun: DetectedSun) {
+        let aligned = sun.separationDeg <= Self.alignedDeg
+        let color = aligned ? Color(red: 0.647, green: 0.839, blue: 0.655) : Color(red: 1, green: 0.878, blue: 0.51)
+        let r = sun.blob.radius + 14
+        let c = sun.blob.center
+        context.stroke(
+            Path(roundedRect: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r), cornerRadius: 8),
+            with: .color(color), lineWidth: 2.5)
+        context.draw(
+            Text(aligned ? "Sun ✓" : "Sun · tap to align").font(.system(size: 13, weight: .bold)).foregroundColor(.white),
+            at: CGPoint(x: c.x, y: c.y - r - 10))
     }
 
     // MARK: - Panels
@@ -375,23 +568,71 @@ struct SkyScreen: SwiftUI.View {
         }
     }
 
+    /// The align menu. Each item says what happens, or why it is not possible now.
+    private var alignMenu: some SwiftUI.View {
+        let now = Date().timeIntervalSince1970
+        let observer = location.observer
+        let sunUp = ((try? sunPosition(now, observer: observer))?.altitudeDeg ?? -1) > 0
+        let moonUp = ((try? moonPosition(now, observer: observer))?.altitudeDeg ?? -1) > 0
+        let moonBright = ((try? moonIlluminatedFraction(now)) ?? 0) >= Self.minMoonFraction
+        let located = location.accuracyM != nil
+        return Menu("Align") {
+            Button {
+                startBodyAlign(.sun)
+            } label: {
+                Text("With the sun")
+                Text(sunUp ? "Tap the sun in the camera image" : "The sun is below the horizon")
+            }
+            .disabled(!sunUp)
+            Button {
+                startBodyAlign(.moon)
+            } label: {
+                Text("With the moon")
+                Text(
+                    !moonUp
+                        ? "The moon is below the horizon"
+                        : moonBright ? "Tap the moon in the camera image" : "The moon is too dim (new moon)")
+            }
+            .disabled(!moonUp || !moonBright)
+            Button {
+                message = nil
+                pickingLandmark = true
+            } label: {
+                Text("With a landmark")
+                Text(located ? "Pick it on a map, then aim at it" : "Needs your location (allow location access)")
+            }
+            .disabled(!located)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    /// The sun and the moon need the camera image, so the camera switches on first.
+    private func startBodyAlign(_ target: AlignTarget) {
+        message = nil
+        cameraOn = true
+        aligning = target
+    }
+
     private func buttons(view: Sunradar.View) -> some SwiftUI.View {
         HStack(spacing: 8) {
-            Button(cameraOn ? "Sky" : "Camera") { cameraOn.toggle() }
-                .buttonStyle(.bordered)
-            Button(showTime ? "Time ●" : "Time") { showTime.toggle() }
-                .buttonStyle(.bordered)
-            Button(aligning ? "Cancel" : "Align with the sun") {
-                let sunUp = ((try? sunPosition(Date().timeIntervalSince1970, observer: location.observer))?.altitudeDeg ?? -1) > 0
-                if !sunUp {
-                    message = "The sun is below the horizon."
-                } else {
-                    cameraOn = true
-                    aligning.toggle()
-                    message = aligning ? "Tap the sun in the camera image." : nil
-                }
+            Button(cameraOn ? "Sky" : "Camera") {
+                aligning = nil
+                cameraOn.toggle()
             }
-            .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
+            Button(dayOffset == 0 && minuteOfDay == nil ? "Time" : "Time ●") { showTime.toggle() }
+                .buttonStyle(.bordered)
+            if aligning == .landmark {
+                Button("Aligned") {
+                    message = alignWithLandmark(view: view)
+                    aligning = nil
+                }
+                .buttonStyle(.borderedProminent)
+            } else if aligning != nil {
+                Button("Cancel") { aligning = nil }.buttonStyle(.borderedProminent)
+            } else {
+                alignMenu
+            }
         }
         .tint(Color(red: 0.81, green: 0.74, blue: 1))
     }

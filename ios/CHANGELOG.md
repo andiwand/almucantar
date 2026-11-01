@@ -12,6 +12,10 @@ rules are the same as in `core/CHANGELOG.md`.
 - The time when the sun is in the direction of the crosshair, with a vertical line from the
   horizon to the sun, and the dates when the sun is in the crosshair.
 - A date slider and a time slider.
-- A heading filter with the magnetometer, and "Align with the sun": tap the sun in the camera
-  image to correct the heading.
+- A heading filter with the magnetometer.
+- The moon, and an arrow at the border of the screen that points to the sun when it is not on
+  the screen.
+- An align menu: with the sun, with the moon, or with a landmark that you pick on a map. Each
+  item says why it is not possible now.
+- Sun detection: a box around the sun in the camera image. Tap the box to align the heading.
 - Without motion sensors (the simulator), drag to look around.
