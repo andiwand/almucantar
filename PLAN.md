@@ -585,3 +585,88 @@ fast way to plot paths and to compare models.
   calibration needs it anyway.
 - Do we want a shadow mode later (for example, which wall gets the sun)? This needs a
   3D model of the room, so it is out of scope now.
+
+## 13. Future features (proposals, not planned in detail)
+
+The order is the priority. The terrain horizon comes first, because it changes the answer to
+the main question of the app: when does the sun really appear or go away at this place?
+
+### 13.1 Terrain horizon (most important)
+
+The horizon of altitude 0° is wrong in the mountains and in a valley. The real horizon is the
+terrain around the place. It changes the visible sunrise and sunset by many minutes.
+
+- **Data:** a digital elevation model (DEM), for example Copernicus GLO-30 (30 m, free) or
+  SRTM. The app downloads the tiles around the place (a radius of about 50–100 km) and keeps
+  them in a cache for offline use.
+- **Core:** a pure function that calculates the horizon profile: the altitude of the terrain
+  for each azimuth (for example every 0.25°). It must include the curvature of the Earth and
+  the refraction of the terrestrial line of sight. The DEM crosses the boundary as a plain
+  grid (an array of heights with an origin and a step), so the bindings stay simple.
+- **Use:** draw the profile as the horizon line, cut the sun path where it is below the
+  terrain, and give the visible sunrise and sunset (the crossings of the sun path with the
+  profile, with `find_azimuth_times()` and a search on the profile).
+- **Check:** the camera image shows the real terrain line, so the user can see the error. A
+  terrain line that matches the image is also a heading calibration (a measurement for the
+  heading filter), like a landmark.
+- **Open:** the height of the observer (GPS altitude is bad; the DEM height plus the eye
+  height is better), near objects (buildings and trees are not in the DEM), and the size of
+  the download.
+
+### 13.2 Virtual place: find photo spots
+
+Drop the observer anywhere on the map, not only at the device location. Without the camera,
+the sky view shows the terrain horizon (13.1) as a synthetic view. Then the user can plan:
+
+- When does the sun or the moon rise or set behind a given peak or landmark?
+- From which place is the sun or the moon in line with a landmark on a given date? This is a
+  search over places, the inverse of `find_dates()`. A first version: the user picks the
+  landmark and the date, and the app draws the line of places on the map.
+
+### 13.3 Fully offline
+
+The app must work without a network and without GPS. The user drops the place on the map, and
+the device clock, the time panel, and the alignment do the rest. Most of the app is offline
+already: the core needs no data from the network (the WMM and the time zones are in the app),
+and the alignment with the sun or the moon needs only the camera and the orientation sensors.
+
+What is not offline today:
+
+- **The map.** `MapPicker` loads the OpenStreetMap tiles over the network. The tile usage
+  policy of OSM does not allow a bulk download for offline use, so the app needs a map that it
+  can ship or download once, for example a small vector base map (coastlines, borders, large
+  roads, and place names) at low zoom levels. This is sufficient to drop the place to about
+  1 km, which gives an error of the sun position of less than 0.01°.
+- **The landmark alignment.** It needs a map at a high zoom level near the place. Offline, the
+  alignment with the sun or the moon is the main method, and the landmark works only where
+  the user downloaded a region before.
+- **The terrain (13.1).** The DEM tiles must be downloaded before the trip, together with the
+  map of the region.
+
+Design points:
+
+- A manual place is a normal source of the place, next to the device location, and the app
+  keeps the last place between starts.
+- The time zone of a dropped place comes from the time zones in the app (`zone.tab`) and the
+  nearest place; the user can correct it in the time panel.
+- A "download this region" action fetches the map, the DEM, and (later) the landmarks for one
+  area, so the user can prepare a trip at home.
+- The network stays optional: no feature may wait for it or fail without it. The app shows
+  clearly when it is offline, so the user knows which features need a download.
+
+This is also the base of 13.2: a virtual place is the same as a dropped place, without the
+camera.
+
+### 13.4 Planets
+
+Astronomy Engine (already in the core) gives the planets. Show the bright planets (Venus,
+Mars, Jupiter, Saturn) as points with a name. A planet is also a target for the heading
+calibration at night. The cost is small.
+
+### 13.5 Milky Way
+
+Show the galactic plane and the galactic center as a line and a point, from fixed galactic
+coordinates converted to the horizontal frame with Astronomy Engine. It is useful only for
+night photography, and only together with 13.2 (planning). It needs the darkness of the sky
+(the sun more than 18° below the horizon, and the moon) to be useful. Decide how to integrate
+it after 13.1 and 13.2.
