@@ -77,6 +77,25 @@ TEST_CASE("find_dates finds the two dates of a direction", "[search]") {
   CHECK(matches[1].separation_deg < 0.2);
 }
 
+TEST_CASE("find_dates gives no date at the edge for a minimum outside the interval", "[search]") {
+  const Observer vienna = test::site("vienna");
+  // The direction of 2026-05-01 (day 120), searched from 2026-05-03: only the August date.
+  const double t = kYearStart + 120 * kDay + 10 * 3600;
+  const auto matches =
+      find_dates(vienna, sun_position(t, vienna), kYearStart + 122 * kDay, kYearStart + 365 * kDay);
+  REQUIRE(matches.size() == 1);
+  CHECK_THAT(day_of_year(matches[0].unix_utc), WithinAbs(222.42, 0.05));
+}
+
+TEST_CASE("a tolerance below the resolution of the time does not stop the search", "[search]") {
+  const Observer vienna = test::site("vienna");
+  const double t = kYearStart + 120 * kDay;
+  const Horizontal d = sun_position(t + 10 * 3600, vienna);
+  CHECK(find_time(vienna, d, t, t + kDay, {.tolerance_s = 1e-9}).separation_deg < 1e-3);
+  CHECK(find_azimuth_times(vienna, 180, t, t + kDay, {.tolerance_s = 1e-9}).size() == 1);
+  CHECK(sun_events(vienna, t, t + kDay, {.tolerance_s = 1e-9}).crossings.size() == 2);
+}
+
 TEST_CASE("find_dates gives one date at the solstice", "[search]") {
   const Observer vienna = test::site("vienna");
   const auto matches =
@@ -115,6 +134,14 @@ TEST_CASE("the search functions reject invalid arguments", "[search]") {
   CHECK_THROWS_AS(find_dates(vienna, d, t, t + 4000 * kDay), std::invalid_argument);
   CHECK_THROWS_AS(find_dates(vienna, d, t, t + 10 * kDay, {.max_separation_deg = nan}),
                   std::invalid_argument);
+  const double inf = std::numeric_limits<double>::infinity();
+  CHECK_THROWS_AS(find_time(vienna, d, t, t + kDay, {.tolerance_s = inf}), std::invalid_argument);
+  CHECK_THROWS_AS(find_dates(vienna, d, t, t + 3600 * kDay, {.step_s = 0.001}),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(sun_path(vienna, t, t + kDay, {.step_s = inf}), std::invalid_argument);
+  CHECK_THROWS_AS(sun_events(vienna, t, t + kDay, {.search_step_s = inf}), std::invalid_argument);
+  // find_azimuth_times does not use max_separation_deg.
+  CHECK_NOTHROW(find_azimuth_times(vienna, 180, t, t + kDay, {.max_separation_deg = nan}));
 }
 
 TEST_CASE("find_azimuth_times finds the time of an azimuth", "[search]") {

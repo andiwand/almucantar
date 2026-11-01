@@ -25,7 +25,6 @@ DayEvents find_events(const SolarModelImpl& model, const Observer& observer, con
   double f_prev = above(t_prev);
   double best_t = t_prev;
   double best_f = f_prev;
-  bool any_below = f_prev <= 0;
 
   for (std::size_t i = 1; i <= steps; ++i) {
     const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
@@ -40,7 +39,6 @@ DayEvents find_events(const SolarModelImpl& model, const Observer& observer, con
       best_f = f;
       best_t = t;
     }
-    any_below = any_below || f <= 0;
     t_prev = t;
     f_prev = f;
   }
@@ -60,7 +58,8 @@ DayEvents find_events(const SolarModelImpl& model, const Observer& observer, con
   }
 
   if (result.crossings.empty()) {
-    result.kind = any_below ? DayKind::polar_night : DayKind::polar_day;
+    // No crossing, so all samples are on the same side of the altitude.
+    result.kind = above(start_utc) <= 0 ? DayKind::polar_night : DayKind::polar_day;
   }
   return result;
 }

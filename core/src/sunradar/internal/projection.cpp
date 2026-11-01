@@ -55,11 +55,7 @@ std::array<Vec3, 2> screen_axes(const ScreenRotation rotation) noexcept {
 }  // namespace
 
 Projector::Projector(const View& view) noexcept : camera_(view.camera) {
-  const double n = std::sqrt(
-      view.device_to_enu.w * view.device_to_enu.w + view.device_to_enu.x * view.device_to_enu.x +
-      view.device_to_enu.y * view.device_to_enu.y + view.device_to_enu.z * view.device_to_enu.z);
-  const Quaternion q{view.device_to_enu.w / n, view.device_to_enu.x / n, view.device_to_enu.y / n,
-                     view.device_to_enu.z / n};
+  const Quaternion q = normalized(view.device_to_enu);
   const auto [right_device, down_device] = screen_axes(view.screen_rotation);
   // The back camera looks along the -z axis of the device.
   const Vec3 forward_device{0, 0, -1};

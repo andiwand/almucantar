@@ -49,6 +49,8 @@ TEST_CASE("heading_predict grows the variance up to the unknown variance", "[hea
   CHECK_THAT(p.variance_deg2, WithinAbs(5, 1e-12));  // 1 square degree per minute
   CHECK(heading_predict(e, 1e9).variance_deg2 == kUnknownHeadingVarianceDeg2);
   CHECK(heading_predict(e, 0).variance_deg2 == 4);
+  // A variance above the cap does not get smaller.
+  CHECK(heading_predict({.variance_deg2 = 1e6}, 1).variance_deg2 == 1e6);
   CHECK_THROWS_AS(heading_predict(e, -1), std::invalid_argument);
   CHECK_THROWS_AS(heading_predict(e, 1, -1), std::invalid_argument);
   CHECK_THROWS_AS(heading_predict({.variance_deg2 = 0}, 1), std::invalid_argument);

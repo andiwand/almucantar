@@ -8,6 +8,9 @@ namespace sunradar {
 /// The variance of a heading that is not known at all, in square degrees.
 inline constexpr double kUnknownHeadingVarianceDeg2 = 180.0 * 180.0;
 
+/// The default growth of the variance in heading_predict(), in square degrees per second.
+inline constexpr double kDefaultHeadingDriftDeg2PerS = 1.0 / 60.0;
+
 /// The estimate of a heading filter: the angle that the app adds to the azimuth of the
 /// orientation frame to get the true azimuth (true = frame + offset). The frame is usually the
 /// frame of the Android game rotation vector, which has no fixed north. Use `offset_deg` as
@@ -33,8 +36,9 @@ struct MagnetometerOptions {
 /// `drift_deg2_per_s` is the growth of the variance (a random walk). The default of 1/60 is
 /// 1 square degree per minute. Throws `std::invalid_argument` if a value is negative or not
 /// finite.
-[[nodiscard]] HeadingEstimate heading_predict(const HeadingEstimate& estimate, double dt_s,
-                                              double drift_deg2_per_s = 1.0 / 60.0);
+[[nodiscard]] HeadingEstimate heading_predict(
+    const HeadingEstimate& estimate, double dt_s,
+    double drift_deg2_per_s = kDefaultHeadingDriftDeg2PerS);
 
 /// Combines the estimate with a measurement (a Kalman update on the circle). Throws
 /// `std::invalid_argument` if a value is not finite or a variance is not positive.

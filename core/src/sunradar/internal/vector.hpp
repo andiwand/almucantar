@@ -45,6 +45,12 @@ inline Horizontal to_horizontal(const Vec3 v) noexcept {
 }
 
 /// Rotates `v` with the unit quaternion `q`.
+/// `q` with length 1. `q` must not have length 0.
+inline Quaternion normalized(const Quaternion& q) noexcept {
+  const double n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+  return {q.w / n, q.x / n, q.y / n, q.z / n};
+}
+
 inline Vec3 rotate(const Quaternion& q, const Vec3 v) noexcept {
   // v' = v + 2 u × (u × v + w v), with u the vector part of q.
   const Vec3 u{q.x, q.y, q.z};

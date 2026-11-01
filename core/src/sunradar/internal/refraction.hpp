@@ -10,8 +10,8 @@ namespace sunradar::internal {
 ///
 /// The function uses the formula of Saemundsson (Sky and Telescope, 1986), with a
 /// correction for the pressure and the temperature. JPL Horizons uses the same
-/// formula. The formula is not valid far below the horizon, so the function keeps
-/// the value of -1 degree for all lower altitudes. The function is continuous, and
+/// formula. The formula is not valid far below the horizon, so for all altitudes
+/// below -1 degree the function gives the refraction at -1 degree. The function is continuous, and
 /// the apparent altitude increases monotonically with the airless altitude.
 [[nodiscard]] double refraction_deg(double altitude_deg,
                                     const Atmosphere& atmosphere = {}) noexcept;

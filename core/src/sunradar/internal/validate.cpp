@@ -3,6 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace sunradar::internal {
 
@@ -15,6 +16,24 @@ void require(const bool condition, const char* const message) {
 void require_finite(const double value, const char* const name) {
   if (!std::isfinite(value)) {
     throw std::invalid_argument(std::string(name) + " is not finite");
+  }
+}
+
+void require_positive(const double value, const char* const name) {
+  require_finite(value, name);
+  if (value <= 0) {
+    throw std::invalid_argument(std::string(name) + " is not positive");
+  }
+}
+
+void validate(const Quaternion& q, const char* const name) {
+  const std::string prefix(name);
+  for (const auto& [value, component] :
+       {std::pair{q.w, ".w"}, std::pair{q.x, ".x"}, std::pair{q.y, ".y"}, std::pair{q.z, ".z"}}) {
+    require_finite(value, (prefix + component).c_str());
+  }
+  if (q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z <= 1e-12) {
+    throw std::invalid_argument(prefix + " has length 0");
   }
 }
 

@@ -18,6 +18,9 @@ namespace {
 
 constexpr double kDay = 86400;
 constexpr double kMaxSteps = 1'000'000;
+/// find_dates searches each day, so it may take more steps: a year at the default step of 300 s
+/// takes about 1e5.
+constexpr double kMaxDateSteps = 10'000'000;
 constexpr double kMaxDays = 3660;
 
 using internal::require;
@@ -33,10 +36,9 @@ void validate(const Observer& observer, const Horizontal& direction, const doubl
           "altitude_deg is not in the range [-90, 90]");
   internal::validate(observer);
   require(end_utc > start_utc, "end_utc is not after start_utc");
-  require(options.step_s > 0, "step_s is not positive");
-  require(options.tolerance_s > 0, "tolerance_s is not positive");
+  internal::require_positive(options.step_s, "step_s");
+  internal::require_positive(options.tolerance_s, "tolerance_s");
   require(options.step_s <= kDay, "step_s is longer than one day");
-  require_finite(options.max_separation_deg, "max_separation_deg");
   if (options.refraction) {
     internal::validate(options.atmosphere);
   }
@@ -64,8 +66,11 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
                                   const double start_utc, const double end_utc,
                                   const SearchOptions& options) {
   validate(observer, direction, start_utc, end_utc, options);
+  require_finite(options.max_separation_deg, "max_separation_deg");
   require(end_utc - start_utc >= kDay, "the interval is shorter than one day");
   require(end_utc - start_utc <= kMaxDays * kDay, "the interval is longer than 3660 days");
+  require((end_utc - start_utc) / options.step_s <= kMaxDateSteps,
+          "the interval has too many search steps");
 
   const internal::Vec3 d = internal::to_enu(direction);
   const auto days = static_cast<std::size_t>((end_utc - start_utc) / kDay);
@@ -77,12 +82,17 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
   }
 
   // A local minimum over the days: not larger than the day before, and smaller than
-  // the day after. The ends of the interval compare with one neighbor only.
+  // the day after. The first and the last day compare with the day outside the interval, so a
+  // minimum outside the interval does not give a date at its edge.
+  const double first_neighbor =
+      search_window(observer, d, start_utc - kDay, start_utc, options).separation_deg;
+  const double end = start_utc + static_cast<double>(days) * kDay;
+  const double last_neighbor = search_window(observer, d, end, end + kDay, options).separation_deg;
   std::vector<TimeMatch> result;
   for (std::size_t i = 0; i < daily.size(); ++i) {
     const double s = daily[i].separation_deg;
-    const bool before = i == 0 || s <= daily[i - 1].separation_deg;
-    const bool after = i + 1 == daily.size() || s < daily[i + 1].separation_deg;
+    const bool before = s <= (i == 0 ? first_neighbor : daily[i - 1].separation_deg);
+    const bool after = s < (i + 1 == daily.size() ? last_neighbor : daily[i + 1].separation_deg);
     if (before && after && s <= options.max_separation_deg) {
       result.push_back(daily[i]);
     }
@@ -93,7 +103,6 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
 std::vector<AzimuthCrossing> find_azimuth_times(const Observer& observer, const double azimuth_deg,
                                                 const double start_utc, const double end_utc,
                                                 const SearchOptions& options) {
-  require_finite(azimuth_deg, "azimuth_deg");
   validate(observer, {.azimuth_deg = azimuth_deg, .altitude_deg = 0}, start_utc, end_utc, options);
   require((end_utc - start_utc) / options.step_s <= kMaxSteps,
           "the interval has too many search steps");

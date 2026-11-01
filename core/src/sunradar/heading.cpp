@@ -24,16 +24,6 @@ void validate(const HeadingEstimate& e) {
   require(e.variance_deg2 > 0, "variance_deg2 is not positive");
 }
 
-internal::Vec3 normalized_quaternion_rotate(const Quaternion& q, const internal::Vec3 v) {
-  require_finite(q.w, "w");
-  require_finite(q.x, "x");
-  require_finite(q.y, "y");
-  require_finite(q.z, "z");
-  const double n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-  require(n > 1e-6, "the quaternion has length 0");
-  return internal::rotate(Quaternion{q.w / n, q.x / n, q.y / n, q.z / n}, v);
-}
-
 }  // namespace
 
 HeadingEstimate heading_predict(const HeadingEstimate& estimate, const double dt_s,
@@ -44,8 +34,10 @@ HeadingEstimate heading_predict(const HeadingEstimate& estimate, const double dt
   require(dt_s >= 0, "dt_s is negative");
   require(drift_deg2_per_s >= 0, "drift_deg2_per_s is negative");
   return {.offset_deg = estimate.offset_deg,
-          .variance_deg2 = std::min(estimate.variance_deg2 + drift_deg2_per_s * dt_s,
-                                    kUnknownHeadingVarianceDeg2)};
+          // The cap applies to the growth only, so a larger variance does not get smaller.
+          .variance_deg2 = std::max(estimate.variance_deg2,
+                                    std::min(estimate.variance_deg2 + drift_deg2_per_s * dt_s,
+                                             kUnknownHeadingVarianceDeg2))};
 }
 
 HeadingEstimate heading_update(const HeadingEstimate& estimate,
@@ -69,13 +61,13 @@ HeadingMeasurement heading_from_magnetometer(const Quaternion& device_to_frame,
   require_finite(field_ut.y, "field_ut.y");
   require_finite(field_ut.z, "field_ut.z");
   require_finite(unix_utc, "unix_utc");
-  require_finite(options.sensor_sigma_deg, "sensor_sigma_deg");
-  require(options.sensor_sigma_deg > 0, "sensor_sigma_deg is not positive");
+  internal::require_positive(options.sensor_sigma_deg, "sensor_sigma_deg");
+  internal::validate(device_to_frame, "device_to_frame");
   internal::validate(observer);
 
   // The measured field in the orientation frame (x east, y north of the frame, z up).
   const internal::Vec3 m =
-      normalized_quaternion_rotate(device_to_frame, {field_ut.x, field_ut.y, field_ut.z});
+      internal::rotate(internal::normalized(device_to_frame), {field_ut.x, field_ut.y, field_ut.z});
   const double measured_f = internal::norm(m);
   require(measured_f > 0, "the magnetic field is 0");
   const double measured_h = std::hypot(m.x, m.y);

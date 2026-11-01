@@ -17,12 +17,7 @@ using internal::require;
 using internal::require_finite;
 
 void validate(const View& view) {
-  const Quaternion& q = view.device_to_enu;
-  require_finite(q.w, "device_to_enu.w");
-  require_finite(q.x, "device_to_enu.x");
-  require_finite(q.y, "device_to_enu.y");
-  require_finite(q.z, "device_to_enu.z");
-  require(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z > 1e-12, "device_to_enu has length 0");
+  internal::validate(view.device_to_enu, "device_to_enu");
   require(static_cast<std::uint8_t>(view.screen_rotation) <=
               static_cast<std::uint8_t>(ScreenRotation::rotation_270),
           "screen_rotation is unknown");

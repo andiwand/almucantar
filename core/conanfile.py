@@ -38,6 +38,7 @@ class SunradarConan(ConanFile):
         "cmake/*",
         "python/*",
         "src/*",
+        "test/*",
         "third_party/*",
         "CMakeLists.txt",
     ]

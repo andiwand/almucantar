@@ -50,7 +50,8 @@ TEST_CASE("moon_position applies the refraction", "[moon]") {
   const Horizontal airless = moon_position(t, vienna, {.refraction = false});
   const Horizontal seen = moon_position(t, vienna);
   CHECK(seen.azimuth_deg == airless.azimuth_deg);
-  CHECK(seen.altitude_deg >= airless.altitude_deg);
+  // The refraction is positive at each altitude, so the moon is always higher.
+  CHECK(seen.altitude_deg > airless.altitude_deg);
 }
 
 TEST_CASE("moon_illuminated_fraction follows the phases", "[moon]") {
