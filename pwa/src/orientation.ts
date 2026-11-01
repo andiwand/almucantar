@@ -33,6 +33,25 @@ export function fromDeviceOrientation(
 
 type Axis = [number, number, number];
 
+/** The axis `v` of the device in ENU. */
+function rotate(q: Quaternion, [x, y, z]: Axis): Axis {
+  const r = multiply(multiply(q, { w: 0, x, y, z }), { w: q.w, x: -q.x, y: -q.y, z: -q.z });
+  return [r.x, r.y, r.z];
+}
+
+/**
+ * Turns `q` about the up axis, so that the device has the azimuth of the compass. iOS gives the
+ * heading separately (webkitCompassHeading), and its alpha has no fixed north. The heading is the
+ * one of the top of the device (+y). If the top points steeply up or down, its azimuth is not
+ * defined, so the back camera (-z) is the axis instead.
+ */
+export function withCompass(q: Quaternion, compassDeg: number): Quaternion {
+  const top = rotate(q, [0, 1, 0]);
+  const [x, y] = Math.abs(top[2]) < 0.7 ? top : rotate(q, [0, 0, -1]);
+  const half = ((Math.atan2(x, y) / DEG - compassDeg) * DEG) / 2;
+  return multiply({ w: Math.cos(half), x: 0, y: 0, z: Math.sin(half) }, q);
+}
+
 /** The quaternion of a rotation matrix with the columns x, y, and z (device axes in ENU). */
 export function fromAxes(x: Axis, y: Axis, z: Axis): Quaternion {
   const [m00, m10, m20] = x;
@@ -70,5 +89,5 @@ export function upright(azimuthDeg: number, pitchDeg: number): Quaternion {
 
 /** The screen rotation (0 to 3) from screen.orientation.angle: counterclockwise, in degrees. */
 export function screenRotation(angleDeg: number): number {
-  return (((Math.round(angleDeg / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+  return ((Math.round(angleDeg / 90) % 4) + 4) % 4;
 }

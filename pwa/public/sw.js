@@ -1,7 +1,7 @@
-// The service worker: the app works offline after the first visit. It answers from the cache
-// first and stores each new answer, so the hashed files of a build and sunradar.wasm are cached
-// when the app loads them.
-const CACHE = "sunradar-v1";
+// The service worker: the app works offline after the first visit. A page (index.html) comes
+// from the network first, so a new deploy arrives at the next start; the cache is the fallback.
+// The other files have a hash in their name (assets/*), so they come from the cache first.
+const CACHE = "sunradar-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(["./", "./index.html"])));
@@ -17,20 +17,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+async function fetchAndStore(request) {
+  const response = await fetch(request);
+  if (response.ok) {
+    const cache = await caches.open(CACHE);
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ??
-        fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        }),
-    ),
+    request.mode === "navigate"
+      ? fetchAndStore(request).catch(() =>
+          caches.match(request).then((cached) => cached ?? caches.match("./index.html")),
+        )
+      : caches.match(request).then((cached) => cached ?? fetchAndStore(request)),
   );
 });

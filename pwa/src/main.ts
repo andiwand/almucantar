@@ -1,7 +1,7 @@
 // The Sunradar PWA: the sky view with the path of the sun, the horizon, and the time when the sun
 // is in the direction of the crosshair. The core comes from @sunradar/core (WebAssembly).
 
-import { load } from "@sunradar/core";
+import { DayKind, load } from "@sunradar/core";
 import type {
   AzimuthCrossing,
   HeadingEstimate,
@@ -11,7 +11,7 @@ import type {
   Quaternion,
   View,
 } from "@sunradar/core";
-import { fromDeviceOrientation, screenRotation, upright } from "./orientation";
+import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
 
 const sunradar = await load();
 
@@ -67,7 +67,10 @@ function selectedTime(): number {
   if (minuteOfDay === null && dayOffset === 0) return Date.now() / 1000;
   const now = new Date();
   const minute = minuteOfDay ?? now.getHours() * 60 + now.getMinutes();
-  return startOfLocalDay(dayOffset).getTime() / 1000 + minute * 60;
+  // The wall clock time, not midnight + minutes, because a day with a DST change has 23 or 25 h.
+  const d = startOfLocalDay(dayOffset);
+  d.setHours(Math.floor(minute / 60), minute % 60);
+  return d.getTime() / 1000;
 }
 
 const hhmm = (unix: number) =>
@@ -100,7 +103,7 @@ function computeDay(): Day {
     for (const p of pts) {
       if (p.position.altitudeDeg >= 0) current.push(p.position);
       else if (current.length) {
-        result.push(current);
+        if (current.length > 1) result.push(current);
         current = [];
       }
     }
@@ -109,9 +112,9 @@ function computeDay(): Day {
   };
   const events = sunradar.sunEvents(observer, start, end);
   const summary =
-    events.kind === 1
+    events.kind === DayKind.polarDay
       ? "Polar day"
-      : events.kind === 2
+      : events.kind === DayKind.polarNight
         ? "Polar night"
         : events.crossings
             .map((c) => `${c.rising ? "Sunrise" : "Sunset"} ${hhmm(c.unixUtc)}`)
@@ -148,7 +151,11 @@ function currentView(): View {
   const q = sensorsActive && deviceToEnu ? deviceToEnu : upright(dragAzimuth, dragPitch);
   return {
     deviceToEnu: q,
-    screenRotation: sensorsActive ? screenRotation(screen.orientation?.angle ?? 0) : 0,
+    screenRotation: sensorsActive
+      ? screenRotation(
+          screen.orientation?.angle ?? (window as { orientation?: number }).orientation ?? 0,
+        )
+      : 0,
     headingOffsetDeg: sensorsActive ? heading.offsetDeg : 0,
     camera: sunradar.cameraFromFov(width, height, fov),
   };
@@ -280,12 +287,15 @@ let datesText = "";
 let datesTimer = 0;
 
 function scheduleDates(center: Horizontal) {
-  const key = `${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}`;
+  const key = `${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key === datesKey) return;
   datesKey = key;
-  datesText = "";
   clearTimeout(datesTimer);
-  if (center.altitudeDeg < 0 || Math.abs(center.altitudeDeg) > MAX_CROSSHAIR_ALTITUDE_DEG) return;
+  // The old text stays until the new result is ready, so sensor noise does not make it flicker.
+  if (center.altitudeDeg < 0) {
+    datesText = "";
+    return;
+  }
   datesTimer = window.setTimeout(() => {
     const start = startOfLocalDay(0).getTime() / 1000;
     const dates = sunradar.findDates(observer, center, start, start + 365 * 86400);
@@ -307,10 +317,9 @@ let lastView: View | null = null;
 
 function frame() {
   const dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== Math.round(canvas.clientWidth * dpr)) {
-    canvas.width = Math.round(canvas.clientWidth * dpr);
-    canvas.height = Math.round(canvas.clientHeight * dpr);
-  }
+  const [width, height] = [canvas.clientWidth, canvas.clientHeight].map((v) => Math.round(v * dpr));
+  if (canvas.width !== width || canvas.height !== height)
+    [canvas.width, canvas.height] = [width, height];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const d = computeDay();
@@ -363,12 +372,9 @@ function frame() {
 
 function onOrientation(event: DeviceOrientationEvent & { webkitCompassHeading?: number }) {
   if (event.alpha === null || event.beta === null || event.gamma === null) return;
-  // iOS gives the magnetic heading separately; its alpha has no fixed north.
-  const alpha =
-    event.webkitCompassHeading !== undefined
-      ? (360 - event.webkitCompassHeading) % 360
-      : event.alpha;
-  deviceToEnu = fromDeviceOrientation(alpha, event.beta, event.gamma);
+  const q = fromDeviceOrientation(event.alpha, event.beta, event.gamma);
+  deviceToEnu =
+    event.webkitCompassHeading !== undefined ? withCompass(q, event.webkitCompassHeading) : q;
   sensorsActive = true;
 }
 
@@ -376,7 +382,7 @@ async function startSensors() {
   const request = (
     DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }
   ).requestPermission;
-  if (request && (await request()) !== "granted") {
+  if (request && (await request().catch(() => "denied")) !== "granted") {
     showMessage("The orientation sensors are not allowed.");
     return;
   }
@@ -391,7 +397,10 @@ async function startSensors() {
     (position) => {
       observer = { latitudeDeg: position.coords.latitude, longitudeDeg: position.coords.longitude };
       placeText = `${observer.latitudeDeg.toFixed(3)}°, ${observer.longitudeDeg.toFixed(3)}° · ±${Math.round(position.coords.accuracy)} m`;
-      resetHeading();
+      // Only the declination changes, so an alignment before the location arrives stays.
+      const old = declination;
+      declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
+      heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
     },
     () => showMessage("No location: the app uses Vienna."),
     { enableHighAccuracy: false, timeout: 20000 },
@@ -401,11 +410,10 @@ async function startSensors() {
 }
 
 /** The browser heading is magnetic, so the offset is the declination until the user aligns. */
+let declination = 0;
 function resetHeading() {
-  heading = {
-    offsetDeg: sunradar.magneticDeclinationDeg(observer, Date.now() / 1000),
-    varianceDeg2: 15 * 15,
-  };
+  declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
+  heading = { offsetDeg: declination, varianceDeg2: 15 * 15 };
 }
 
 async function toggleCamera() {
@@ -440,7 +448,8 @@ canvas.addEventListener("pointerdown", (e) => {
   }
   dragging = { x: e.clientX, y: e.clientY };
 });
-window.addEventListener("pointerup", () => (dragging = null));
+for (const type of ["pointerup", "pointercancel"])
+  window.addEventListener(type, () => (dragging = null));
 window.addEventListener("pointermove", (e) => {
   if (!dragging || sensorsActive) return;
   dragAzimuth = (dragAzimuth - (e.clientX - dragging.x) * 0.15 + 360) % 360;
@@ -484,7 +493,9 @@ $<HTMLInputElement>("minute").addEventListener("input", (e) => {
 $("now").addEventListener("click", () => {
   minuteOfDay = null;
   dayOffset = 0;
+  const now = new Date();
   $<HTMLInputElement>("date-offset").value = "0";
+  $<HTMLInputElement>("minute").value = String(now.getHours() * 60 + now.getMinutes());
 });
 $<HTMLInputElement>("fov").addEventListener("input", (e) => {
   fovDeg = Number((e.target as HTMLInputElement).value);
