@@ -14,6 +14,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-01
+
 ### API
 
 - `kDefaultHeadingDriftDeg2PerS` is the default drift of `heading_predict()`. All bindings
