@@ -1,0 +1,10 @@
+# Build output
+/build/
+/build-*/
+CMakeUserPresets.json
+
+# Editors and OS
+.idea/
+.vscode/
+.cache/
+.DS_Store

@@ -1,0 +1,21 @@
+{# WebAssembly build of the core, for the PWA (M8). Conan fetches emsdk.
+   The exception mode is an ABI, so every dependency gets the same flag. #}
+{% set emsdk_version = "3.1.73" %}
+
+[settings]
+os=Emscripten
+arch=wasm
+build_type=Release
+compiler=emcc
+compiler.version={{emsdk_version}}
+compiler.libcxx=libc++
+compiler.cppstd=20
+
+[tool_requires]
+emsdk/{{emsdk_version}}
+
+[conf]
+tools.build:cflags=['-fwasm-exceptions']
+tools.build:cxxflags=['-fwasm-exceptions']
+tools.build:exelinkflags=['-fwasm-exceptions']
+tools.build:sharedlinkflags=['-fwasm-exceptions']

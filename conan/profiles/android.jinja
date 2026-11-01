@@ -1,0 +1,31 @@
+{# Shared body of the android-* profiles. The including profile sets `arch`.
+
+   `api_level` is the minimum Android version of the native code. It must be
+   the same as `minSdk` of the Android app (28, because the app reads
+   LENS_DISTORTION, which starts at API 28).
+
+   The NDK path comes from ANDROID_NDK_HOME. If that is not set, the profile
+   uses ANDROID_HOME (or the default SDK location on macOS) and the NDK
+   version below. #}
+{% set ndk_version = "28.2.13676358" %}
+{% set api_level = "28" %}
+{% set default_sdk = os.path.expanduser("~/Library/Android/sdk") if platform.system() == "Darwin" else os.path.expanduser("~/Android/Sdk") %}
+{% set android_home = os.getenv("ANDROID_HOME") or default_sdk %}
+{% set ndk_path = os.getenv("ANDROID_NDK_HOME") or (android_home + "/ndk/" + ndk_version) %}
+
+[settings]
+os=Android
+os.api_level={{api_level}}
+arch={{arch}}
+build_type=Release
+compiler=clang
+compiler.version=19
+compiler.cppstd=20
+compiler.libcxx=c++_shared
+
+[conf]
+tools.android:ndk_path={{ndk_path}}
+# The build folder and the CMake preset get the OS and the ABI in the name, for
+# example build/android-armv8-release and conan-android-armv8-release, so they
+# do not collide with the host build.
+tools.cmake.cmake_layout:build_folder_vars=['settings.os', 'settings.arch', 'settings.build_type']
