@@ -76,7 +76,7 @@ jobs:
       - name: Pack
         working-directory: core/build/emscripten-wasm-release/wasm/dist
         run: |
-          npm version --no-git-tag-version "${{ needs.version.outputs.version }}"
+          npm version --no-git-tag-version --allow-same-version "${{ needs.version.outputs.version }}"
           npm pack
 
       - name: Publish
