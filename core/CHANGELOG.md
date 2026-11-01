@@ -28,6 +28,12 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 - `find_time()` finds the time when the sun is nearest to a direction (auto mode), and
   `find_dates()` finds the dates when the sun goes through a direction (date slider).
   Both compare with the refracted position by default.
+- `ScreenRotation` has the meaning of Android `Display.getRotation()`: `rotation_90` is a
+  device turned 90° counterclockwise. The first version had `rotation_90` and
+  `rotation_270` swapped, so a landscape view was upside down and mirrored.
+- Clipped lines no longer get a wrong point at (0, 0) for single frames. A point on the
+  border of the valid cone was sometimes rejected because of rounding, which made lines
+  flicker.
 - An invalid argument throws `std::invalid_argument`: a value that is not finite, a
   latitude outside [-90, 90], an empty interval, a step that is not positive, or a
   path with more than 1,000,000 points.

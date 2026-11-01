@@ -8,13 +8,14 @@
 
 namespace sunradar {
 
-/// The rotation of the screen content relative to the natural orientation of the
-/// device. The values have the meaning of Android `Surface.ROTATION_*`.
+/// The rotation of the screen content relative to the natural orientation of the device,
+/// with the meaning of Android `Display.getRotation()` and `Surface.ROTATION_*`: the content
+/// turns opposite to the device, so it stays upright.
 enum class ScreenRotation : std::uint8_t {
   rotation_0,    ///< natural orientation (portrait on a phone)
-  rotation_90,   ///< the screen x axis is the device +y axis
-  rotation_180,  ///< upside down
-  rotation_270,  ///< the screen x axis is the device -y axis
+  rotation_90,   ///< device turned 90° counterclockwise: screen right is device -y
+  rotation_180,  ///< upside down: screen right is device -x
+  rotation_270,  ///< device turned 90° clockwise: screen right is device +y
 };
 
 /// A pinhole camera with lens distortion, in the pixels of the screen. The default is a

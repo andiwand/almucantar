@@ -83,9 +83,11 @@ CMake options: `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WA
 - The orientation quaternion rotates from the device frame to ENU, as the Android
   rotation vector does. The device frame is the Android one: x right, y up, z out of
   the screen, in the natural orientation. The back camera looks along -z.
-- `ScreenRotation` defines the screen axes in the device frame. `rotation_90` means
-  screen x = device +y and screen up = device -x, the same as
-  `SensorManager.remapCoordinateSystem(AXIS_Y, AXIS_MINUS_X)`.
+- `ScreenRotation` has the meaning of Android `Display.getRotation()`: `rotation_90`
+  means that the device is turned 90° counterclockwise (its top points left), so screen
+  right = device -y and screen up = device +x. Do not derive it from
+  `remapCoordinateSystem` examples: they remap the rotation matrix, which is the inverse
+  relation, and the first version of the core had 90 and 270 swapped because of this.
 - The heading offset rotates the sensor frame to true north: true azimuth = sensor
   azimuth + offset.
 - Screen pixels: origin at the top left, y down. The camera parameters are in the pixels

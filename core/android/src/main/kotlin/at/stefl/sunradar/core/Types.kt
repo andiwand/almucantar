@@ -52,11 +52,17 @@ enum class DayKind {
     POLAR_NIGHT,
 }
 
-/** The meaning of Android `Surface.ROTATION_*`: the ordinal is the same value. */
+/**
+ * The rotation of the screen content, with the meaning of Android `Display.getRotation()`: the
+ * ordinal is the `Surface.ROTATION_*` value. [ROTATION_90] means that the device is turned 90
+ * degrees counterclockwise.
+ */
 enum class ScreenRotation {
     ROTATION_0,
+    /** Device turned 90 degrees counterclockwise: screen right is device -y. */
     ROTATION_90,
     ROTATION_180,
+    /** Device turned 90 degrees clockwise: screen right is device +y. */
     ROTATION_270,
 }
 

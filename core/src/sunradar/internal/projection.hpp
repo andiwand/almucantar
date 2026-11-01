@@ -23,6 +23,9 @@ class Projector {
 
  private:
   [[nodiscard]] ScreenPoint distort_to_pixel(double x, double y) const noexcept;
+  /// Projects a unit vector in front of the camera without the check of the cone. For points
+  /// on the border of the cone, where rounding can put them a little outside.
+  [[nodiscard]] ScreenPoint project_unchecked(Vec3 direction) const noexcept;
   [[nodiscard]] Vec3 boundary(Vec3 inside, Vec3 outside) const noexcept;
 
   Camera camera_;

@@ -64,12 +64,15 @@ Quaternion upright(const double azimuth_deg, const double pitch_deg = 0, const d
   switch (rotation) {
     case ScreenRotation::rotation_0:
       return from_axes(right, up, back);
-    case ScreenRotation::rotation_90:  // screen x = device +y, screen up = device -x
-      return from_axes(neg(up), right, back);
-    case ScreenRotation::rotation_180:
-      return from_axes(neg(right), neg(up), back);
-    case ScreenRotation::rotation_270:  // screen x = device -y, screen up = device +x
+    // Android Display.getRotation(): rotation_90 means that the device is turned 90°
+    // counterclockwise, so the device top (+y) points to the left of the user and the device
+    // right side (+x) points up.
+    case ScreenRotation::rotation_90:  // device +x = up, device +y = left
       return from_axes(up, neg(right), back);
+    case ScreenRotation::rotation_180:  // device +x = left, device +y = down
+      return from_axes(neg(right), neg(up), back);
+    case ScreenRotation::rotation_270:  // device +x = down, device +y = right
+      return from_axes(neg(up), right, back);
   }
   return {};
 }
@@ -103,6 +106,29 @@ TEST_CASE("project gives the pinhole positions", "[view]") {
   REQUIRE(up.valid);
   CHECK_THAT(up.point.x, WithinAbs(500, 1e-9));
   CHECK_THAT(up.point.y, WithinAbs(500 - f * std::tan(10 * kDeg), 1e-9));
+}
+
+TEST_CASE("screen rotations have the meaning of Android Display.getRotation()", "[view]") {
+  // The device is turned 90° counterclockwise and looks to the north: its top (+y) points
+  // west, its right side (+x) points up, and its screen (+z) faces the user (south). Android
+  // reports ROTATION_90 for this. A point to the east must be on the right of the screen, and
+  // a point above the horizon must be above the center.
+  const View view{.device_to_enu = from_axes({0, 0, 1}, {-1, 0, 0}, {0, -1, 0}),
+                  .screen_rotation = ScreenRotation::rotation_90};
+  const Projection east = project(view, {.azimuth_deg = 10, .altitude_deg = 0});
+  const Projection up = project(view, {.azimuth_deg = 0, .altitude_deg = 10});
+  REQUIRE(east.valid);
+  REQUIRE(up.valid);
+  CHECK(east.point.x > 500);
+  CHECK_THAT(east.point.y, WithinAbs(500, 1e-9));
+  CHECK(up.point.y < 500);
+  CHECK_THAT(up.point.x, WithinAbs(500, 1e-9));
+
+  // Turned clockwise instead (top to the east): ROTATION_270.
+  const View cw{.device_to_enu = from_axes({0, 0, -1}, {1, 0, 0}, {0, -1, 0}),
+                .screen_rotation = ScreenRotation::rotation_270};
+  CHECK(project(cw, {.azimuth_deg = 10, .altitude_deg = 0}).point.x > 500);
+  CHECK(project(cw, {.azimuth_deg = 0, .altitude_deg = 10}).point.y < 500);
 }
 
 TEST_CASE("project uses the heading offset", "[view]") {
@@ -247,6 +273,52 @@ TEST_CASE("project_line clips at the valid cone", "[view]") {
                               {.azimuth_deg = 182, .altitude_deg = 0}})
               .empty());
     CHECK(project_line(view, {}).empty());
+  }
+}
+
+TEST_CASE("projected lines change continuously when the view turns", "[view]") {
+  // A regression test for flickering lines: the boundary point of a clipped line was
+  // sometimes rejected because of rounding, and the line got a point at (0, 0) for one frame.
+  // The view turns in small steps; each step must not make a line jump.
+  const auto path = sun_path(test::site("vienna"), 1781992800, 1781992800 + 86400);
+  const Camera camera = camera_from_fov(1080, 2400, 60);
+  const auto length = [](const std::vector<Polyline>& lines) {
+    double total = 0;
+    for (const Polyline& l : lines) {
+      for (std::size_t i = 1; i < l.size(); ++i) {
+        total += std::hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y);
+      }
+    }
+    return total;
+  };
+  const auto max_step = [](const std::vector<Polyline>& lines) {
+    double result = 0;
+    for (const Polyline& l : lines) {
+      for (std::size_t i = 1; i < l.size(); ++i) {
+        result = std::max(result, std::hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y));
+      }
+    }
+    return result;
+  };
+  for (const double pitch : {-30.0, 0.0, 20.0, 45.0}) {
+    for (const double roll : {0.0, 15.0}) {
+      double previous_horizon = -1;
+      for (double yaw = 0; yaw < 360; yaw += 0.05) {
+        const View view{.device_to_enu = upright(yaw, pitch, roll), .camera = camera};
+        const auto horizon = horizon_line(view);
+        const auto projected = project_path(view, path);
+        INFO("pitch " << pitch << " roll " << roll << " yaw " << yaw);
+        // The horizon has 1° steps and the path 5-minute steps (at most 1.25°). With a
+        // focal length of 1559 px, a step is far below 300 px, also near the border.
+        REQUIRE(max_step(horizon) < 300);
+        REQUIRE(max_step(projected) < 300);
+        const double h = length(horizon);
+        if (previous_horizon >= 0) {
+          REQUIRE(std::abs(h - previous_horizon) < 100);
+        }
+        previous_horizon = h;
+      }
+    }
   }
 }
 

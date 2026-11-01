@@ -35,7 +35,7 @@ private const val TAG = "SunradarCamera"
  */
 @OptIn(ExperimentalCamera2Interop::class)
 @Composable
-fun CameraPreview(modifier: Modifier, onCamera: (ViewCamera?) -> Unit) {
+fun CameraPreview(modifier: Modifier, displayRotation: Int, onCamera: (ViewCamera?) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {

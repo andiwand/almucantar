@@ -17,5 +17,8 @@ The changes in the Android app that a user notices. Each release has the tag
   overlay uses the lens calibration of the device (`LENS_INTRINSIC_CALIBRATION` and
   `LENS_DISTORTION`, with the distortion correction of the camera switched off), or else the
   focal length and the size of the sensor. The status shows which one.
+- The app rotates with the screen, and the overlay stays correct in landscape. The activity
+  handles the rotation itself, so the camera does not restart.
+- Lines no longer flicker when the phone turns.
 - The status shows the magnetic declination, the accuracy of the compass, and the times of
   sunrise and sunset.

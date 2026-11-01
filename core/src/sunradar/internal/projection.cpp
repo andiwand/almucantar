@@ -35,17 +35,19 @@ std::array<double, 2> undistort(const Camera& c, const double xd, const double y
   return {x, y};
 }
 
-/// The screen axes in the device frame, for a screen rotation.
+/// The screen axes (right, down) in the device frame, for a screen rotation. The meaning is
+/// the one of Android `Display.getRotation()`: `rotation_90` means that the device is turned
+/// 90° counterclockwise, so its top points to the left of the user.
 std::array<Vec3, 2> screen_axes(const ScreenRotation rotation) noexcept {
   switch (rotation) {
-    case ScreenRotation::rotation_0:
+    case ScreenRotation::rotation_0:  // right = +x, up = +y
       return {Vec3{1, 0, 0}, Vec3{0, -1, 0}};
-    case ScreenRotation::rotation_90:
-      return {Vec3{0, 1, 0}, Vec3{1, 0, 0}};
-    case ScreenRotation::rotation_180:
-      return {Vec3{-1, 0, 0}, Vec3{0, 1, 0}};
-    case ScreenRotation::rotation_270:
+    case ScreenRotation::rotation_90:  // right = -y, up = +x
       return {Vec3{0, -1, 0}, Vec3{-1, 0, 0}};
+    case ScreenRotation::rotation_180:  // right = -x, up = -y
+      return {Vec3{-1, 0, 0}, Vec3{0, 1, 0}};
+    case ScreenRotation::rotation_270:  // right = +y, up = -x
+      return {Vec3{0, 1, 0}, Vec3{1, 0, 0}};
   }
   return {Vec3{1, 0, 0}, Vec3{0, -1, 0}};
 }
@@ -94,13 +96,17 @@ ScreenPoint Projector::distort_to_pixel(const double x, const double y) const no
   return {c.fx * xd + c.cx, c.fy * yd + c.cy};
 }
 
+ScreenPoint Projector::project_unchecked(const Vec3 direction) const noexcept {
+  const double z = dot(direction, forward_);
+  return distort_to_pixel(dot(direction, right_) / z, dot(direction, down_) / z);
+}
+
 Projection Projector::project(const Vec3 direction) const noexcept {
   const Vec3 d = normalized(direction);
   if (!inside(d)) {
     return {};
   }
-  const double z = dot(d, forward_);
-  return {.valid = true, .point = distort_to_pixel(dot(d, right_) / z, dot(d, down_) / z)};
+  return {.valid = true, .point = project_unchecked(d)};
 }
 
 Vec3 Projector::unproject(const ScreenPoint point) const noexcept {
@@ -129,7 +135,10 @@ std::vector<Polyline> Projector::project_line(const std::vector<Vec3>& line,
   if (line.empty()) {
     return result;
   }
-  const auto point_at = [&](const Vec3 d) { return project(d).point; };
+  // The points of the line are inside the cone, and the boundary points are on its border.
+  // Both are in front of the camera, because the cone is at most 85° wide. A second check of
+  // the cone could reject a boundary point because of rounding, so the projection skips it.
+  const auto point_at = [&](const Vec3 d) { return project_unchecked(d); };
 
   Polyline current;
   const std::size_t count = closed ? line.size() + 1 : line.size();

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -102,7 +103,11 @@ fun SkyScreen(locationGranted: Boolean) {
             )
         }
     val declination = remember(place.observer, date) { magneticDeclinationDeg(place.observer, now) }
-    val rotation = ScreenRotation.entries[LocalView.current.display?.rotation ?: 0]
+    // Reading the configuration makes Compose recompose after a rotation, because the activity
+    // handles rotations itself (configChanges in the manifest).
+    LocalConfiguration.current
+    val displayRotation = LocalView.current.display?.rotation ?: 0
+    val rotation = ScreenRotation.entries[displayRotation]
     var crosshair by remember { mutableDoubleStateOf(Double.NaN) }
 
     // The camera: on if the user switches it on and allows it. Without a camera model (not yet
@@ -129,7 +134,7 @@ fun SkyScreen(locationGranted: Boolean) {
 
     Box(Modifier.fillMaxSize().background(SKY)) {
         if (cameraOn) {
-            CameraPreview(Modifier.fillMaxSize()) { viewCamera = it }
+            CameraPreview(Modifier.fillMaxSize(), displayRotation) { viewCamera = it }
         }
         val q = orientation.deviceToEnu
         if (q != null) {

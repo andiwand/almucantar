@@ -102,11 +102,12 @@ class SunradarTest {
 
     @Test
     fun screenRotationAndCamera() {
-        // The same scene in landscape: device +y to the east, device +x down.
+        // The same scene in landscape, with the device turned counterclockwise (ROTATION_90):
+        // device +x points up, device +y points west.
         val landscape =
             quaternionFromAxes(
-                x = doubleArrayOf(0.0, 0.0, -1.0),
-                y = doubleArrayOf(1.0, 0.0, 0.0),
+                x = doubleArrayOf(0.0, 0.0, 1.0),
+                y = doubleArrayOf(-1.0, 0.0, 0.0),
                 z = doubleArrayOf(0.0, -1.0, 0.0),
             )
         val camera = cameraFromFov(1920.0, 1080.0, 70.0)
