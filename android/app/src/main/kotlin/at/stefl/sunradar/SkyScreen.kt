@@ -1,8 +1,12 @@
 package at.stefl.sunradar
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.hardware.SensorManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,11 +14,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,9 +33,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import at.stefl.sunradar.core.Horizontal
 import at.stefl.sunradar.core.Polylines
 import at.stefl.sunradar.core.ScreenPoint
@@ -97,24 +105,53 @@ fun SkyScreen(locationGranted: Boolean) {
     val rotation = ScreenRotation.entries[LocalView.current.display?.rotation ?: 0]
     var crosshair by remember { mutableDoubleStateOf(Double.NaN) }
 
+    // The camera: on if the user switches it on and allows it. Without a camera model (not yet
+    // known, or no camera), the view uses the virtual camera of the sky view.
+    val context = LocalContext.current
+    var cameraOn by remember { mutableStateOf(false) }
+    var viewCamera by remember { mutableStateOf<ViewCamera?>(null) }
+    val cameraPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            cameraOn = it
+        }
+    val toggleCamera = {
+        if (cameraOn) {
+            cameraOn = false
+        } else if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            cameraOn = true
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(SKY)) {
+        if (cameraOn) {
+            CameraPreview(Modifier.fillMaxSize()) { viewCamera = it }
+        }
         val q = orientation.deviceToEnu
         if (q != null) {
             Canvas(Modifier.fillMaxSize()) {
                 val fov = if (size.width < size.height) FOV_PORTRAIT_DEG else FOV_LANDSCAPE_DEG
+                val camera =
+                    viewCamera?.camera?.takeIf { cameraOn }
+                        ?: cameraFromFov(size.width.toDouble(), size.height.toDouble(), fov)
                 val view =
                     View(
                         deviceToEnu = q,
                         screenRotation = rotation,
                         headingOffsetDeg = declination,
-                        camera = cameraFromFov(size.width.toDouble(), size.height.toDouble(), fov),
+                        camera = camera,
                     )
                 drawSky(view, day, now)
                 crosshair = autoModeTime(view, day)
             }
         }
 
-        Column(Modifier.safeDrawingPadding().padding(16.dp)) {
+        // The end padding keeps the text away from the camera button.
+        Column(Modifier.safeDrawingPadding().padding(start = 16.dp, top = 16.dp, end = 120.dp)) {
             Text(placeText(place), color = Color.White)
             Text(
                 "Declination %.1f° %s"
@@ -123,6 +160,14 @@ fun SkyScreen(locationGranted: Boolean) {
             )
             Text(compassText(orientation), color = Color.White)
             Text(day.summary, color = Color.White)
+            if (cameraOn) Text(cameraText(viewCamera), color = Color.White)
+        }
+
+        Button(
+            onClick = toggleCamera,
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(16.dp),
+        ) {
+            Text(if (cameraOn) "Sky" else "Camera")
         }
 
         Text(
@@ -253,6 +298,16 @@ internal fun errorScale(accuracyM: Double): String {
     val sky = if (skyDeg < 0.01) "< 0.01°" else "%.2f°".format(Locale.ROOT, skyDeg)
     return "$label (sky $sky)"
 }
+
+private fun cameraText(camera: ViewCamera?): String =
+    when (camera?.source) {
+        null -> "Camera: waiting for the calibration"
+        CalibrationSource.INTRINSICS -> {
+            val distorted = camera.camera.k1 != 0.0 || camera.camera.k2 != 0.0
+            "Camera: lens calibration" + if (distorted) " with distortion" else ""
+        }
+        CalibrationSource.FOCAL_LENGTH -> "Camera: focal length only (less accurate)"
+    }
 
 private fun compassText(orientation: Orientation): String {
     if (!orientation.available) return "This device has no rotation vector sensor"

@@ -15,6 +15,8 @@ API of the AAR.
 | `.../Sensors.kt` | `TYPE_ROTATION_VECTOR`. M7 replaces it with the game rotation vector and the heading filter of the core. |
 | `.../Location.kt` | The place: the device location (coarse), else the city of the time zone, else Vienna. The town name comes from the geocoder of the device. |
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
+| `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |
+| `.../CameraCalibration.kt` | Converts the Camera2 calibration and `PreviewView.getSensorToViewTransform()` to a `Camera` in view pixels. Pure Kotlin, tested in `app/src/test/`. |
 | `app/src/test/` | JVM unit tests. |
 
 ## Build and test

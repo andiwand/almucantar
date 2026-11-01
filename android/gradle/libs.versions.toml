@@ -11,6 +11,7 @@ composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 androidxCore = "1.19.1"
 junit = "4.13.2"
+camerax = "1.6.2"
 
 [libraries]
 # From the composite build of ../core/android (see settings.gradle.kts), so it has no version.
@@ -22,6 +23,10 @@ compose-material3 = { module = "androidx.compose.material3:material3" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-core = { module = "androidx.core:core", version.ref = "androidxCore" }
 junit = { module = "junit:junit", version.ref = "junit" }
+camerax-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

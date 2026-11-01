@@ -294,8 +294,11 @@ struct CameraModel {
   (API 28). If the device does not give them, the app calculates `fx` from
   `LENS_INFO_AVAILABLE_FOCAL_LENGTHS` and `SENSOR_INFO_PHYSICAL_SIZE`, without
   distortion.
-- The app must convert the intrinsics from the sensor frame to the preview frame, because
-  CameraX crops and scales the preview.
+- The app converts the intrinsics from the sensor frame to the preview frame with
+  `PreviewView.getSensorToViewTransform()`, which maps the active array to the view
+  (crop, scale, and rotation). The intrinsics are in the pre-correction array, so the app
+  subtracts the offset to the active array. The preview switches the distortion correction
+  off (`DISTORTION_CORRECTION_MODE_OFF`), so the image has the distortion of the model.
 - The PWA has no intrinsics. So it uses a FOV slider, or a table of devices.
 - If the platform shows no camera image, the core uses a virtual camera with a FOV that
   the user selects.
@@ -510,7 +513,7 @@ contain the same core.
 | M3 | WMM2025, orientation, camera model, projection, horizon | done: WMM agrees with the official test values to 0.001 nT; projection round-trip < 1e-6 px |
 | M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
 | M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. Not yet checked on a real phone. |
-| M6 | Camera overlay with intrinsics and distortion | outdoors, the real sun is on the predicted marker within 2° |
+| M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. Open: the outdoor check of 2° on a real phone. |
 | M7 | Calibration: sun or moon tap, map heading, gyro hold | indoors, the error after calibration is ≤ 2° |
 | M8 | Date slider, auto mode UI, polish | usable in a real flat visit |
 | M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
@@ -529,9 +532,10 @@ fast way to plot paths and to compare models.
   the focal length and the sensor size gives about 1–3° at the edges.
 - **Preview crop.** The conversion from the sensor frame to the CameraX preview frame is
   a frequent source of offsets. Test it on two or three devices.
-- **Direction of the distortion.** The core uses the OpenCV direction (ideal to
-  distorted). The documentation of Camera2 `LENS_DISTORTION` can be read in both
-  directions. Check it in M6 with a real image of a straight edge.
+- **Direction of the distortion.** Resolved in M6: the AOSP definition of
+  `LENS_DISTORTION` says `correctedImage(x_i, y_i) = sample_at(x_c, y_c, inputImage)`, so
+  it maps the ideal point to the distorted point, the same direction as OpenCV and the
+  core. kappa_4 and kappa_5 are p1 and p2.
 - **Licenses.** Check the NREL SPA license before we put the code in the repository.
   Astronomy Engine (MIT), GeographicLib (MIT), and Eigen (MPL 2.0) are not a problem.
 - **WMM validity.** WMM2025 is valid until the end of 2029. Plan an update.

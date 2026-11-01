@@ -13,5 +13,9 @@ The changes in the Android app that a user notices. Each release has the tag
 - The place comes from the coarse location. Without it, the app uses the main city of the
   time zone, and it says so. The app shows the nearest town and the error of the location
   as a power of ten, with the error that it causes on the sky.
+- Camera mode: the "Camera" button shows the overlay on the image of the back camera. The
+  overlay uses the lens calibration of the device (`LENS_INTRINSIC_CALIBRATION` and
+  `LENS_DISTORTION`, with the distortion correction of the camera switched off), or else the
+  focal length and the size of the sensor. The status shows which one.
 - The status shows the magnetic declination, the accuracy of the compass, and the times of
   sunrise and sunset.
