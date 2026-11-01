@@ -73,6 +73,10 @@ jobs:
   tidy:
     name: clang-tidy
     runs-on: ubuntu-24.04
+    env:
+      # Conan and CMake must both use clang, so clang-tidy sees clang flags.
+      CC: clang
+      CXX: clang++
     steps:
       - uses: actions/checkout@v4
 
@@ -83,10 +87,13 @@ jobs:
       - name: Install tools
         run: |
           pip install "conan==${CONAN_VERSION}" -r ../scripts/requirements-dev.txt
-          CC=clang CXX=clang++ conan profile detect --force
+          conan profile detect --force
 
       - name: Install dependencies
-        run: conan install . --build=missing -s build_type=Debug -s compiler.cppstd=20 -o "&:with_python=True"
+        run: >
+          conan install . --build=missing -s build_type=Debug -s compiler.cppstd=20
+          -o "&:with_python=True"
+          -c tools.build:compiler_executables="{'c': 'clang', 'cpp': 'clang++'}"
 
       - name: Configure
         run: cmake --preset conan-debug -DPython_EXECUTABLE="$(which python)"

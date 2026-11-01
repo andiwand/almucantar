@@ -7,6 +7,13 @@ add_library(sunradar::options ALIAS sunradar_options)
 target_compile_options(sunradar_options INTERFACE
   -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wdouble-promotion)
 
+# GCC before version 15 warns about a designated initializer that leaves out a member
+# with a default value, for example `PathOptions{.step_s = 60}`. The API depends on
+# this form, so the warning is off for GCC.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(sunradar_options INTERFACE -Wno-missing-field-initializers)
+endif()
+
 if(SUNRADAR_WARNINGS_AS_ERRORS)
   target_compile_options(sunradar_options INTERFACE -Werror)
 endif()
