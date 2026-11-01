@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Sunradar</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16325a"/>
+      <stop offset="1" stop-color="#0b1a30"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffc83d" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffc83d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <!-- the horizon with ticks -->
+  <path d="M64 372 H448" stroke="#ffffff" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
+  <path d="M136 372 v-16 M256 372 v-24 M376 372 v-16" stroke="#ffffff" stroke-opacity="0.85" stroke-width="8" stroke-linecap="round"/>
+  <!-- the path of the sun, with the hours -->
+  <path d="M104 372 A152 152 0 0 1 408 372" fill="none" stroke="#ffc83d" stroke-width="14" stroke-linecap="round"/>
+  <g fill="#ffc83d">
+    <circle cx="132" cy="285" r="11"/>
+    <circle cx="197" cy="232" r="11"/>
+    <circle cx="315" cy="232" r="11"/>
+    <circle cx="380" cy="285" r="11"/>
+  </g>
+  <!-- the sun at its highest point, with a crosshair -->
+  <circle cx="256" cy="220" r="78" fill="url(#glow)"/>
+  <circle cx="256" cy="220" r="40" fill="#ffe08a"/>
+  <path d="M256 140 v26 M256 274 v26 M176 220 h26 M310 220 h26" stroke="#7fd8ff" stroke-width="9" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1a30" />
+    <title>Sunradar</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <video id="camera" playsinline muted></video>
+    <canvas id="sky"></canvas>
+    <div id="status" class="panel"></div>
+    <div id="message" class="panel hidden"></div>
+    <div id="bottom">
+      <div id="time-panel" class="panel hidden">
+        <label>Date <input id="date-offset" type="range" min="-183" max="183" value="0" /></label>
+        <span id="date-label"></span>
+        <label>Time <input id="minute" type="range" min="0" max="1439" value="720" /></label>
+        <span id="time-label"></span>
+        <button id="now">Now</button>
+        <label id="fov-row" class="hidden"
+          >Field of view
+          <input id="fov" type="range" min="40" max="100" value="65" />
+        </label>
+        <span id="fov-label" class="hidden"></span>
+      </div>
+      <div id="readout" class="panel"></div>
+      <div id="buttons">
+        <button id="start" class="primary">Start sensors</button>
+        <button id="camera-button">Camera</button>
+        <button id="time-button">Time</button>
+        <button id="align-button">Align with the sun</button>
+      </div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

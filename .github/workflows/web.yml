@@ -1,0 +1,140 @@
+# The WebAssembly package, the PWA, and the website. On main, the website and the PWA (under
+# /app/) go to GitHub Pages.
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "pwa/**"
+      - "website/**"
+      - "assets/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "core/**"
+      - "pwa/**"
+      - "website/**"
+      - "assets/**"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONAN_VERSION: "2.26.1"
+  WASM_DIST: core/build/emscripten-wasm-release/wasm/dist
+
+jobs:
+  wasm:
+    name: npm package (WebAssembly)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Conan
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-emscripten-${{ hashFiles('core/conanfile.py', 'core/conan/profiles/emscripten') }}
+
+      - name: Build
+        working-directory: core
+        run: |
+          conan install . --build=missing -pr:h conan/profiles/emscripten -pr:b default \
+            -o "&:with_tests=False" -o "&:with_wasm=True"
+          cmake --preset conan-emscripten-wasm-release -DSUNRADAR_WARNINGS_AS_ERRORS=ON \
+            -DSUNRADAR_NODE="$(which node)"
+          cmake --build --preset conan-emscripten-wasm-release
+
+      - name: Test
+        working-directory: core
+        run: ctest --test-dir build/emscripten-wasm-release --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: ${{ env.WASM_DIST }}
+
+  pwa:
+    name: PWA
+    needs: wasm
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: pwa
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: ${{ env.WASM_DIST }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: npm ci
+
+      - name: Check the format
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pwa
+          path: pwa/dist
+
+  # Runs only if GitHub Pages is enabled for the repository (source: GitHub Actions) and the
+  # repository variable PAGES_ENABLED is "true".
+  pages:
+    name: GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
+    needs: pwa
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pwa
+          path: site/app
+
+      - name: Put the website together
+        run: cp -r website/* site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
