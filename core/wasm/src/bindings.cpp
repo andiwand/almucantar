@@ -50,7 +50,9 @@ struct SunOptionsJs {
   bool refraction = true;
   Atmosphere atmosphere;
   [[nodiscard]] SunOptions get() const {
-    return {.model = to_enum<SolarModel>(model, "model"), .refraction = refraction, .atmosphere = atmosphere};
+    return {.model = to_enum<SolarModel>(model, "model"),
+            .refraction = refraction,
+            .atmosphere = atmosphere};
   }
 };
 
@@ -146,7 +148,8 @@ std::vector<Horizontal> to_line(const val& array) {
   line.reserve(n);
   for (unsigned i = 0; i < n; ++i) {
     const val p = array[i];
-    line.push_back({.azimuth_deg = p["azimuthDeg"].as<double>(), .altitude_deg = p["altitudeDeg"].as<double>()});
+    line.push_back({.azimuth_deg = p["azimuthDeg"].as<double>(),
+                    .altitude_deg = p["altitudeDeg"].as<double>()});
   }
   return line;
 }
@@ -305,7 +308,10 @@ EMSCRIPTEN_BINDINGS(sunradar) {
       .field("x", &Quaternion::x)
       .field("y", &Quaternion::y)
       .field("z", &Quaternion::z);
-  value_object<Vector3>("Vector3").field("x", &Vector3::x).field("y", &Vector3::y).field("z", &Vector3::z);
+  value_object<Vector3>("Vector3")
+      .field("x", &Vector3::x)
+      .field("y", &Vector3::y)
+      .field("z", &Vector3::z);
   value_object<ScreenPoint>("ScreenPoint").field("x", &ScreenPoint::x).field("y", &ScreenPoint::y);
   value_object<SunOptionsJs>("SunOptions")
       .field("model", &SunOptionsJs::model)
