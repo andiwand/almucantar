@@ -22,6 +22,7 @@ main use: you visit a flat and want to know when the sun shines through a window
 
 1. Android first (native, Kotlin).
 2. PWA second, with the same C++ core compiled to WebAssembly.
+3. iOS maybe later, with the same C++ core.
 
 ## 2. Precision budget
 
@@ -94,24 +95,34 @@ in hour angle, and at most about 0.25° per minute on the sky. So **1° of error
 
 ## 4. Repository layout
 
+The repository is a monorepo. Each platform has its own directory, and each
+directory is a self-contained project with its own build system. All platforms use
+the C++ core in `core/`.
+
 ```
 sunradar/
-├── core/                  C++ library
+├── core/                  C++ core, a self-contained CMake and Conan project
 │   ├── include/sunradar/  public API
 │   ├── src/
 │   ├── tests/             Catch2 tests
-│   ├── data/              reference data for tests, WMM coefficients
+│   │   └── data/          reference data for tests
+│   ├── tools/             scripts to make reference data
+│   ├── bindings/wasm/     embind wrapper for the PWA (M8)
+│   ├── cmake/
+│   ├── conan/profiles/    android-armv8, android-x86_64, emscripten
+│   ├── conanfile.py
 │   └── CMakeLists.txt
-├── bindings/
-│   ├── jni/               JNI wrapper for Android
-│   └── wasm/              embind wrapper for the PWA
-├── android/               Gradle project
-├── web/                   PWA (later)
-├── tools/                 scripts to make reference data
-├── conan/profiles/        host, android-arm64, android-x86_64, emscripten
-├── conanfile.py
-└── CMakeLists.txt
+├── android/               Gradle project, with the JNI wrapper in app/src/main/cpp (M4)
+├── pwa/                   the PWA (M8)
+├── ios/                   the iOS app (later, if we need it)
+├── .github/workflows/     CI for all projects
+├── PLAN.md
+└── README.md
 ```
+
+The JNI wrapper belongs to `android/`, because it depends on the Android NDK and on
+the Kotlin classes. The embind wrapper belongs to `core/`, because Emscripten builds
+it as a target of the core.
 
 ## 5. C++ core
 

@@ -1,7 +1,13 @@
-# Build output
-/build/
-/build-*/
-CMakeUserPresets.json
+# C++ core
+/core/build/
+/core/CMakeUserPresets.json
+
+# Android
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/app/.cxx/
+/android/local.properties
 
 # Editors and OS
 .idea/

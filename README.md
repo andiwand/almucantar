@@ -6,20 +6,27 @@ sun is at a given place in the sky, for example when you visit a flat. See
 
 ## Repository layout
 
-| Path | Content |
-|---|---|
-| `core/` | the C++20 core: solar models, projection, search |
-| `conan/profiles/` | Conan profiles for Android and Emscripten |
-| `cmake/` | shared CMake code |
+This repository is a monorepo. Each directory is a self-contained project.
 
-## Requirements
+| Path | Content | Status |
+|---|---|---|
+| `core/` | the C++20 core: solar models, projection, search | in progress |
+| `android/` | the Android app (Kotlin, Jetpack Compose) | planned (M4) |
+| `pwa/` | the PWA (TypeScript, the core as WebAssembly) | planned (M8) |
+| `ios/` | the iOS app | maybe later |
+
+## Core
+
+### Requirements
 
 - CMake 3.24 or later
 - Conan 2
 - A C++20 compiler (Apple Clang, Clang, or GCC)
 - For Android: the NDK `28.2.13676358`
 
-## Build and test on the host
+### Build and test on the host
+
+Run these commands in `core/`.
 
 1. Install the dependencies:
 
@@ -47,10 +54,10 @@ sun is at a given place in the sky, for example when you visit a flat. See
 
 To use the sanitizers, add `-DSUNRADAR_SANITIZE=ON` to step 2.
 
-## Build for Android
+### Build for Android
 
-The profile finds the NDK through `ANDROID_NDK_HOME`. If that variable is not set, it uses
-`ANDROID_HOME`, or `~/Library/Android/sdk` on macOS.
+Run these commands in `core/`. The profile finds the NDK through `ANDROID_NDK_HOME`. If
+that variable is not set, it uses `ANDROID_HOME`, or `~/Library/Android/sdk` on macOS.
 
 1. Install the dependencies (use `android-x86_64` for the emulator):
 
