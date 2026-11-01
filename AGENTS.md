@@ -12,12 +12,13 @@ the sun is at a given place in the sky. The repository is a monorepo:
 
 | Path | What | Has `AGENTS.md` |
 |---|---|---|
-| `core/` | The C++ library with all its bindings (Python, Android, and WASM now; Apple later). | yes |
+| `core/` | The C++ library with all its bindings (Python, Android, WASM, and Apple). | yes |
 | `android/` | The Android app. It uses `core/android` as a composite build, and contains no C++. | yes |
 | `pwa/` | The PWA. It uses `core/wasm`. | yes |
 | `website/` | The website. The workflow `web.yml` deploys it with the PWA (under `/app/`) to GitHub Pages. | no |
 | `assets/` | The logo. | no |
-| `ios/` | The iOS app (M11). It will use `core/apple`. | later |
+| `ios/` | The iOS app. It uses the Swift package of `core/apple`. | yes |
+| `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
 | `scripts/` | Repository tools: `format`, and the pinned versions of the dev tools. | no |
 | `.github/workflows/` | One workflow per project and per package, with path filters. | no |
 
@@ -37,7 +38,7 @@ contain no C++. `PLAN.md` section 3 explains why.
 The build loop of the core is in [`core/AGENTS.md`](core/AGENTS.md). For Android, use the JDK
 of Android Studio (`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`)
 and set `ANDROID_HOME`. Install and test on an emulator only (`ANDROID_SERIAL`), because a
-phone can be connected.
+phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xcodegen`).
 
 ## Conventions for all projects
 
@@ -57,7 +58,7 @@ phone can be connected.
 ## Releasing
 
 Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages),
-`android-vX.Y.Z`, and `pwa-vX.Y.Z`. The flow is the one of OpenDocument.core.
+`android-vX.Y.Z`, `pwa-vX.Y.Z`, and `ios-vX.Y.Z`. The flow is the one of OpenDocument.core.
 
 1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that
    makes them. An empty `## Unreleased` stops the release.
@@ -66,8 +67,9 @@ Each project has its own version and tag: `core-vX.Y.Z` (the core and all its pa
 3. Run it again without `dry_run`. It commits `chore(release): <tag> [skip ci]` and creates a
    draft release.
 4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
-   Maven Central) or `android-release.yml` (the APK). The PWA needs no publish step, because
-   GitHub Pages deploys `main`.
+   Maven Central, and the Swift package) or `android-release.yml` (the APK). The PWA needs no publish step, because
+   GitHub Pages deploys `main`. The iOS app has no publish
+   workflow yet, because the App Store needs an Apple developer account.
 
 `scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,
 `notes`). git cliff (`.github/cliff.toml`) calculates the version from the Conventional

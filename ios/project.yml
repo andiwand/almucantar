@@ -1,0 +1,44 @@
+# The Xcode project of the iOS app, for XcodeGen: `xcodegen generate` writes Sunradar.xcodeproj.
+# The app uses the Swift package of the core at the root of the repository; build its
+# xcframework first (python3 core/apple/build_xcframework.py).
+name: Sunradar
+options:
+  bundleIdPrefix: at.stefl
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Sunradar:
+    path: ..
+targets:
+  SunradarApp:
+    type: application
+    platform: iOS
+    sources: [Sunradar]
+    dependencies:
+      - package: Sunradar
+        product: Sunradar
+    settings:
+      base:
+        PRODUCT_NAME: Sunradar
+        PRODUCT_MODULE_NAME: SunradarApp
+        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.sunradar
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Sunradar/Info.plist
+      properties:
+        CFBundleDisplayName: Sunradar
+        UILaunchScreen: {}
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: Sunradar shows the path of the sun on the camera image.
+        NSLocationWhenInUseUsageDescription: Sunradar needs your place to calculate the position of the sun.
+        NSMotionUsageDescription: Sunradar uses the motion sensors to know where the phone points.

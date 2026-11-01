@@ -1,0 +1,4 @@
+# XcodeGen writes the project from project.yml.
+/Sunradar.xcodeproj/
+/build/
+/DerivedData/

@@ -1,0 +1,91 @@
+import CoreMotion
+import Foundation
+import Sunradar
+
+/// The orientation from CoreMotion and the heading filter of the core (the same design as the
+/// Android app: PLAN.md, section 5.4a).
+///
+/// The reference frame xArbitraryCorrectedZVertical has z up and an arbitrary x; the heading
+/// filter estimates the offset to true north. iOS gives a calibrated magnetic field only with a
+/// reference frame that uses the magnetometer, so this one uses it a little for the drift.
+@MainActor
+final class MotionTracker: ObservableObject {
+    @Published private(set) var deviceToFrame: Sunradar.Quaternion?
+    @Published private(set) var estimate = HeadingEstimate()
+    @Published private(set) var available = true
+
+    var observer = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
+
+    private let manager = CMMotionManager()
+    private var lastTimestamp: TimeInterval?
+    private var lastMagnetometerUpdate: TimeInterval = 0
+    /// Whether CMAttitude.quaternion rotates from the reference frame to the device (true), or
+    /// the other way round. Apple does not say clearly, so the tracker finds it from gravity.
+    private var conjugate: Bool?
+
+    func start() {
+        guard manager.isDeviceMotionAvailable else {
+            available = false
+            return
+        }
+        manager.deviceMotionUpdateInterval = 1.0 / 60.0
+        manager.startDeviceMotionUpdates(using: .xArbitraryCorrectedZVertical, to: .main) { [weak self] motion, _ in
+            guard let self, let motion else { return }
+            MainActor.assumeIsolated { self.update(motion) }
+        }
+    }
+
+    func stop() { manager.stopDeviceMotionUpdates() }
+
+    func apply(_ measurement: HeadingMeasurement) {
+        if let updated = try? headingUpdate(estimate, measurement) { estimate = updated }
+    }
+
+    private func update(_ motion: CMDeviceMotion) {
+        let a = motion.attitude.quaternion
+        var q = Sunradar.Quaternion(w: a.w, x: a.x, y: a.y, z: a.z)
+        if conjugate == nil { conjugate = Self.needsConjugate(q, gravity: motion.gravity) }
+        if conjugate == true { q = Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z) }
+
+        if let last = lastTimestamp, let predicted = try? headingPredict(estimate, dtS: motion.timestamp - last) {
+            estimate = predicted
+        }
+        lastTimestamp = motion.timestamp
+        deviceToFrame = q
+
+        // One magnetometer measurement per second: the errors are correlated in time.
+        let field = motion.magneticField
+        if field.accuracy != .uncalibrated, motion.timestamp - lastMagnetometerUpdate >= 1 {
+            lastMagnetometerUpdate = motion.timestamp
+            let f = Vector3(x: field.field.x, y: field.field.y, z: field.field.z)
+            if let m = try? headingFromMagnetometer(
+                deviceToFrame: q, fieldUt: f, observer: observer, unixUtc: Date().timeIntervalSince1970)
+            {
+                apply(m)
+            }
+        }
+    }
+
+    /// The gravity of CoreMotion points down, in the device frame. With the correct direction of
+    /// the quaternion, rotating "down" of the frame into the device frame gives that vector.
+    static func needsConjugate(_ q: Sunradar.Quaternion, gravity: CMAcceleration) -> Bool {
+        let down = (x: 0.0, y: 0.0, z: -1.0)
+        // The inverse rotation (frame to device) of the quaternion q (device to frame).
+        let inverse = rotate(Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z), down)
+        let dot = inverse.x * gravity.x + inverse.y * gravity.y + inverse.z * gravity.z
+        return dot < 0
+    }
+
+    static func rotate(_ q: Sunradar.Quaternion, _ v: (x: Double, y: Double, z: Double)) -> (x: Double, y: Double, z: Double) {
+        // v' = v + 2 u × (u × v + w v)
+        let u = (x: q.x, y: q.y, z: q.z)
+        let t = (
+            x: u.y * v.z - u.z * v.y + q.w * v.x, y: u.z * v.x - u.x * v.z + q.w * v.y,
+            z: u.x * v.y - u.y * v.x + q.w * v.z
+        )
+        return (
+            x: v.x + 2 * (u.y * t.z - u.z * t.y), y: v.y + 2 * (u.z * t.x - u.x * t.z),
+            z: v.z + 2 * (u.x * t.y - u.y * t.x)
+        )
+    }
+}

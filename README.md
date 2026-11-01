@@ -19,11 +19,12 @@ This repository is a monorepo. Each directory is a self-contained project.
 | `core/` | the C++20 core: solar models, projection, search | in progress |
 | `core/python/` | the Python package `sunradar` | in progress |
 | `core/android/` | the Android AAR `at.stefl.sunradar:core-android` | in progress |
-| `android/` | the Android app (Kotlin, Jetpack Compose) | planned (M4) |
+| `android/` | the Android app (Kotlin, Jetpack Compose) | in progress |
+| `core/apple/` | the Swift package `Sunradar` (`Package.swift` at the root) | in progress |
 | `core/wasm/` | the npm package `@sunradar/core` (WebAssembly) | in progress |
 | `pwa/` | the PWA (TypeScript, the core as WebAssembly) | in progress |
 | `website/` | the website on GitHub Pages; the PWA is under `/app/` | in progress |
-| `ios/` | the iOS app | planned (M11) |
+| `ios/` | the iOS app (SwiftUI) | in progress |
 
 Agents: read [`AGENTS.md`](AGENTS.md) first.
 

@@ -12,7 +12,7 @@ on:
       project:
         description: The project to release
         type: choice
-        options: [core, android, pwa]
+        options: [core, android, pwa, ios]
         required: true
       version:
         description: The version (empty for the version from the commits)

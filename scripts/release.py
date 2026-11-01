@@ -41,6 +41,17 @@ PROJECTS = {
         "changelog": "android/CHANGELOG.md",
         "stamps": [],
     },
+    "ios": {
+        "paths": ["ios/**"],
+        "changelog": "ios/CHANGELOG.md",
+        "stamps": [
+            (
+                "ios/project.yml",
+                r'(MARKETING_VERSION: ")[^"]*(")',
+                r"\g<1>{version}\g<2>",
+            )
+        ],
+    },
     "pwa": {
         "paths": ["pwa/**"],
         "changelog": "pwa/CHANGELOG.md",
