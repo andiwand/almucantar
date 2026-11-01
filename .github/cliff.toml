@@ -1,0 +1,55 @@
+# Calculates the next version and the release notes of a project from the Conventional Commits.
+# scripts/release.py calls it with the tag pattern and the paths of the project, for example
+# --tag-pattern "core-v.*" --include-path "core/**". The configuration of OpenDocument.core,
+# adapted to the monorepo.
+
+[changelog]
+header = ""
+# group_by sorts alphabetically, hence the numbers in an HTML comment that the template removes.
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | upper_first }}\
+{% endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = false
+filter_commits = false
+topo_order = false
+sort_commits = "oldest"
+
+# An npm scope in a subject would notify a GitHub user in the release notes; backticks keep it text.
+commit_preprocessors = [
+    { pattern = '(^|[\s(])@([\w./-]+)', replace = '$1`@$2`' },
+]
+
+# The first match wins, so chore(release) is before chore.
+commit_parsers = [
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "^feat", group = "<!-- 0 -->Features" },
+    { message = "^fix", group = "<!-- 1 -->Fixes" },
+    { message = "^perf", group = "<!-- 2 -->Performance" },
+    { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+    { message = "^docs", group = "<!-- 4 -->Documentation" },
+    { message = "^test", group = "<!-- 5 -->Tests" },
+    { message = "^build", group = "<!-- 6 -->Build" },
+    { message = "^ci", group = "<!-- 7 -->CI" },
+    { message = "^style", group = "<!-- 8 -->Style" },
+    { message = "^revert", group = "<!-- 9 -->Reverts" },
+    { message = "^chore", group = "<!-- 10 -->Chores" },
+]
+
+[bump]
+# Semantic versioning: feat! is a major step, feat a minor step, the rest a patch step.
+features_always_bump_minor = true
+breaking_always_bump_major = true
+# The first version of a project without a tag.
+initial_tag = "0.1.0"

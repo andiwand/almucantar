@@ -521,7 +521,7 @@ contain the same core.
 | M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
 | M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. Open: a test with the real sun. |
 | M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 8 node tests of the package, 3 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). Open: a test on phones (Chrome on Android, Safari on iOS). |
-| M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |
+| M10 | `release.yml`, publishing to PyPI, npm, and Maven Central, Android APK | implemented: `scripts/release.py` and git cliff, the release workflow with a dry run, `publish-core.yml` (npm, wheels for Linux and macOS, sdist, AAR), `android-release.yml`. Open: the accounts and secrets of the registries, Windows wheels. |
 | M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | the same features as the Android app; the instrumented tests of the binding pass in XCTest |
 
 The Python binding comes early (M2), because it is the easiest binding to test. It
@@ -551,7 +551,9 @@ fast way to plot paths and to compare models.
   the monorepo. The Swift API can use Swift C++ interop (Swift 5.9 and later) instead of
   the Objective-C layer of OpenDocument.core; we decide that when M11 starts.
 - The names of the packages: `sunradar` on PyPI and `@sunradar/core` on npm are proposals.
-  Check that the names are free. The Maven group is `at.stefl.sunradar` (decided).
+  Check that the names are free (the npm scope needs an npm organization "sunradar"). The
+  Maven group is `at.stefl.sunradar` (decided); Maven Central needs the verified namespace
+  `at.stefl`.
 - Do we publish the C++ package to a Conan remote? Only if someone outside this
   repository needs it.
 - Do we show the moon as well? Astronomy Engine gives it at no extra cost, and the

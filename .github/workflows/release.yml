@@ -1,0 +1,85 @@
+# Makes a release of one project of the monorepo: it checks the changelog, puts the version into
+# the changelog (and the version files), commits the stamp, and creates a draft release. A human
+# publishes the draft; the published release starts the publish workflows of the project.
+#
+# The version comes from the Conventional Commits (git cliff) unless the input gives one. With
+# dry_run, the workflow shows what it would do and changes nothing.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: The project to release
+        type: choice
+        options: [core, android, pwa]
+        required: true
+      version:
+        description: The version (empty for the version from the commits)
+        type: string
+        required: false
+      dry_run:
+        description: Show the release, change nothing
+        type: boolean
+        default: true
+
+# One release at a time, and never cancelled: it pushes a commit and creates a release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    if: github.ref == 'refs/heads/main'
+    env:
+      PROJECT: ${{ inputs.project }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install git cliff
+        run: pip install git-cliff
+
+      - name: Version
+        id: version
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "${version}" ]; then version="$(python3 scripts/release.py version "${PROJECT}")"; fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${PROJECT}-v${version}" >> "${GITHUB_OUTPUT}"
+          echo "Release ${PROJECT} ${version}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Check the changelog
+        run: python3 scripts/release.py check "${PROJECT}"
+
+      - name: Stamp
+        run: |
+          python3 scripts/release.py stamp "${PROJECT}" "${{ steps.version.outputs.version }}" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Release notes
+        run: |
+          python3 scripts/release.py notes "${PROJECT}" "${{ steps.version.outputs.version }}" > notes.md
+          { echo '```markdown'; cat notes.md; echo '```'; } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Commit the stamp and create the draft release
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
+          git push
+          gh release create "${{ steps.version.outputs.tag }}" --draft \
+            --target "$(git rev-parse HEAD)" \
+            --title "${PROJECT} ${{ steps.version.outputs.version }}" \
+            --notes-file notes.md

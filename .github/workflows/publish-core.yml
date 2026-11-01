@@ -1,0 +1,248 @@
+# Publishes the packages of the core when a core-v* release is published: npm, PyPI, and Maven
+# Central. Each package is also attached to the GitHub release. A registry without credentials
+# is skipped with a notice. By hand (workflow_dispatch), the workflow builds everything and
+# publishes nothing.
+#
+# Credentials:
+# - npm: the secret NPM_TOKEN (an automation token of the npm organization).
+# - PyPI: trusted publishing (configure the publisher "publish-core.yml" on pypi.org) and the
+#   repository variable PYPI_ENABLED = true.
+# - Maven Central: the secrets MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD (a portal token),
+#   SIGNING_KEY, and SIGNING_PASSWORD (an ASCII-armored PGP key).
+name: publish-core
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to build (nothing is published)
+        type: string
+        default: 0.0.0-test
+
+env:
+  CONAN_VERSION: "2.26.1"
+
+jobs:
+  version:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'core-v')
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+            echo "version=${tag#core-v}" >> "${GITHUB_OUTPUT}"
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "version=${{ inputs.version }}" >> "${GITHUB_OUTPUT}"
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+  npm:
+    needs: version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Build
+        working-directory: core
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+          conan install . --build=missing -pr:h conan/profiles/emscripten -pr:b default \
+            -o "&:with_tests=False" -o "&:with_wasm=True"
+          cmake --preset conan-emscripten-wasm-release -DSUNRADAR_NODE="$(which node)"
+          cmake --build --preset conan-emscripten-wasm-release
+          ctest --test-dir build/emscripten-wasm-release --output-on-failure
+
+      - name: Pack
+        working-directory: core/build/emscripten-wasm-release/wasm/dist
+        run: |
+          npm version --no-git-tag-version "${{ needs.version.outputs.version }}"
+          npm pack
+
+      - name: Publish
+        if: needs.version.outputs.publish == 'true'
+        working-directory: core/build/emscripten-wasm-release/wasm/dist
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::notice::NPM_TOKEN is not set; the npm package is not published"
+            exit 0
+          fi
+          npm publish ./*.tgz --provenance --access public
+
+      - name: Attach to the release
+        if: needs.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" core/build/emscripten-wasm-release/wasm/dist/*.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: core/build/emscripten-wasm-release/wasm/dist/*.tgz
+
+  wheels:
+    needs: version
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build the wheels
+        uses: pypa/cibuildwheel@v3.1
+        with:
+          package-dir: core
+          output-dir: dist
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_SKIP: "*-musllinux_* *i686*"
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_ARCHS_MACOS: arm64
+          # The placeholder {project} does not work in the environment: on macOS the project is in
+          # GITHUB_WORKSPACE, in the Linux container it is /project.
+          CIBW_ENVIRONMENT_MACOS: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.version.outputs.version }}
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/core/build/Release/generators/conan_toolchain.cmake"
+          CIBW_ENVIRONMENT_LINUX: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.version.outputs.version }}
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/core/build/Release/generators/conan_toolchain.cmake"
+          CIBW_BEFORE_BUILD: >-
+            pip install "conan==2.26.1" &&
+            conan profile detect --force &&
+            conan install {project}/core --build=missing -s build_type=Release -s compiler.cppstd=20
+            -o "&:with_python=True" -o "&:with_tests=False"
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: pytest {project}/core/python/tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+
+  sdist:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build the sdist
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.version.outputs.version }}
+        run: pipx run build --sdist --outdir dist core
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  pypi:
+    needs: [version, wheels, sdist]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "{wheels-*,sdist}"
+          merge-multiple: true
+          path: dist
+
+      - name: Publish
+        if: vars.PYPI_ENABLED == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Notice
+        if: vars.PYPI_ENABLED != 'true'
+        run: echo "::notice::PYPI_ENABLED is not true; the Python package is not published"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --repo "${{ github.repository }}"
+
+  native:
+    needs: version
+    uses: ./.github/workflows/native-android.yml
+
+  maven:
+    needs: [version, native]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: core/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          merge-multiple: true
+          path: core/android/native/prebuilt/jniLibs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the AAR
+        run: ./gradlew assembleRelease -Psunradar.abis= -Psunradar.version=${{ needs.version.outputs.version }}
+
+      - name: Publish
+        if: needs.version.outputs.publish == 'true'
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -z "${ORG_GRADLE_PROJECT_mavenCentralUsername}" ]; then
+            echo "::notice::MAVEN_CENTRAL_USERNAME is not set; the AAR is not published"
+            exit 0
+          fi
+          ./gradlew publishToMavenCentral -Psunradar.abis= -Psunradar.version=${{ needs.version.outputs.version }}
+
+      - name: Attach to the release
+        if: needs.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/outputs/aar/core-android-release.aar "core-android-${{ needs.version.outputs.version }}.aar"
+          gh release upload "${{ github.event.release.tag_name }}" "core-android-${{ needs.version.outputs.version }}.aar"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aar
+          path: core/android/build/outputs/aar/*.aar

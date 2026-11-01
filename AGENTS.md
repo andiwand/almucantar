@@ -53,3 +53,26 @@ phone can be connected.
 - End commit messages with the `Co-Authored-By` line of the agent. Put the
   `🤖 Generated with [Claude Code](https://claude.com/claude-code)` line at the top of
   a pull request body.
+
+## Releasing
+
+Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages),
+`android-vX.Y.Z`, and `pwa-vX.Y.Z`. The flow is the one of OpenDocument.core.
+
+1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that
+   makes them. An empty `## Unreleased` stops the release.
+2. Run the workflow `release` (Actions → release → Run workflow) with the project. Keep
+   `dry_run` on first: the summary shows the version, the stamp, and the release notes.
+3. Run it again without `dry_run`. It commits `chore(release): <tag> [skip ci]` and creates a
+   draft release.
+4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
+   Maven Central) or `android-release.yml` (the APK). The PWA needs no publish step, because
+   GitHub Pages deploys `main`.
+
+`scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,
+`notes`). git cliff (`.github/cliff.toml`) calculates the version from the Conventional
+Commits: `feat` gives a minor step, `fix` and the rest a patch step, `!` a major step.
+
+A registry without credentials is skipped with a notice, and the files are still attached to
+the release. The credentials are described at the top of each publish workflow.
+

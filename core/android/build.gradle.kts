@@ -1,11 +1,27 @@
 // The AAR at.stefl.sunradar:core-android: the Kotlin API and libsunradar_jni.so.
 
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
+import com.vanniktech.maven.publish.DeploymentValidation
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.spotless)
+    alias(libs.plugins.maven.publish)
 }
 
 group = "at.stefl.sunradar"
+
+// The release gives the version (sunradar.version or SUNRADAR_VERSION, for example 0.2.0 or
+// core-v0.2.0). Other builds are snapshots.
+val sunradarVersion =
+    providers
+        .gradleProperty("sunradar.version")
+        .orElse(providers.environmentVariable("SUNRADAR_VERSION"))
+        .filter { it.isNotEmpty() }
+        .map { it.removePrefix("core-v").removePrefix("v") }
+        .getOrElse("0.0.0-SNAPSHOT")
+
+version = sunradarVersion
 
 // ktfmt in the kotlinlang style. `./gradlew spotlessApply` formats, `spotlessCheck` checks.
 spotless {
@@ -112,4 +128,45 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+mavenPublishing {
+    configure(AndroidSingleVariantLibrary(variant = "release"))
+
+    // Releases the deployment and waits until it is published, so the exit code of the task says
+    // whether the release worked.
+    publishToMavenCentral(true, DeploymentValidation.PUBLISHED)
+
+    // Only Maven Central needs a signature. Without a key, publishToMavenLocal still works.
+    if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+        signAllPublications()
+    }
+
+    coordinates("at.stefl.sunradar", "core-android", sunradarVersion)
+
+    pom {
+        name = "core-android"
+        description =
+            "The sunradar core for Android: sun and moon position, sun path, magnetic declination, " +
+                "camera projection, and a heading filter"
+        url = "https://github.com/andiwand/sunradar"
+        licenses {
+            license {
+                name = "MPL-2.0"
+                url = "https://www.mozilla.org/en-US/MPL/2.0/"
+            }
+        }
+        developers {
+            developer {
+                id = "andiwand"
+                name = "Andreas Stefl"
+                url = "https://github.com/andiwand"
+            }
+        }
+        scm {
+            connection = "scm:git:https://github.com/andiwand/sunradar.git"
+            developerConnection = "scm:git:git@github.com:andiwand/sunradar.git"
+            url = "https://github.com/andiwand/sunradar"
+        }
+    }
 }
