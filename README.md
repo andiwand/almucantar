@@ -1,4 +1,10 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="Sunradar" width="128" height="128">
+</p>
+
 # sunradar
+
+**Website and web app: <https://andiwand.github.io/sunradar/>**
 
 sunradar shows the path of the sun on top of the camera image. You can see when the
 sun is at a given place in the sky, for example when you visit a flat. See
@@ -14,7 +20,9 @@ This repository is a monorepo. Each directory is a self-contained project.
 | `core/python/` | the Python package `sunradar` | in progress |
 | `core/android/` | the Android AAR `at.stefl.sunradar:core-android` | in progress |
 | `android/` | the Android app (Kotlin, Jetpack Compose) | planned (M4) |
-| `pwa/` | the PWA (TypeScript, the core as WebAssembly) | planned (M8) |
+| `core/wasm/` | the npm package `@sunradar/core` (WebAssembly) | in progress |
+| `pwa/` | the PWA (TypeScript, the core as WebAssembly) | in progress |
+| `website/` | the website on GitHub Pages; the PWA is under `/app/` | in progress |
 | `ios/` | the iOS app | planned (M11) |
 
 Agents: read [`AGENTS.md`](AGENTS.md) first.

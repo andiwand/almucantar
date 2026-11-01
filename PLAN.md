@@ -496,8 +496,10 @@ contain the same core.
 
 ## 9. PWA (after Android)
 
-- TypeScript, Vite. Uses `@sunradar/core` (`core/wasm`) as an npm workspace package,
-  in a Web Worker.
+- TypeScript, Vite. Uses `@sunradar/core` (`core/wasm`) from the WASM build output (a
+  `file:` dependency). The core runs on the main thread, because a frame needs less than
+  1 ms; the values are plain objects, so a Web Worker is possible later.
+- GitHub Pages serves the website (`website/`) and the PWA under `/app/`.
 - Camera: `getUserMedia`. Orientation: `AbsoluteOrientationSensor`, with
   `deviceorientation` as a fallback. iOS needs a permission prompt for the sensors.
 - FOV: a slider, or calibration with two sun or moon taps.
@@ -518,7 +520,7 @@ contain the same core.
 | M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone. |
 | M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
 | M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. Open: a test with the real sun. |
-| M9 | `core/wasm` npm package, PWA | the same features, with the documented lower precision |
+| M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 8 node tests of the package, 3 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). Open: a test on phones (Chrome on Android, Safari on iOS). |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central | a release publishes all three packages with the same version |
 | M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | the same features as the Android app; the instrumented tests of the binding pass in XCTest |
 

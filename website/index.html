@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sunradar – see when the sun is where</title>
+    <meta
+      name="description"
+      content="Sunradar shows the path of the sun on your camera image. See when the sun shines through a window, on a balcony, or over a roof – today and on any day of the year."
+    />
+    <meta property="og:title" content="Sunradar" />
+    <meta property="og:description" content="See when the sun is where in the sky." />
+    <meta property="og:image" content="images/browser.jpg" />
+    <link rel="icon" href="images/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <img src="images/logo.svg" alt="" class="logo" width="112" height="112" />
+      <h1>Sunradar</h1>
+      <p class="tagline">See when the sun is where in the sky.</p>
+      <p class="lead">
+        Hold up your phone, and Sunradar draws the path of the sun on the camera image. Point at a
+        window, a balcony, or a gap between two roofs, and it tells you when the sun will be there –
+        today, or on any other day of the year.
+      </p>
+      <div class="actions">
+        <a class="button primary" href="app/">Try it in the browser</a>
+        <a class="button" href="https://github.com/andiwand/sunradar">Source on GitHub</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="shots">
+        <figure>
+          <img src="images/camera.jpg" alt="The path of the sun on the camera image" loading="lazy" />
+          <figcaption>The path of the sun, the hours, and the horizon on the camera image.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/sky.jpg" alt="The sky view with the time for the crosshair" loading="lazy" />
+          <figcaption>Point the crosshair at a direction: the app shows when the sun is there.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/time.jpg" alt="The sky view on another date" loading="lazy" />
+          <figcaption>Move to any date and time. The dashed lines show the summer and the winter path.</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2>Made for the moment you visit a flat</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>When is the sun in this direction?</h3>
+            <p>
+              A vertical line through the crosshair meets the path of the sun. The large time is when the
+              sun is in that direction, with its height above the horizon.
+            </p>
+          </div>
+          <div class="card">
+            <h3>On which days?</h3>
+            <p>
+              Each point of the sky between the winter and the summer path gets the sun on about two days
+              per year. Sunradar lists them for the point in the crosshair.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Any date and time</h3>
+            <p>
+              Slide through the year to see the path in June and in December, with sunrise, sunset, and
+              the hours.
+            </p>
+          </div>
+          <div class="card">
+            <h3>A compass you can trust indoors</h3>
+            <p>
+              Steel in buildings disturbs a phone compass. Sunradar notices it and relies on the
+              gyroscope instead, and you can align the heading with the sun, the moon, or a landmark.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Precise where it matters</h2>
+        <p>
+          The astronomy is the easy part: the position of the sun agrees with NASA's JPL Horizons to
+          better than 0.02° – a few seconds of time. The real limits are the compass of the phone and
+          the camera. So Sunradar uses the lens calibration of the camera, the World Magnetic Model for
+          the magnetic declination, and a filter that combines the gyroscope, the magnetometer, and your
+          alignments. The app shows how accurate the heading is at any moment.
+        </p>
+        <table>
+          <tr><th>Sun position</th><td>≤ 0.015° (NOAA model), ≤ 0.002° (Astronomy Engine)</td></tr>
+          <tr><th>Moon position</th><td>≤ 0.002°</td></tr>
+          <tr><th>Magnetic declination</th><td>WMM2025, exact to the official test values</td></tr>
+          <tr><th>Heading after alignment with the sun</th><td>limited by the tap on the sun (about 0.5°); field tests are in progress</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h2>Everywhere</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Android</h3>
+            <p>The native app with the camera overlay, the heading filter, and sun detection.</p>
+          </div>
+          <div class="card">
+            <h3>Browser</h3>
+            <p>
+              The <a href="app/">web app</a> works offline after the first visit. On a computer, drag to
+              look around.
+            </p>
+          </div>
+          <div class="card">
+            <h3>iOS</h3>
+            <p>Planned.</p>
+          </div>
+          <div class="card">
+            <h3>For developers</h3>
+            <p>
+              The core is a small C++ library with packages for Python, npm (WebAssembly), and Android. It
+              is open source under the MPL-2.0.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Sunradar is open source (<a href="https://github.com/andiwand/sunradar">GitHub</a>, MPL-2.0). It
+        uses <a href="https://github.com/cosinekitty/astronomy">Astronomy Engine</a> (MIT), the
+        <a href="https://www.ncei.noaa.gov/products/world-magnetic-model">World Magnetic Model</a> (NOAA),
+        the time zone database of IANA, and maps from
+        <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
+      </p>
+    </footer>
+  </body>
+</html>
