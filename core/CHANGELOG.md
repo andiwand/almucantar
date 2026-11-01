@@ -70,3 +70,7 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   and `x86_64`, with the same functions and types. An invalid argument throws
   `IllegalArgumentException`. `DirectionLine` and `Polylines` let an app project a path in
   each frame without conversions. An invalid argument raises `ValueError`.
+- The Swift package `Sunradar` for iOS 16 and macOS 13 (`Package.swift` at the root of the
+  repository). It has the same API as the other bindings. Below it is the C API
+  `sunradar_c.h` in the binary target `SunradarC.xcframework`. A release of the core
+  attaches the xcframework and tags `X.Y.Z` for SwiftPM.

@@ -14,6 +14,7 @@ option(SUNRADAR_TESTS "Build the C++ tests" ON)
 option(SUNRADAR_PYTHON "Build the Python binding" OFF)
 option(SUNRADAR_JNI "Build the JNI binding for the Android AAR" OFF)
 option(SUNRADAR_WASM "Build the WebAssembly binding for the npm package" OFF)
+option(SUNRADAR_APPLE "Build the C API for the Swift package" OFF)
 option(SUNRADAR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(SUNRADAR_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -94,6 +95,10 @@ endif()
 
 if(SUNRADAR_WASM)
   add_subdirectory(wasm)
+endif()
+
+if(SUNRADAR_APPLE)
+  add_subdirectory(apple)
 endif()
 
 # Install the public headers only. The internal headers stay in the source tree.

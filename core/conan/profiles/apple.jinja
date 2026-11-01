@@ -1,0 +1,21 @@
+{# Shared body of the apple-* profiles. The including profile sets `os`, `arch`, and for iOS
+   `sdk`. `os_version` is the minimum OS of the slice; it must be the same as `platforms:` in
+   Package.swift. #}
+{% set os_version = {"iOS": "16.0", "Macos": "13.0"}[os] %}
+
+[settings]
+os={{os}}
+os.version={{os_version}}
+{% if sdk %}os.sdk={{sdk}}
+{% endif %}arch={{arch}}
+build_type=Release
+compiler=apple-clang
+compiler.version=17
+compiler.cppstd=20
+compiler.libcxx=libc++
+
+[conf]
+tools.build:compiler_executables={'c': 'clang', 'cpp': 'clang++'}
+# The build folder and the preset get the OS and the arch in the name, so the slices do not
+# collide with each other or with the host build.
+tools.cmake.cmake_layout:build_folder_vars=['settings.os', 'settings.os.sdk', 'settings.arch', 'settings.build_type']

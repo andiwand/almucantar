@@ -1,5 +1,5 @@
-# Publishes the packages of the core when a core-v* release is published: npm, PyPI, and Maven
-# Central. Each package is also attached to the GitHub release. A registry without credentials
+# Publishes the packages of the core when a core-v* release is published: npm, PyPI, Maven
+# Central, and the Swift package. Each package is also attached to the GitHub release. A registry without credentials
 # is skipped with a notice. By hand (workflow_dispatch), the workflow builds everything and
 # publishes nothing.
 #
@@ -9,6 +9,9 @@
 #   repository variable PYPI_ENABLED = true.
 # - Maven Central: the secrets MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD (a portal token),
 #   SIGNING_KEY, and SIGNING_PASSWORD (an ASCII-armored PGP key).
+# - Swift: no credentials. The job attaches SunradarC.xcframework.zip to the release. Then it
+#   tags X.Y.Z (the tag form that SwiftPM accepts) on a commit on top of the release, which puts
+#   the URL and the checksum of the zip into Package.swift. Main keeps the placeholder.
 name: publish-core
 
 on:
@@ -247,3 +250,48 @@ jobs:
         with:
           name: aar
           path: core/android/build/outputs/aar/*.aar
+
+  swift:
+    needs: version
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+          python3 core/apple/build_xcframework.py --zip
+          swift test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-xcframework
+          path: core/apple/build/SunradarC.xcframework.zip*
+
+      - name: Attach to the release and tag the Swift package
+        if: needs.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "${TAG}" core/apple/build/SunradarC.xcframework.zip
+          checksum="$(cat core/apple/build/SunradarC.xcframework.zip.sha256)"
+          sed -i '' \
+            -e "s|releases/download/UNRELEASED/|releases/download/${TAG}/|" \
+            -e "s|checksum: \"0\{64\}\"|checksum: \"${checksum}\"|" \
+            Package.swift
+          grep -q "${checksum}" Package.swift
+          rm -rf core/apple/build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(core): release the Swift package ${VERSION}"
+          git tag "${VERSION}"
+          git push origin "refs/tags/${VERSION}"

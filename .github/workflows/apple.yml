@@ -1,0 +1,48 @@
+# The Apple part: the xcframework of the C API, the tests of the Swift package, and a build of the
+# iOS app for the simulator (without signing).
+name: apple
+
+on:
+  push:
+    branches: [main]
+    paths: ["core/**", "ios/**", "Package.swift", ".github/workflows/apple.yml"]
+  pull_request:
+    paths: ["core/**", "ios/**", "Package.swift", ".github/workflows/apple.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONAN_VERSION: "2.26.1"
+
+jobs:
+  swift:
+    name: xcframework, swift test, iOS app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Conan and XcodeGen
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+          brew install xcodegen
+
+      - name: Build the xcframework
+        run: python3 core/apple/build_xcframework.py
+
+      - name: Test the Swift package
+        run: swift test
+
+      - name: Build the iOS app
+        working-directory: ios
+        run: |
+          xcodegen generate
+          xcodebuild -project Sunradar.xcodeproj -scheme SunradarApp \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO build

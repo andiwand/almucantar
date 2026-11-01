@@ -19,6 +19,7 @@ class SunradarConan(ConanFile):
         "with_python": [True, False],
         "with_jni": [True, False],
         "with_wasm": [True, False],
+        "with_apple": [True, False],
     }
     default_options = {
         "shared": False,
@@ -26,12 +27,14 @@ class SunradarConan(ConanFile):
         "with_python": False,
         "with_jni": False,
         "with_wasm": False,
+        "with_apple": False,
     }
 
     exports_sources = [
         "LICENSE",
         "android/jni/*",
         "wasm/*",
+        "apple/*",
         "cmake/*",
         "python/*",
         "src/*",
@@ -56,6 +59,7 @@ class SunradarConan(ConanFile):
         tc.cache_variables["SUNRADAR_PYTHON"] = bool(self.options.with_python)
         tc.cache_variables["SUNRADAR_JNI"] = bool(self.options.with_jni)
         tc.cache_variables["SUNRADAR_WASM"] = bool(self.options.with_wasm)
+        tc.cache_variables["SUNRADAR_APPLE"] = bool(self.options.with_apple)
         tc.generate()
         CMakeDeps(self).generate()
 

@@ -1,6 +1,12 @@
 # C++ core
 /core/build/
 /core/CMakeUserPresets.json
+/core/apple/build/
+
+# Swift
+/.build/
+/.swiftpm/
+/Package.resolved
 
 # Android
 /android/.gradle/
