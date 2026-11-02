@@ -11,6 +11,8 @@ import type {
   Quaternion,
   View,
 } from "@sunradar/core";
+import { litOutline, towardSun } from "./moon";
+import type { MoonAt } from "./moon";
 import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
 
 const sunradar = await load();
@@ -196,10 +198,43 @@ function uprightLabel(view: View, direction: Horizontal, text: string, gap: numb
   ctx.restore();
 }
 
+/**
+ * Draws the moon at (x, y) with the lit part toward the sun. The direction of the sun on the
+ * screen comes from a point 1° from the moon toward the sun, see `towardSun`.
+ */
+function drawMoon(view: View, moon: MoonAt, sun: Horizontal, x: number, y: number, r: number) {
+  let ux = 0;
+  let uy = -1;
+  const q = sunradar.project(view, towardSun(moon.direction, sun));
+  if (q.valid) {
+    const length = Math.hypot(q.point.x - x, q.point.y - y);
+    if (length > 1e-3) {
+      ux = (q.point.x - x) / length;
+      uy = (q.point.y - y) / length;
+    }
+  }
+  ctx.fillStyle = "rgba(224, 230, 240, 0.22)";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.fillStyle = "#e0e6f0";
+  ctx.beginPath();
+  litOutline(moon.fraction).forEach(([px, py], i) => {
+    // The y axis of the outline is perpendicular to the direction of the sun.
+    const sx = x + (ux * px - uy * py) * r;
+    const sy = y + (uy * px + ux * py) * r;
+    if (i === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fill();
+}
+
 function draw(
   view: View,
   d: Day,
   sun: Horizontal,
+  moon: MoonAt | null,
   center: Horizontal,
   crossing: AzimuthCrossing | null,
 ) {
@@ -259,6 +294,16 @@ function draw(
       ctx.strokeStyle = "#7fd8ff";
       ctx.lineWidth = 2.5;
       ctx.stroke();
+    }
+  }
+
+  // The moon with its phase. The faint disc shows the dark part.
+  if (moon) {
+    const m = sunradar.project(view, moon.direction);
+    if (m.valid) {
+      drawMoon(view, moon, sun, m.point.x, m.point.y, 11);
+      ctx.fillStyle = "white";
+      uprightLabel(view, moon.direction, "moon", 16);
     }
   }
 
@@ -338,7 +383,12 @@ function frame() {
     : null;
   scheduleDates(usable ? center : null);
 
-  draw(view, d, sun, center, crossing);
+  const moonFraction = sunradar.moonIlluminatedFraction(time);
+  const moon: MoonAt | null =
+    moonFraction >= 0.02
+      ? { direction: sunradar.moonPosition(time, observer), fraction: moonFraction }
+      : null;
+  draw(view, d, sun, moon, center, crossing);
 
   const sigma = Math.sqrt(heading.varianceDeg2);
   const headingText = !sensorsActive

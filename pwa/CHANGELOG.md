@@ -5,6 +5,7 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The sky view shows the moon with its phase. The lit part faces the sun.
 - The offline cache includes the scripts and WebAssembly on the first visit. A new version
   activates only when no page of the old version is open, so an open page keeps its cached
   assets. Cache cleanup removes the cache of earlier versions and preserves other apps on the
