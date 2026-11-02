@@ -431,7 +431,9 @@ function frame(ms: number) {
   shown.window += (target.window - shown.window) * k;
   shown.dim += (target.dim - shown.dim) * k;
 
-  const time = shown.day + shown.hours * 3600;
+  // The nearest whole day. A day between two days would add part of a day to the time of the
+  // day, and the sun would flash up during a change of the date.
+  const time = startOfDay(shown.day + DAY / 2) + shown.hours * 3600;
   const day = dayAt(time);
   const sun = sunradar.sunPosition(time, observer);
   // In the south, or in the north on the southern hemisphere. A narrow screen follows the sun.
