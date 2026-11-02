@@ -11,6 +11,7 @@ add_executable(sunradar_test
   src/test_path.cpp
   src/test_search.cpp
   src/test_sun.cpp
+  src/test_terrain.cpp
   src/test_version.cpp
   src/test_view.cpp
   src/internal/test_noaa_model.cpp

@@ -616,6 +616,10 @@ terrain around the place. It changes the visible sunrise and sunset by many minu
 - **Open:** the height of the observer (GPS altitude is bad; the DEM height plus the eye
   height is better), near objects (buildings and trees are not in the DEM), and the size of
   the download.
+- **Status:** the core part is done (`terrain.hpp`, in C++ and Python). `horizon_profile()`
+  takes a grid in latitude and longitude, rows from north to south. A grid of 2400 × 3600
+  samples (about 90 m) and a step of 0.25° takes about 70 ms on a laptop. Next: the Android,
+  WASM, and Apple bindings, then the download of the DEM in the apps.
 
 ### 13.2 Virtual place: find photo spots
 

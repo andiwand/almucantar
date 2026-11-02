@@ -5,6 +5,8 @@
 #include <pybind11/stl.h>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "sunradar/sunradar.hpp"
 
@@ -446,6 +448,109 @@ void bind_sun(py::module_& m) {
         "Returns the path of the sun at the times start_utc + k * step_s up to end_utc.");
 }
 
+void bind_terrain(py::module_& m) {
+  using namespace sunradar;
+  py::class_<ElevationGrid>(
+      m, "ElevationGrid",
+      "A DEM as a grid of heights. Row 0 is in the north, column 0 in the west.")
+      .def(py::init([](const double north_latitude_deg, const double west_longitude_deg,
+                       const double latitude_step_deg, const double longitude_step_deg,
+                       const int rows, const int columns, std::vector<float> heights_m) {
+             return ElevationGrid{.north_latitude_deg = north_latitude_deg,
+                                  .west_longitude_deg = west_longitude_deg,
+                                  .latitude_step_deg = latitude_step_deg,
+                                  .longitude_step_deg = longitude_step_deg,
+                                  .rows = rows,
+                                  .columns = columns,
+                                  .heights_m = std::move(heights_m)};
+           }),
+           "north_latitude_deg"_a, "west_longitude_deg"_a, "latitude_step_deg"_a,
+           "longitude_step_deg"_a, "rows"_a, "columns"_a, "heights_m"_a)
+      .def_readwrite("north_latitude_deg", &ElevationGrid::north_latitude_deg)
+      .def_readwrite("west_longitude_deg", &ElevationGrid::west_longitude_deg)
+      .def_readwrite("latitude_step_deg", &ElevationGrid::latitude_step_deg)
+      .def_readwrite("longitude_step_deg", &ElevationGrid::longitude_step_deg)
+      .def_readwrite("rows", &ElevationGrid::rows)
+      .def_readwrite("columns", &ElevationGrid::columns)
+      .def_readwrite("heights_m", &ElevationGrid::heights_m,
+                     "row by row, in meters; NaN is a sample without data");
+
+  const HorizonOptions horizon;
+  py::class_<HorizonOptions>(m, "HorizonOptions")
+      .def(py::init([](const double azimuth_step_deg, const double max_distance_m,
+                       const double eye_height_m, const bool use_grid_elevation,
+                       const double observer_elevation_m, const double refraction_coefficient) {
+             return HorizonOptions{.azimuth_step_deg = azimuth_step_deg,
+                                   .max_distance_m = max_distance_m,
+                                   .eye_height_m = eye_height_m,
+                                   .use_grid_elevation = use_grid_elevation,
+                                   .observer_elevation_m = observer_elevation_m,
+                                   .refraction_coefficient = refraction_coefficient};
+           }),
+           "azimuth_step_deg"_a = horizon.azimuth_step_deg,
+           "max_distance_m"_a = horizon.max_distance_m, "eye_height_m"_a = horizon.eye_height_m,
+           "use_grid_elevation"_a = horizon.use_grid_elevation,
+           "observer_elevation_m"_a = horizon.observer_elevation_m,
+           "refraction_coefficient"_a = horizon.refraction_coefficient)
+      .def_readwrite("azimuth_step_deg", &HorizonOptions::azimuth_step_deg)
+      .def_readwrite("max_distance_m", &HorizonOptions::max_distance_m)
+      .def_readwrite("eye_height_m", &HorizonOptions::eye_height_m)
+      .def_readwrite("use_grid_elevation", &HorizonOptions::use_grid_elevation)
+      .def_readwrite("observer_elevation_m", &HorizonOptions::observer_elevation_m)
+      .def_readwrite("refraction_coefficient", &HorizonOptions::refraction_coefficient);
+
+  py::class_<HorizonProfile>(m, "HorizonProfile",
+                             "The altitude of the terrain horizon for each azimuth.")
+      .def(py::init([](const double azimuth_step_deg, std::vector<double> altitude_deg,
+                       std::vector<double> distance_m, const double observer_elevation_m) {
+             return HorizonProfile{.azimuth_step_deg = azimuth_step_deg,
+                                   .altitude_deg = std::move(altitude_deg),
+                                   .distance_m = std::move(distance_m),
+                                   .observer_elevation_m = observer_elevation_m};
+           }),
+           "azimuth_step_deg"_a, "altitude_deg"_a, "distance_m"_a,
+           "observer_elevation_m"_a = HorizonProfile{}.observer_elevation_m)
+      .def_readwrite("azimuth_step_deg", &HorizonProfile::azimuth_step_deg)
+      .def_readwrite("altitude_deg", &HorizonProfile::altitude_deg, "NaN without data")
+      .def_readwrite("distance_m", &HorizonProfile::distance_m, "NaN without data")
+      .def_readwrite("observer_elevation_m", &HorizonProfile::observer_elevation_m);
+
+  m.def("horizon_profile", &horizon_profile, "observer"_a, "grid"_a, "options"_a = HorizonOptions{},
+        "Calculates the terrain horizon of the observer.");
+  m.def("terrain_altitude_deg", &terrain_altitude_deg, "profile"_a, "azimuth_deg"_a,
+        "Returns the altitude of the terrain horizon at an azimuth (linear interpolation).");
+
+  const TerrainEventOptions events;
+  py::class_<TerrainEventOptions>(m, "TerrainEventOptions")
+      .def(
+          py::init([](const SolarModel model, const bool refraction, const Atmosphere& atmosphere,
+                      const double limb_deg, const double search_step_s, const double tolerance_s) {
+            return TerrainEventOptions{.model = model,
+                                       .refraction = refraction,
+                                       .atmosphere = atmosphere,
+                                       .limb_deg = limb_deg,
+                                       .search_step_s = search_step_s,
+                                       .tolerance_s = tolerance_s};
+          }),
+          "model"_a = events.model, "refraction"_a = events.refraction,
+          "atmosphere"_a = events.atmosphere, "limb_deg"_a = events.limb_deg,
+          "search_step_s"_a = events.search_step_s, "tolerance_s"_a = events.tolerance_s)
+      .def_readwrite("model", &TerrainEventOptions::model)
+      .def_readwrite("refraction", &TerrainEventOptions::refraction)
+      .def_readwrite("atmosphere", &TerrainEventOptions::atmosphere)
+      .def_readwrite("limb_deg", &TerrainEventOptions::limb_deg)
+      .def_readwrite("search_step_s", &TerrainEventOptions::search_step_s)
+      .def_readwrite("tolerance_s", &TerrainEventOptions::tolerance_s);
+
+  py::class_<TerrainEvents>(m, "TerrainEvents",
+                            "The times when the sun appears or goes away behind the terrain.")
+      .def_readonly("kind", &TerrainEvents::kind)
+      .def_readonly("crossings", &TerrainEvents::crossings, "rising is an appearance");
+  m.def("terrain_events", &terrain_events, "observer"_a, "profile"_a, "start_utc"_a, "end_utc"_a,
+        "options"_a = TerrainEventOptions{},
+        "Finds the times when the sun crosses the terrain horizon.");
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -456,6 +561,7 @@ PYBIND11_MODULE(_core, m) {
   bind_search(m);
   bind_heading(m);
   bind_moon(m);
+  bind_terrain(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");
