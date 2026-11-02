@@ -678,6 +678,14 @@ Design points:
 This is also the base of 13.2: a virtual place is the same as a dropped place, without the
 camera.
 
+**Decided:** the offline map is Natural Earth 1:10m (public domain), in the app as
+`assets/basemap/basemap.json` (4.3 MB, 1.7 MB with gzip; `scripts/basemap/build_basemap.py`): the
+coastlines, the borders, the larger lakes and rivers, and 7342 places with their IANA time
+zones. A dropped place gets the time zone of the nearest place that has one.
+
+**Status:** the PWA is done: the Place panel (search and tap on the map), the last place in
+`localStorage`, and the times in the time zone of the place. Android and iOS: open.
+
 ### 13.4 Planets
 
 Astronomy Engine (already in the core) gives the planets. Show the bright planets (Venus,
