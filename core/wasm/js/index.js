@@ -7,6 +7,9 @@ import createSunradarModule from "./sunradar.mjs";
 /** The model that calculates the position of the sun. */
 export const SolarModel = Object.freeze({ noaa: 0, astronomyEngine: 1 });
 
+/** The body of terrainEvents(). */
+export const Body = Object.freeze({ sun: 0, moon: 1 });
+
 /** The result kind of sunEvents(). */
 export const DayKind = Object.freeze({ normal: 0, polarDay: 1, polarNight: 2 });
 

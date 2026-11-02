@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const dist = process.env.SUNRADAR_WASM_DIST;
 assert.ok(dist, "SUNRADAR_WASM_DIST is not set");
-const { load, SolarModel, DayKind } = await import(pathToFileURL(path.join(dist, "index.js")).href);
+const { load, SolarModel, DayKind, Body } = await import(pathToFileURL(path.join(dist, "index.js")).href);
 const sunradar = await load();
 
 const vienna = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 };
@@ -185,4 +185,13 @@ test("terrain: Web Mercator tiles and Terrarium pixels", () => {
   const grid = sunradar.terrariumGrid(rgba, 2, 2, tiles[0]);
   assert.deepEqual(Array.from(grid.heightsM), [500, 500, 500, 500]);
   assert.throws(() => sunradar.mapTiles(vienna, 1000, 13), RangeError);
+});
+
+test("terrain: the moon behind the terrain", () => {
+  const flat = { azimuthStepDeg: 10, altitudeDeg: new Array(36).fill(0), distanceM: new Array(36).fill(1000), observerElevationM: 0 };
+  const events = sunradar.terrainEvents(vienna, flat, dayStart, dayStart + 3 * day, { body: Body.moon });
+  assert.ok(events.crossings.length >= 5 && events.crossings.length <= 7);
+  const rise = events.crossings.find((c) => c.rising);
+  assert.ok(sunradar.moonPosition(rise.unixUtc + 2, vienna).altitudeDeg + 0.2667 > 0);
+  assert.throws(() => sunradar.terrainEvents(vienna, flat, dayStart, dayStart + day, { body: 9 }), RangeError);
 });

@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "sunradar/moon.hpp"
 #include "sunradar/sun.hpp"
 #include "sunradar/terrain.hpp"
 
@@ -383,4 +384,49 @@ TEST_CASE("terrarium_grid converts a tile to equal steps of latitude", "[terrain
   }
   REQUIRE_THROWS_AS(terrarium_grid(rgba, size, size - 1, tile), std::invalid_argument);
   REQUIRE_THROWS_AS(terrarium_grid(rgba, size, size, {.zoom = 1, .x = 2}), std::invalid_argument);
+}
+
+TEST_CASE("terrain_events finds the moon behind the terrain", "[terrain]") {
+  const Observer vienna{.latitude_deg = 48.21, .longitude_deg = 16.37};
+  const double start = kSolsticeUtc;
+  const double end = start + (3 * 86400);
+  const TerrainEventOptions moon{.body = Body::moon};
+  const TerrainEvents flat = terrain_events(vienna, constant_profile(0), start, end, moon);
+  REQUIRE(flat.kind == DayKind::normal);
+  // Three days have about three moonrises and three moonsets.
+  REQUIRE(flat.crossings.size() >= 5);
+  REQUIRE(flat.crossings.size() <= 7);
+  for (std::size_t i = 0; i < flat.crossings.size(); ++i) {
+    const Crossing& crossing = flat.crossings[i];
+    if (i > 0) {
+      REQUIRE(crossing.rising != flat.crossings[i - 1].rising);
+    }
+    // The upper limb of the moon is on the horizon within the tolerance of 0.5 s.
+    const auto clearance = [&](const double t) {
+      return moon_position(t, vienna).altitude_deg + 0.2667;
+    };
+    INFO("crossing " << i);
+    REQUIRE((clearance(crossing.unix_utc - 1) > 0) != crossing.rising);
+    REQUIRE((clearance(crossing.unix_utc + 1) > 0) == crossing.rising);
+  }
+
+  // A terrain of 10° makes each moonrise later and each moonset earlier.
+  const TerrainEvents high = terrain_events(vienna, constant_profile(10), start, end, moon);
+  const auto first = [](const TerrainEvents& e, const bool rising) {
+    for (const Crossing& c : e.crossings) {
+      if (c.rising == rising) {
+        return c.unix_utc;
+      }
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+  };
+  REQUIRE(first(high, true) > first(flat, true));
+  REQUIRE(first(high, true) - first(flat, true) < 7200);
+
+  // The sun is the default, so the moon gives other times.
+  REQUIRE(first(terrain_events(vienna, constant_profile(0), start, end), true) !=
+          first(flat, true));
+  REQUIRE_THROWS_AS(terrain_events(vienna, constant_profile(0), start, end,
+                                   {.body = static_cast<Body>(7)}),
+                    std::invalid_argument);
 }

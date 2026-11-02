@@ -89,3 +89,15 @@ def test_map_tiles_and_terrarium():
     # 2 x 2 pixels at 500 m: 129 * 256 + 244 - 32768 = 500.
     grid = sunradar.terrarium_grid(bytes([129, 244, 0, 255] * 4), 2, 2, tiles[0])
     assert grid.heights_m == [500.0] * 4
+
+
+def test_terrain_events_of_the_moon():
+    flat = sunradar.HorizonProfile(
+        azimuth_step_deg=1, altitude_deg=[0.0] * 360, distance_m=[1000.0] * 360
+    )
+    moon = sunradar.TerrainEventOptions(body=sunradar.Body.moon)
+    events = sunradar.terrain_events(VIENNA, flat, SOLSTICE, SOLSTICE + 3 * 86400, moon)
+    assert 5 <= len(events.crossings) <= 7
+    rise = next(c for c in events.crossings if c.rising)
+    seen = sunradar.moon_position(rise.unix_utc + 2, VIENNA)
+    assert seen.altitude_deg + 0.2667 > 0

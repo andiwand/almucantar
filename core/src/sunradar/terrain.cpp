@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "sunradar/internal/astronomy_engine.hpp"
 #include "sunradar/internal/geotiff.hpp"
 #include "sunradar/internal/math.hpp"
 #include "sunradar/internal/numeric.hpp"
@@ -211,12 +212,13 @@ RayResult trace_ray(const std::vector<ElevationGrid>& tiles, const Observer& obs
 double clearance_deg(const internal::SolarModelImpl& model, const Observer& observer,
                      const HorizonProfile& profile, const TerrainEventOptions& options,
                      const double unix_utc) {
-  Horizontal sun = model.sun(unix_utc, observer);
+  Horizontal body = options.body == Body::moon ? internal::moon_airless(unix_utc, observer)
+                                               : model.sun(unix_utc, observer);
   if (options.refraction) {
-    sun = internal::refracted(sun, options.atmosphere);
+    body = internal::refracted(body, options.atmosphere);
   }
-  const double terrain = terrain_altitude_deg(profile, sun.azimuth_deg);
-  return sun.altitude_deg + options.limb_deg - (std::isnan(terrain) ? 0.0 : terrain);
+  const double terrain = terrain_altitude_deg(profile, body.azimuth_deg);
+  return body.altitude_deg + options.limb_deg - (std::isnan(terrain) ? 0.0 : terrain);
 }
 
 }  // namespace
@@ -422,6 +424,7 @@ TerrainEvents terrain_events(const Observer& observer, const HorizonProfile& pro
   require_positive(profile.azimuth_step_deg, "azimuth_step_deg");
   require(azimuth_count(profile.azimuth_step_deg) == profile.altitude_deg.size(),
           "the profile does not have 360 / azimuth_step_deg values");
+  require(options.body == Body::sun || options.body == Body::moon, "body is not a Body");
   require_finite(options.limb_deg, "limb_deg");
   require_positive(options.search_step_s, "search_step_s");
   require_positive(options.tolerance_s, "tolerance_s");

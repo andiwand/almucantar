@@ -571,21 +571,28 @@ void bind_terrain(py::module_& m) {
   m.def("terrain_altitude_deg", &terrain_altitude_deg, "profile"_a, "azimuth_deg"_a,
         "Returns the altitude of the terrain horizon at an azimuth (linear interpolation).");
 
+  py::enum_<Body>(m, "Body", "A body that can rise and set behind the terrain.")
+      .value("sun", Body::sun)
+      .value("moon", Body::moon);
+
   const TerrainEventOptions events;
   py::class_<TerrainEventOptions>(m, "TerrainEventOptions")
       .def(
-          py::init([](const SolarModel model, const bool refraction, const Atmosphere& atmosphere,
-                      const double limb_deg, const double search_step_s, const double tolerance_s) {
-            return TerrainEventOptions{.model = model,
+          py::init([](const Body body, const SolarModel model, const bool refraction,
+                      const Atmosphere& atmosphere, const double limb_deg,
+                      const double search_step_s, const double tolerance_s) {
+            return TerrainEventOptions{.body = body,
+                                       .model = model,
                                        .refraction = refraction,
                                        .atmosphere = atmosphere,
                                        .limb_deg = limb_deg,
                                        .search_step_s = search_step_s,
                                        .tolerance_s = tolerance_s};
           }),
-          "model"_a = events.model, "refraction"_a = events.refraction,
+          "body"_a = events.body, "model"_a = events.model, "refraction"_a = events.refraction,
           "atmosphere"_a = events.atmosphere, "limb_deg"_a = events.limb_deg,
           "search_step_s"_a = events.search_step_s, "tolerance_s"_a = events.tolerance_s)
+      .def_readwrite("body", &TerrainEventOptions::body)
       .def_readwrite("model", &TerrainEventOptions::model)
       .def_readwrite("refraction", &TerrainEventOptions::refraction)
       .def_readwrite("atmosphere", &TerrainEventOptions::atmosphere)
@@ -594,7 +601,7 @@ void bind_terrain(py::module_& m) {
       .def_readwrite("tolerance_s", &TerrainEventOptions::tolerance_s);
 
   py::class_<TerrainEvents>(m, "TerrainEvents",
-                            "The times when the sun appears or goes away behind the terrain.")
+                            "The times when the body appears or goes away behind the terrain.")
       .def_readonly("kind", &TerrainEvents::kind)
       .def_readonly("crossings", &TerrainEvents::crossings, "rising is an appearance");
   m.def("terrain_events", &terrain_events, "observer"_a, "profile"_a, "start_utc"_a, "end_utc"_a,

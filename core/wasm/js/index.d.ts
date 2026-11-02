@@ -9,6 +9,7 @@ export interface Vector3 { x: number; y: number; z: number }
 export interface ScreenPoint { x: number; y: number }
 
 export declare const SolarModel: { readonly noaa: 0; readonly astronomyEngine: 1 };
+export declare const Body: { readonly sun: 0; readonly moon: 1 };
 export declare const DayKind: { readonly normal: 0; readonly polarDay: 1; readonly polarNight: 2 };
 export declare const ScreenRotation: {
   readonly rotation0: 0; readonly rotation90: 1; readonly rotation180: 2; readonly rotation270: 3;
@@ -48,6 +49,8 @@ export interface HorizonProfile {
   observerElevationM: number;
 }
 export interface TerrainEventOptions {
+  /** Body.sun (the default) or Body.moon. */
+  body: number;
   model: number; refraction: boolean; atmosphere: Atmosphere; limbDeg: number; searchStepS: number;
   toleranceS: number;
 }

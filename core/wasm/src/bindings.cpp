@@ -117,6 +117,7 @@ struct ViewJs {
 };
 
 struct TerrainEventOptionsJs {
+  int body = static_cast<int>(TerrainEventOptions{}.body);
   int model = to_int(TerrainEventOptions{}.model);
   bool refraction = TerrainEventOptions{}.refraction;
   Atmosphere atmosphere = TerrainEventOptions{}.atmosphere;
@@ -124,7 +125,8 @@ struct TerrainEventOptionsJs {
   double searchStepS = TerrainEventOptions{}.search_step_s;
   double toleranceS = TerrainEventOptions{}.tolerance_s;
   [[nodiscard]] TerrainEventOptions get() const {
-    return {.model = to_enum<SolarModel>(model, "model"),
+    return {.body = to_enum<Body>(body, "body"),
+            .model = to_enum<SolarModel>(model, "model"),
             .refraction = refraction,
             .atmosphere = atmosphere,
             .limb_deg = limbDeg,
@@ -545,6 +547,7 @@ EMSCRIPTEN_BINDINGS(sunradar) {
       .field("observerElevationM", &HorizonOptions::observer_elevation_m)
       .field("refractionCoefficient", &HorizonOptions::refraction_coefficient);
   value_object<TerrainEventOptionsJs>("TerrainEventOptions")
+      .field("body", &TerrainEventOptionsJs::body)
       .field("model", &TerrainEventOptionsJs::model)
       .field("refraction", &TerrainEventOptionsJs::refraction)
       .field("atmosphere", &TerrainEventOptionsJs::atmosphere)

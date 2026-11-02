@@ -116,30 +116,39 @@ struct MapTile {
 /// `std::invalid_argument` if the profile is empty or the azimuth is not finite.
 [[nodiscard]] double terrain_altitude_deg(const HorizonProfile& profile, double azimuth_deg);
 
+/// A body that can rise and set behind the terrain.
+enum class Body : std::uint8_t {
+  sun,
+  moon,
+};
+
 struct TerrainEventOptions {
-  SolarModel model = SolarModel::noaa;
-  bool refraction = true;  ///< add the refraction to the position of the sun
-  Atmosphere atmosphere;   ///< used only if `refraction` is true
-  /// The sun is visible if its center plus this angle is above the terrain. The default is the
-  /// semi-diameter of the sun, so the first light of the upper limb counts. Use 0 for the center.
+  Body body = Body::sun;
+  SolarModel model = SolarModel::noaa;  ///< used only for the sun
+  bool refraction = true;               ///< add the refraction to the position of the body
+  Atmosphere atmosphere;                ///< used only if `refraction` is true
+  /// The body is visible if its center plus this angle is above the terrain. The default is the
+  /// semi-diameter of the sun, so the first light of the upper limb counts. The semi-diameter of
+  /// the moon is 0.25° to 0.28°, so the default is also good for the moon. Use 0 for the center.
   double limb_deg = 0.2667;
-  /// The interval of the first search. A terrain feature that hides the sun for less than this
+  /// The interval of the first search. A terrain feature that hides the body for less than this
   /// interval can be missed.
   double search_step_s = 60;
   double tolerance_s = 0.5;  ///< the time accuracy of the results
 };
 
-/// The times when the sun appears or goes away behind the terrain.
+/// The times when the body appears or goes away behind the terrain.
 struct TerrainEvents {
-  /// normal: the sun crosses the terrain at least once. polar_day: the sun stays above the
-  /// terrain. polar_night: the sun stays behind the terrain or below the horizon.
+  /// normal: the body crosses the terrain at least once. polar_day: the body stays above the
+  /// terrain. polar_night: the body stays behind the terrain or below the horizon.
   DayKind kind = DayKind::normal;
   std::vector<Crossing> crossings;  ///< all crossings, in time order; `rising` is an appearance
 };
 
-/// Finds the times between `start_utc` and `end_utc` when the sun crosses the terrain horizon
-/// `profile`: the visible sunrise and sunset, and the times when a peak hides the sun during the
-/// day. An azimuth without data uses the altitude 0. Throws `std::invalid_argument` if
+/// Finds the times between `start_utc` and `end_utc` when the body of `options` (the sun or the
+/// moon) crosses the terrain horizon `profile`: the visible rise and set, and the times when a peak
+/// hides the body. For example, the moon rises behind a mountain at the first crossing with
+/// `rising` true. An azimuth without data uses the altitude 0. Throws `std::invalid_argument` if
 /// `end_utc <= start_utc`, if the interval has more than 1,000,000 search steps, or if an
 /// argument is not valid.
 [[nodiscard]] TerrainEvents terrain_events(const Observer& observer, const HorizonProfile& profile,
