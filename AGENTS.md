@@ -15,7 +15,7 @@ the sun is at a given place in the sky. The repository is a monorepo:
 | `core/` | The C++ library with all its bindings (Python, Android, WASM, and Apple). | yes |
 | `android/` | The Android app. It uses `core/android` as a composite build, and contains no C++. | yes |
 | `pwa/` | The PWA. It uses `core/wasm`. | yes |
-| `website/` | The website. The workflow `web.yml` deploys it with the PWA (under `/app/`) to GitHub Pages. | no |
+| `website/` | The website. It uses `core/wasm` for its sky. The workflow `web.yml` deploys it with the PWA (under `/app/`) to GitHub Pages. | yes |
 | `assets/` | The logo. | no |
 | `ios/` | The iOS app. It uses the Swift package of `core/apple`. | yes |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Sunradar – see when the sun is where</title>
     <meta
       name="description"
@@ -11,139 +11,226 @@
     <meta property="og:title" content="Sunradar" />
     <meta property="og:description" content="See when the sun is where in the sky." />
     <meta property="og:image" content="https://andiwand.github.io/sunradar/images/browser.jpg" />
+    <meta name="theme-color" content="#0b1a30" />
     <link rel="icon" href="images/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header class="hero">
-      <img src="images/logo.svg" alt="" class="logo" width="112" height="112" />
-      <h1>Sunradar</h1>
-      <p class="tagline">See when the sun is where in the sky.</p>
-      <p class="lead">
-        Hold up your phone, and Sunradar draws the path of the sun on the camera image. Point at a
-        window, a balcony, or a gap between two roofs, and it tells you when the sun will be there –
-        today, or on any other day of the year.
-      </p>
-      <div class="actions">
-        <a class="button primary" href="app/">Try it in the browser</a>
-        <a class="button" href="https://github.com/andiwand/sunradar/releases/tag/android-v0.1.0">Android app (pre-release)</a>
-        <a class="button" href="https://github.com/andiwand/sunradar">Source on GitHub</a>
+    <canvas id="sky" aria-hidden="true"></canvas>
+
+    <header class="hero" data-chapter="hero">
+      <div class="hero-inner">
+        <img src="images/logo.svg" alt="" class="logo" width="88" height="88" />
+        <h1>Sunradar</h1>
+        <p class="tagline">See when the sun is where.</p>
+        <p class="lead">
+          Hold up your phone, and Sunradar draws the path of the sun on the camera image. Point at a
+          window, a balcony, or a gap between two roofs, and it tells you when the sun will be there
+          – today, or on any day of the year.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="app/">Try it in the browser</a>
+          <a class="button" href="https://github.com/andiwand/sunradar/releases/tag/android-v0.1.0"
+            >Android (pre-release)</a
+          >
+          <a class="button" href="https://github.com/andiwand/sunradar">Source on GitHub</a>
+        </div>
+        <p class="hint" id="hero-readout">The sky right now</p>
+        <p class="hint drag-hint">Drag the sky to move the sun · scroll to see more</p>
       </div>
     </header>
 
     <main>
-      <section class="shots">
-        <figure>
-          <img src="images/camera.jpg" alt="The path of the sun on the camera image" loading="lazy" />
-          <figcaption>The path of the sun, the hours, and the horizon on the camera image.</figcaption>
-        </figure>
-        <figure>
-          <img src="images/sky.jpg" alt="The sky view with the time for the crosshair" loading="lazy" />
-          <figcaption>Point the crosshair at a direction: the app shows when the sun is there.</figcaption>
-        </figure>
-        <figure>
-          <img src="images/time.jpg" alt="The sky view on another date" loading="lazy" />
-          <figcaption>Move to any date and time. The dashed lines show the summer and the winter path.</figcaption>
-        </figure>
-      </section>
-
-      <section>
-        <h2>Made for the moment you visit a flat</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>When is the sun in this direction?</h3>
-            <p>
-              A vertical line through the crosshair meets the path of the sun. The large time is when the
-              sun is in that direction, with its height above the horizon.
-            </p>
-          </div>
-          <div class="card">
-            <h3>On which days?</h3>
-            <p>
-              Each point of the sky between the winter and the summer path gets the sun on about two days
-              per year. Sunradar lists them for the point in the crosshair.
-            </p>
-          </div>
-          <div class="card">
-            <h3>Any date and time</h3>
-            <p>
-              Slide through the year to see the path in June and in December, with sunrise, sunset, and
-              the hours.
-            </p>
-          </div>
-          <div class="card">
-            <h3>A compass you can trust indoors</h3>
-            <p>
-              Steel in buildings disturbs a phone compass. Sunradar notices it and relies on the
-              gyroscope instead, and you can align the heading with the sun, the moon, or a landmark.
-            </p>
+      <section class="chapter" data-chapter="day">
+        <div class="card">
+          <p class="step">1 · The day</p>
+          <h2>One path across the sky</h2>
+          <p>
+            Each day, the sun follows one path across your sky. Sunradar draws this path on the
+            camera image, with the hours, so you can see where the sun is at any time of the day.
+          </p>
+          <div class="readout">
+            <div class="big" id="day-time">–</div>
+            <div id="day-detail"></div>
+            <div class="muted" id="day-events"></div>
           </div>
         </div>
       </section>
 
-      <section>
-        <h2>Precise where it matters</h2>
-        <p>
-          The astronomy is the easy part: the position of the sun agrees with NASA's JPL Horizons to
-          better than 0.02° – a few seconds of time. The real limits are the compass of the phone and
-          the camera. So Sunradar uses the lens calibration of the camera, the World Magnetic Model for
-          the magnetic declination, and a filter that combines the gyroscope, the magnetometer, and your
-          alignments. The app shows how accurate the heading is at any moment.
-        </p>
-        <table>
-          <tr><th>Sun position</th><td>≤ 0.015° (NOAA model), ≤ 0.002° (Astronomy Engine)</td></tr>
-          <tr><th>Moon position</th><td>≤ 0.002°</td></tr>
-          <tr><th>Magnetic declination</th><td>WMM2025, exact to the official test values</td></tr>
-          <tr><th>Heading after alignment with the sun</th><td>limited by the tap on the sun (about 0.5°); field tests are in progress</td></tr>
-        </table>
-      </section>
-
-      <section>
-        <h2>Everywhere</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>Android</h3>
-            <p>
-              The native app with the camera overlay, the heading filter, and sun detection. Get the APK of
-              the <a href="https://github.com/andiwand/sunradar/releases/tag/android-v0.1.0">0.1.0
-              pre-release</a>; it is not in Google Play yet.
-            </p>
-          </div>
-          <div class="card">
-            <h3>Browser</h3>
-            <p>
-              The <a href="app/">web app</a> works offline after the first visit. On a computer, drag to
-              look around.
-            </p>
-          </div>
-          <div class="card">
-            <h3>iOS</h3>
-            <p>
-              The native app in SwiftUI, with the same features as the Android app. Build it from the
-              repository; it is not in the App Store yet.
-            </p>
-          </div>
-          <div class="card">
-            <h3>For developers</h3>
-            <p>
-              The core is a small C++ library with packages for Python, npm (WebAssembly), Android, and
-              Swift. The packages of the
-              <a href="https://github.com/andiwand/sunradar/releases/tag/core-v0.1.0">0.1.0 pre-release</a>
-              are on GitHub. It is open source under the MPL-2.0.
-            </p>
+      <section class="chapter" data-chapter="year">
+        <div class="card">
+          <p class="step">2 · The year</p>
+          <h2>Every day of the year</h2>
+          <p>
+            In June the path is high and long. In December it is low and short. The dashed lines
+            show the two solstices, and the path of every other day is between them.
+          </p>
+          <div class="readout">
+            <div class="big" id="year-date">–</div>
+            <div class="muted" id="year-detail"></div>
           </div>
         </div>
       </section>
+
+      <section class="chapter" data-chapter="window">
+        <div class="card">
+          <p class="step">3 · The flat</p>
+          <h2>Does the sun come through this window?</h2>
+          <p>
+            Made for the moment you visit a flat. Point the crosshair at the window, and Sunradar
+            shows when the sun is in that direction – today, and on which days of the year.
+          </p>
+          <div class="readout">
+            <div class="big" id="window-time">–</div>
+            <div id="window-detail"></div>
+            <div class="muted" id="window-dates"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter" data-chapter="moon">
+        <div class="card">
+          <p class="step">4 · The night</p>
+          <h2>The moon, too</h2>
+          <p>
+            At night, Sunradar shows the moon and its path. You can also use the moon to align the
+            compass.
+          </p>
+          <div class="readout">
+            <div class="big" id="moon-date">–</div>
+            <div id="moon-night"></div>
+            <div class="muted" id="moon-detail"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter" data-chapter="compass">
+        <div class="card">
+          <p class="step">5 · The compass</p>
+          <h2>A compass you can trust indoors</h2>
+          <p>
+            Steel in buildings disturbs the compass of a phone. Sunradar knows how far it can trust
+            the heading, and it shows that. Tap the sun, the moon, or a landmark once, and the path
+            is in the correct place.
+          </p>
+          <div class="readout">
+            <div class="big" id="compass-heading">–</div>
+            <div class="muted" id="compass-detail"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="play" data-chapter="play">
+        <div class="card wide">
+          <p class="step">Your turn</p>
+          <h2>Your sky</h2>
+          <label>
+            <span>Date</span>
+            <input id="play-date" type="range" min="0" max="365" step="1" />
+          </label>
+          <label>
+            <span>Time</span>
+            <input id="play-hour" type="range" min="0" max="1439" step="1" />
+          </label>
+          <div class="readout">
+            <div id="play-readout"></div>
+          </div>
+          <div class="actions left">
+            <button class="button" id="play-location" type="button">Use my location</button>
+            <a class="button primary" href="app/">Open the app</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="rest" data-chapter="rest">
+        <section>
+          <h2>Precise where it matters</h2>
+          <p>
+            The astronomy is the easy part: the position of the sun agrees with NASA's JPL Horizons
+            to better than 0.02° – a few seconds of time. The real limits are the compass of the
+            phone and the camera. So Sunradar uses the lens calibration of the camera, the World
+            Magnetic Model for the magnetic declination, and a filter that combines the gyroscope,
+            the magnetometer, and your alignments. The app shows how accurate the heading is at any
+            moment.
+          </p>
+          <table>
+            <tr>
+              <th>Sun position</th>
+              <td>≤ 0.015° (NOAA model), ≤ 0.002° (Astronomy Engine)</td>
+            </tr>
+            <tr>
+              <th>Moon position</th>
+              <td>≤ 0.002°</td>
+            </tr>
+            <tr>
+              <th>Magnetic declination</th>
+              <td>WMM2025, exact to the official test values</td>
+            </tr>
+            <tr>
+              <th>Heading after alignment with the sun</th>
+              <td>limited by the tap on the sun (about 0.5°); field tests are in progress</td>
+            </tr>
+          </table>
+          <p class="muted small">The sky on this page comes from the same code as the app.</p>
+        </section>
+
+        <section>
+          <h2>Everywhere</h2>
+          <div class="grid">
+            <div class="tile">
+              <h3>Android</h3>
+              <p>
+                The native app with the camera overlay, the heading filter, and sun detection. Get
+                the APK of the
+                <a href="https://github.com/andiwand/sunradar/releases/tag/android-v0.1.0"
+                  >0.1.0 pre-release</a
+                >; it is not in Google Play yet.
+              </p>
+            </div>
+            <div class="tile">
+              <h3>Browser</h3>
+              <p>
+                The <a href="app/">web app</a> works offline after the first visit. On a computer,
+                drag to look around.
+              </p>
+            </div>
+            <div class="tile">
+              <h3>iOS</h3>
+              <p>
+                The native app in SwiftUI, with the same features as the Android app. Build it from
+                the repository; it is not in the App Store yet.
+              </p>
+            </div>
+            <div class="tile">
+              <h3>For developers</h3>
+              <p>
+                The core is a small C++ library with packages for Python, npm (WebAssembly),
+                Android, and Swift. The packages of the
+                <a href="https://github.com/andiwand/sunradar/releases/tag/core-v0.1.0"
+                  >0.1.0 pre-release</a
+                >
+                are on GitHub. It is open source under the MPL-2.0.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <footer>
+          <p>
+            Sunradar is open source (<a href="https://github.com/andiwand/sunradar">GitHub</a>,
+            MPL-2.0). It uses
+            <a href="https://github.com/cosinekitty/astronomy">Astronomy Engine</a>
+            (MIT), the
+            <a href="https://www.ncei.noaa.gov/products/world-magnetic-model"
+              >World Magnetic Model</a
+            >
+            (NOAA), the time zone database of IANA, and on Android maps from
+            <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
+          </p>
+        </footer>
+      </div>
     </main>
 
-    <footer>
-      <p>
-        Sunradar is open source (<a href="https://github.com/andiwand/sunradar">GitHub</a>, MPL-2.0). It
-        uses <a href="https://github.com/cosinekitty/astronomy">Astronomy Engine</a> (MIT), the
-        <a href="https://www.ncei.noaa.gov/products/world-magnetic-model">World Magnetic Model</a> (NOAA),
-        the time zone database of IANA, and on Android maps from
-        <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
-      </p>
-    </footer>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
