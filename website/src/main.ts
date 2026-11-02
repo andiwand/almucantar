@@ -107,7 +107,6 @@ interface Target {
   guides: number;
   band: number;
   window: number;
-  crosshair: boolean;
   moon: boolean;
   /** The chapter hides the moon, because it changes the date all the time. */
   hideMoon: boolean;
@@ -120,7 +119,11 @@ let dragHours = 0;
 
 /** The window of the third chapter, in the directions of the sky. */
 const WINDOW = { azimuth: [150, 214] as [number, number], altitude: [4, 44] as [number, number] };
-const CROSSHAIR: Horizontal = { azimuthDeg: 196, altitudeDeg: 24 };
+/** The middle of the window. The readout gives the days on which the sun is there. */
+const WINDOW_MIDDLE: Horizontal = {
+  azimuthDeg: (WINDOW.azimuth[0] + WINDOW.azimuth[1]) / 2,
+  altitudeDeg: (WINDOW.altitude[0] + WINDOW.altitude[1]) / 2,
+};
 
 /** The next night with a bright moon high in the sky, starting from tonight. */
 function moonNight(): number {
@@ -206,7 +209,7 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     const d = dayAt(now());
     const from = d.start + 8 * 3600;
     const to = d.start + 17 * 3600;
-    return { time: from + (to - from) * p, window: 1, crosshair: true };
+    return { time: from + (to - from) * p, window: 1 };
   },
   moon: (p) => {
     const arc = moonArc();
@@ -331,15 +334,15 @@ function windowTimes(day: Day): string {
 let datesFor = "";
 let datesText = "";
 
-function crosshairDates(): string {
+function middleDates(): string {
   const start = startOfDay(now());
   const key = `${start}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key !== datesFor) {
     datesFor = key;
-    const dates = sunradar.findDates(observer, CROSSHAIR, start, start + 365 * DAY);
+    const dates = sunradar.findDates(observer, WINDOW_MIDDLE, start, start + 365 * DAY);
     datesText = dates.length
-      ? `In the crosshair: ${dates.map((m) => `${dayMonth(m.unixUtc)} at ${hhmm(m.unixUtc)}`).join(" and ")}`
-      : "The sun does not reach the crosshair this year.";
+      ? `In the middle of the window: ${dates.map((m) => `${dayMonth(m.unixUtc)} at ${hhmm(m.unixUtc)}`).join(" and ")}`
+      : "The sun does not reach the middle of the window this year.";
   }
   return datesText;
 }
@@ -378,7 +381,7 @@ function readouts(name: string, time: number, sun: Horizontal, band: number) {
   } else if (name === "window") {
     setText("window-time", hhmm(time));
     setText("window-detail", windowTimes(day));
-    setText("window-dates", crosshairDates());
+    setText("window-dates", middleDates());
   } else if (name === "moon") {
     const fraction = sunradar.moonIlluminatedFraction(time);
     setText("moon-date", hhmm(time));
@@ -426,7 +429,6 @@ const DEFAULTS: Target = {
   guides: 0,
   band: 0,
   window: 0,
-  crosshair: false,
   moon: false,
   hideMoon: false,
   tap: 0,
@@ -547,7 +549,6 @@ function frame(ms: number) {
     moonPath,
     bandDeg: shown.band,
     window: shown.window > 0.01 ? { ...WINDOW, alpha: shown.window } : null,
-    crosshair: target.crosshair && shown.window > 0.6 ? CROSSHAIR : null,
     tap: target.tap,
     dim: shown.dim,
     centerAzimuthDeg: shown.center,

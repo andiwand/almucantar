@@ -28,7 +28,6 @@ export interface Frame {
   bandDeg: number;
   /** A window in the wall of a room, in the sky directions that it shows. */
   window: { azimuth: [number, number]; altitude: [number, number]; alpha: number } | null;
-  crosshair: Horizontal | null;
   /** A ring on the sun that shows a tap, from 0 to 1. */
   tap: number;
   /** A dark layer that makes the text easier to read, from 0 to 1. */
@@ -276,7 +275,6 @@ export class Sky {
     this.skyline(p, day);
 
     if (frame.window && frame.window.alpha > 0) this.room(p, frame.window, day);
-    if (frame.crosshair) this.crosshair(p, frame.crosshair, frame.window?.altitude);
 
     if (frame.dim > 0) {
       ctx.fillStyle = `rgba(4, 8, 18, ${frame.dim})`;
@@ -437,34 +435,5 @@ export class Sky {
     ctx.fillStyle = css(mix(wall, [255, 255, 255], 0.18));
     ctx.fillRect(x0 - 18, y1 + 5, x1 - x0 + 36, 10);
     ctx.restore();
-  }
-
-  /** The crosshair. The vertical line stays in the altitude range `span`, if there is one. */
-  private crosshair(p: Panorama, direction: Horizontal, span?: [number, number]) {
-    const ctx = this.ctx;
-    const x = p.x(direction.azimuthDeg);
-    const y = p.y(direction.altitudeDeg);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 16, 0, Math.PI * 2);
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      ctx.moveTo(x + dx * 10, y + dy * 10);
-      ctx.lineTo(x + dx * 24, y + dy * 24);
-    }
-    ctx.stroke();
-    // The vertical line through the crosshair, as in the app.
-    ctx.setLineDash([3, 6]);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-    ctx.beginPath();
-    ctx.moveTo(x, span ? p.y(span[1]) : 0);
-    ctx.lineTo(x, span ? p.y(span[0]) : p.horizonY);
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 }
