@@ -13,10 +13,14 @@ export default defineConfig({
     {
       name: "offline-assets",
       apply: "build",
+      // The post order runs this hook after the generateBundle hooks of the normal plugins. So
+      // the list and the version contain the files that those plugins emit or change.
+      enforce: "post",
       generateBundle(_options, bundle) {
         const template = readFileSync(new URL("./public/sw.js", import.meta.url), "utf8");
         const hash = createHash("sha256").update(template);
         for (const file of Object.values(bundle)) {
+          hash.update(file.fileName);
           hash.update(file.type === "chunk" ? file.code : file.source);
         }
         for (const file of ["icon.svg", "manifest.webmanifest"]) {

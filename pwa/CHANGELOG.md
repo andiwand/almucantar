@@ -12,8 +12,7 @@ are the same as in `core/CHANGELOG.md`.
 - Location access works without orientation sensors and after a sensor permission denial.
 - An uncalibrated compass on iOS (heading -1) no longer gives a wrong heading.
 - Camera requests cannot overlap. A failed video start releases the camera.
-- Alignment near the zenith or nadir shows a message. Crosshair dates refresh at midnight and
-  clear when the phone points too high or too low.
+- Alignment near the zenith or nadir shows a message. Crosshair dates refresh at midnight.
 - The first version: the sky view with the path of the sun, the hours, the horizon, the
   solstice paths, and the time when the sun is in the direction of the crosshair, with the
   dates for the crosshair. A time panel for another date and time.

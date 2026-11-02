@@ -288,17 +288,18 @@ let datesText = "";
 let datesTimer = 0;
 
 function scheduleDates(center: Horizontal | null) {
-  if (!center || center.altitudeDeg < 0) {
-    clearTimeout(datesTimer);
-    datesKey = "";
-    datesText = "";
-    return;
-  }
+  // The readout does not show the dates while the crosshair is not usable. The state stays, so
+  // one unusable frame from sensor noise does not clear the text or start the search again.
+  if (!center) return;
   const start = startOfLocalDay(0).getTime() / 1000;
   const key = `${start}:${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key === datesKey) return;
   datesKey = key;
   clearTimeout(datesTimer);
+  if (center.altitudeDeg < 0) {
+    datesText = "";
+    return;
+  }
   // The old text stays until the new result is ready, so sensor noise does not make it flicker.
   datesTimer = window.setTimeout(() => {
     const dates = sunradar.findDates(observer, center, start, start + 365 * 86400);
@@ -478,15 +479,19 @@ function alignWithSun(view: View, x: number, y: number) {
   $("align-button").textContent = "Align with the sun";
   const sun = sunradar.sunPosition(Date.now() / 1000, observer);
   const tapped = sunradar.unproject(view, { x, y });
-  if (Math.abs(tapped.altitudeDeg) >= 89) {
-    showMessage("The point is too near the zenith or the nadir.");
-    return;
-  }
   if (Math.abs(tapped.altitudeDeg - sun.altitudeDeg) > 5) {
     showMessage("That point is not at the height of the sun. Tap the sun itself.");
     return;
   }
-  const measurement = sunradar.headingFromDirection(view, { x, y }, sun.azimuthDeg, 0.5);
+  let measurement;
+  try {
+    measurement = sunradar.headingFromDirection(view, { x, y }, sun.azimuthDeg, 0.5);
+  } catch (e) {
+    // The core rejects a direction that gives no heading (for example near the zenith).
+    if (!(e instanceof RangeError)) throw e;
+    showMessage(`No alignment: ${e.message}.`);
+    return;
+  }
   heading = sunradar.headingUpdate(heading, measurement);
   showMessage(`Heading aligned with the sun (±${Math.sqrt(heading.varianceDeg2).toFixed(1)}°).`);
 }
