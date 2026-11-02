@@ -1,3 +1,4 @@
+import Combine
 import Sunradar
 import SwiftUI
 import simd
@@ -107,8 +108,8 @@ struct SkyScreen: SwiftUI.View {
     @State private var message: String?
     @State private var dragAzimuth = 180.0
     @State private var dragPitch = 20.0
+    @State private var dragStart: (azimuth: Double, pitch: Double)?
     @State private var dates: [TimeMatch] = []
-    @State private var datesKey = ""
 
     private let calendar = Calendar.current
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -183,8 +184,8 @@ struct SkyScreen: SwiftUI.View {
                 location.start()
             }
             .onReceive(timer) { now = $0 }
-            .onChange(of: location.observer) { motion.observer = $0 }
-            .onChange(of: detecting) { if !$0 { blobs = [] } }
+            .onChange(of: location.observer) { motion.observer = location.observer }
+            .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
                 MapPicker(observer: location.observer) { picked in
                     pickingLandmark = false
@@ -272,10 +273,13 @@ struct SkyScreen: SwiftUI.View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard !motion.available || motion.deviceToFrame == nil else { return }
-                dragAzimuth = (dragAzimuth - value.velocity.width * 0.0025 + 360).truncatingRemainder(dividingBy: 360)
-                dragPitch = min(80, max(-80, dragPitch + value.velocity.height * 0.0025))
+                if dragStart == nil { dragStart = (dragAzimuth, dragPitch) }
+                guard let start = dragStart else { return }
+                dragAzimuth = (start.azimuth - value.translation.width * 0.15 + 360).truncatingRemainder(dividingBy: 360)
+                dragPitch = min(80, max(-80, start.pitch + value.translation.height * 0.15))
             }
             .onEnded { value in
+                dragStart = nil
                 guard abs(value.translation.width) < 10, abs(value.translation.height) < 10 else { return }
                 tap(view: view, at: value.location, detected: detected)
             }

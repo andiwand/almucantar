@@ -5,6 +5,8 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- A camera permission reply cannot start capture after the camera view closes.
+- Dragging the sky view follows the drag distance, independent of gesture event frequency.
 - A sky view that follows the orientation of the phone. It shows the horizon, the cardinal
   points, the path of the sun on the selected day with the full hours, the sun now, and the
   paths at the solstices.

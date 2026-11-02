@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import os
 import Sunradar
 import SwiftUI
@@ -42,23 +42,36 @@ struct CameraView: UIViewRepresentable {
         /// Read by the queue of the frames, so the detection switches on and off without a new
         /// configuration.
         let detect = OSAllocatedUnfairLock(initialState: false)
-        private let session = AVCaptureSession()
+        /// Configuration and capture state belong to sessionQueue. The main thread only
+        /// attaches this session to the preview layer.
+        nonisolated(unsafe) private let session = AVCaptureSession()
         /// One serial queue for the configuration, the start, and the stop of the session, so a
         /// fast stop cannot come before the start.
         private let sessionQueue = DispatchQueue(label: "at.stefl.sunradar.session")
+        /// Access only on sessionQueue. The permission reply can arrive after stop().
+        nonisolated(unsafe) private var wantsRunning = false
         private let frames = DispatchQueue(label: "at.stefl.sunradar.frames")
         private var device: AVCaptureDevice?
 
         func start() {
             previewLayer.videoGravity = .resizeAspectFill
             previewLayer.session = session
+            sessionQueue.async { self.wantsRunning = true }
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 guard granted else { return }
-                self.sessionQueue.async { self.configure() }
+                self.sessionQueue.async {
+                    guard self.wantsRunning else { return }
+                    self.configure()
+                }
             }
         }
 
-        func stop() { sessionQueue.async { self.session.stopRunning() } }
+        func stop() {
+            sessionQueue.async {
+                self.wantsRunning = false
+                self.session.stopRunning()
+            }
+        }
 
         nonisolated private func configure() {
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
