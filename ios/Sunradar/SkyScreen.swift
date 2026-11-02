@@ -768,6 +768,7 @@ struct SkyScreen: SwiftUI.View {
             .disabled(!located)
         }
         .buttonStyle(.borderedProminent)
+        .foregroundStyle(Self.onTint)
     }
 
     /// The sun and the moon need the camera image, so the camera switches on first.
@@ -792,15 +793,19 @@ struct SkyScreen: SwiftUI.View {
                     aligning = nil
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(Self.onTint)
             } else if aligning != nil {
-                Button("Cancel") { aligning = nil }.buttonStyle(.borderedProminent)
+                Button("Cancel") { aligning = nil }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Self.onTint)
             } else {
-                alignMenu
+                // The order of Android: Place before Align, and the menu last.
                 Button("Place") {
                     message = nil
                     showPlace = true
                 }
                 .buttonStyle(.bordered)
+                alignMenu
                 // The menu of the app: the settings and the credits. It is hidden during an alignment.
                 Menu {
                     Button("Settings and credits") { showSettings = true }
@@ -813,4 +818,7 @@ struct SkyScreen: SwiftUI.View {
         }
         .tint(Color(red: 0.81, green: 0.74, blue: 1))
     }
+
+    /// The label on the light tint of a prominent button: dark, as on Android, so it can be read.
+    private static let onTint = Color(red: 0.22, green: 0.12, blue: 0.40)
 }
