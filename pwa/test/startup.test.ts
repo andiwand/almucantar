@@ -36,6 +36,11 @@ beforeEach(() => {
   });
   vi.stubGlobal("location", { protocol: "http:" });
   vi.stubGlobal("requestAnimationFrame", vi.fn());
+  const stored = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+  });
 });
 
 afterEach(() => vi.unstubAllGlobals());

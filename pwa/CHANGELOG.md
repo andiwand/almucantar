@@ -5,6 +5,10 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The terrain horizon: the sky view shows the mountains around the place, and the sun path is
+  dimmer where the terrain hides the sun. The status shows when the sun comes over the terrain
+  and goes behind it. The app downloads the elevation tiles (AWS Terrain Tiles) once and keeps
+  them, also offline. A setting in the time panel switches the terrain off.
 - The sky view shows the moon with its phase. The lit part faces the sun.
 - The offline cache includes the scripts and WebAssembly on the first visit. A new version
   activates only when no page of the old version is open, so an open page keeps its cached

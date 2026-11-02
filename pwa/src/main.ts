@@ -5,6 +5,7 @@ import { DayKind, load } from "@sunradar/core";
 import type {
   AzimuthCrossing,
   HeadingEstimate,
+  HorizonProfile,
   Horizontal,
   Observer,
   Polyline,
@@ -14,6 +15,8 @@ import type {
 import { litOutline, towardSun } from "./moon";
 import type { MoonAt } from "./moon";
 import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
+import { Terrain, TileCache, cacheStorageStore, decodePng, localStorageIndex } from "./terrain";
+import type { TerrainState } from "./terrain";
 
 const sunradar = await load();
 
@@ -41,6 +44,44 @@ let aligning = false;
 let fovDeg = 65;
 
 const MAX_CROSSHAIR_ALTITUDE_DEG = 75;
+
+// The terrain horizon. It needs the place, so it starts when the location arrives.
+const TERRAIN_SETTING = "sunradar-terrain-on";
+let terrainOn = localStorage.getItem(TERRAIN_SETTING) !== "false";
+let terrainVersion = 0;
+const terrain = new Terrain({
+  sunradar,
+  cache: new TileCache({
+    store: cacheStorageStore(),
+    ...localStorageIndex(),
+    fetch: (url, init) => fetch(url, init),
+    now: () => Date.now(),
+  }),
+  decode: decodePng,
+  onChange: (state: TerrainState) => {
+    if (state.kind === "ready" || state.kind === "off") terrainVersion++;
+  },
+});
+let hasLocation = false;
+
+/** The profile of the terrain, or null while it is not ready or switched off. */
+const terrainProfile = () => (terrain.state.kind === "ready" ? terrain.state.profile : null);
+
+function terrainStatus(): string {
+  const s = terrain.state;
+  if (!terrainOn) return "";
+  if (!hasLocation) return "Terrain: needs the location";
+  switch (s.kind) {
+    case "loading":
+      return `Terrain: loading ${s.done}/${s.total}`;
+    case "failed":
+      return `Terrain: ${s.message}`;
+    case "ready":
+      return s.missing ? `Terrain: ${s.missing} tiles missing` : "";
+    default:
+      return "";
+  }
+}
 
 // --- Elements -----------------------------------------------------------------------------------
 
@@ -87,6 +128,8 @@ interface Day {
   end: number;
   path: Horizontal[];
   daySegments: Horizontal[][];
+  /** The parts of the path above the horizon but behind the terrain. */
+  hiddenSegments: Horizontal[][];
   hours: { direction: Horizontal; label: string }[];
   summary: string;
   guides: Horizontal[][];
@@ -97,14 +140,18 @@ let day: Day | null = null;
 function computeDay(): Day {
   const start = startOfLocalDay(dayOffset).getTime() / 1000;
   const end = startOfLocalDay(dayOffset + 1).getTime() / 1000;
-  const key = `${start}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
+  const key = `${start}:${observer.latitudeDeg}:${observer.longitudeDeg}:${terrainVersion}`;
   if (day?.key === key) return day;
+  const profile = terrainProfile();
   const points = sunradar.sunPath(observer, start, end);
-  const segments = (pts: typeof points) => {
+  const segments = (
+    pts: typeof points,
+    keep: (h: Horizontal) => boolean = (h) => h.altitudeDeg >= 0,
+  ) => {
     const result: Horizontal[][] = [];
     let current: Horizontal[] = [];
     for (const p of pts) {
-      if (p.position.altitudeDeg >= 0) current.push(p.position);
+      if (keep(p.position)) current.push(p.position);
       else if (current.length) {
         if (current.length > 1) result.push(current);
         current = [];
@@ -113,6 +160,13 @@ function computeDay(): Day {
     if (current.length > 1) result.push(current);
     return result;
   };
+  // With the terrain, the parts of the path behind the terrain are a separate, dimmer line.
+  const terrainAt = (h: Horizontal) => {
+    const t = profile ? sunradar.terrainAltitudeDeg(profile, h.azimuthDeg) : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const visible = (h: Horizontal) => h.altitudeDeg >= 0 && h.altitudeDeg >= terrainAt(h);
+  const hidden = (h: Horizontal) => h.altitudeDeg >= 0 && h.altitudeDeg < terrainAt(h);
   const events = sunradar.sunEvents(observer, start, end);
   const summary =
     events.kind === DayKind.polarDay
@@ -122,6 +176,17 @@ function computeDay(): Day {
         : events.crossings
             .map((c) => `${c.rising ? "Sunrise" : "Sunset"} ${hhmm(c.unixUtc)}`)
             .join(" · ");
+  let terrainSummary = "";
+  if (profile) {
+    const t = sunradar.terrainEvents(observer, profile, start, end);
+    terrainSummary =
+      t.kind === DayKind.polarDay
+        ? "Over the terrain all day"
+        : t.kind === DayKind.polarNight
+          ? "Behind the terrain all day"
+          : "Over the terrain: " +
+            t.crossings.map((c) => `${c.rising ? "↑" : "↓"} ${hhmm(c.unixUtc)}`).join(" ");
+  }
   const year = new Date(start * 1000).getFullYear();
   const guides = [5, 11].flatMap((month) => {
     const s = new Date(year, month, 21).getTime() / 1000;
@@ -132,14 +197,15 @@ function computeDay(): Day {
     start,
     end,
     path: points.map((p) => p.position),
-    daySegments: segments(points),
+    daySegments: segments(points, visible),
+    hiddenSegments: profile ? segments(points, hidden) : [],
     hours: points
       .filter((p) => (p.unixUtc - start) % 3600 === 0 && p.position.altitudeDeg > -6)
       .map((p) => ({
         direction: p.position,
         label: String(new Date(p.unixUtc * 1000).getHours()).padStart(2, "0"),
       })),
-    summary,
+    summary: terrainSummary ? `${summary}<br>${terrainSummary}` : summary,
     guides,
   };
   return day;
@@ -230,6 +296,38 @@ function drawMoon(view: View, moon: MoonAt, sun: Horizontal, x: number, y: numbe
   ctx.fill();
 }
 
+/**
+ * Draws the terrain horizon: a line, and in the sky view (without the camera) a light fill below
+ * it. The fill is a band down to 10° below the terrain, in steps of 1° of azimuth.
+ */
+function drawTerrain(view: View, profile: HorizonProfile) {
+  const line: Horizontal[] = [];
+  for (let az = 0; az <= 360; az++) {
+    const altitude = sunradar.terrainAltitudeDeg(profile, az % 360);
+    line.push({ azimuthDeg: az % 360, altitudeDeg: Number.isNaN(altitude) ? 0 : altitude });
+  }
+  if (!cameraOn) {
+    // One path and one fill for all bands, so the edges between the bands do not show.
+    ctx.fillStyle = "rgba(120, 140, 110, 0.25)";
+    ctx.beginPath();
+    for (let i = 0; i < 360; i++) {
+      const corners = [
+        line[i],
+        line[i + 1],
+        { azimuthDeg: line[i + 1].azimuthDeg, altitudeDeg: line[i + 1].altitudeDeg - 10 },
+        { azimuthDeg: line[i].azimuthDeg, altitudeDeg: line[i].altitudeDeg - 10 },
+      ].map((h) => sunradar.project(view, h));
+      if (!corners.every((p) => p.valid)) continue;
+      corners.forEach((p, k) =>
+        k ? ctx.lineTo(p.point.x, p.point.y) : ctx.moveTo(p.point.x, p.point.y),
+      );
+      ctx.closePath();
+    }
+    ctx.fill("nonzero");
+  }
+  strokeLines(sunradar.projectLine(view, line), "rgba(190, 230, 170, 0.9)", 2);
+}
+
 function draw(
   view: View,
   d: Day,
@@ -251,7 +349,13 @@ function draw(
   ctx.fillStyle = "white";
   ctx.font = "bold 14px system-ui";
 
-  strokeLines(sunradar.horizonLine(view), "rgba(255,255,255,0.8)", 1.5);
+  const profile = terrainProfile();
+  strokeLines(
+    sunradar.horizonLine(view),
+    profile ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.8)",
+    profile ? 1 : 1.5,
+  );
+  if (profile) drawTerrain(view, profile);
   for (const [az, label] of [
     [0, "N"],
     [90, "E"],
@@ -263,6 +367,8 @@ function draw(
   for (const g of d.guides)
     strokeLines(sunradar.projectLine(view, g), "rgba(255,255,255,0.35)", 1.5, [4, 4]);
   strokeLines(sunradar.projectLine(view, d.path), "rgba(255,200,61,0.5)", 2, [8, 6]);
+  for (const s of d.hiddenSegments)
+    strokeLines(sunradar.projectLine(view, s), "rgba(255,200,61,0.45)", 2, [3, 5]);
   for (const s of d.daySegments) {
     const lines = sunradar.projectLine(view, s);
     strokeLines(lines, "rgba(255,200,61,0.25)", 9);
@@ -398,7 +504,10 @@ function frame() {
       : sigma > 3
         ? `<span class="heading-fair">Heading ±${sigma.toFixed(0)}°</span>`
         : `<span class="heading-good">Heading ±${sigma.toFixed(1)}°</span>`;
-  status.innerHTML = `<b>${placeText}</b><br>${headingText}<br>${d.summary}`;
+  const terrainText = terrainStatus();
+  status.innerHTML =
+    `<b>${placeText}</b><br>${headingText}<br>${d.summary}` +
+    (terrainText ? `<br><span class="heading-fair">${terrainText}</span>` : "");
 
   readout.innerHTML = !usable
     ? "Hold the phone up to see when the sun is in that direction."
@@ -459,6 +568,8 @@ async function startSensors() {
       observer = { latitudeDeg: position.coords.latitude, longitudeDeg: position.coords.longitude };
       placeText = `${observer.latitudeDeg.toFixed(3)}°, ${observer.longitudeDeg.toFixed(3)}° · ±${Math.round(position.coords.accuracy)} m`;
       // Only the declination changes, so an alignment before the location arrives stays.
+      hasLocation = true;
+      if (terrainOn) terrain.update(observer);
       const old = declination;
       declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
       heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
@@ -571,6 +682,14 @@ $("now").addEventListener("click", () => {
   const now = new Date();
   $<HTMLInputElement>("date-offset").value = "0";
   $<HTMLInputElement>("minute").value = String(now.getHours() * 60 + now.getMinutes());
+});
+const terrainBox = $<HTMLInputElement>("terrain-on");
+terrainBox.checked = terrainOn;
+terrainBox.addEventListener("change", () => {
+  terrainOn = terrainBox.checked;
+  localStorage.setItem(TERRAIN_SETTING, String(terrainOn));
+  if (!terrainOn) terrain.stop();
+  else if (hasLocation) terrain.update(observer);
 });
 $<HTMLInputElement>("fov").addEventListener("input", (e) => {
   fovDeg = Number((e.target as HTMLInputElement).value);
