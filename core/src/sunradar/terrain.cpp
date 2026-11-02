@@ -7,6 +7,7 @@
 #include <numbers>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -356,10 +357,13 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   for (const ElevationGrid& grid : tiles) {
     sorted.push_back(&grid);
   }
-  const auto cell_deg = [cos_observer](const ElevationGrid* g) {
-    return std::min(g->latitude_step_deg, g->longitude_step_deg * cos_observer);
+  // Equal cells are ordered by their north-west corner, so the result does not depend on the
+  // order of the tiles (the edges of two tiles share the samples of the margin).
+  const auto key = [cos_observer](const ElevationGrid* g) {
+    return std::tuple{std::min(g->latitude_step_deg, g->longitude_step_deg * cos_observer),
+                      -g->north_latitude_deg, g->west_longitude_deg};
   };
-  std::ranges::stable_sort(sorted, {}, cell_deg);
+  std::ranges::sort(sorted, {}, key);
   require_positive(options.azimuth_step_deg, "azimuth_step_deg");
   const std::size_t count = azimuth_count(options.azimuth_step_deg);
   require(count > 0, "360 is not a multiple of azimuth_step_deg");

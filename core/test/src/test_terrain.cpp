@@ -259,12 +259,14 @@ TEST_CASE("horizon_profile joins tiles across the gap at their edges", "[terrain
   const HorizonOptions options{.azimuth_step_deg = 5};
   const HorizonProfile one = horizon_profile(kAlps, {grid}, options);
   const auto [west, east] = split_tiles(grid, 235);
-  // The order of the tiles does not matter.
   const HorizonProfile two = horizon_profile(kAlps, {east, west}, options);
   for (std::size_t i = 0; i < one.altitude_deg.size(); ++i) {
     INFO("azimuth " << static_cast<double>(i) * 5);
     REQUIRE_THAT(two.altitude_deg[i], WithinAbs(one.altitude_deg[i], 0.01));
   }
+  // The order of the tiles does not change the result, also not in the gap between them.
+  const HorizonProfile swapped = horizon_profile(kAlps, {west, east}, options);
+  REQUIRE(swapped.altitude_deg == two.altitude_deg);
   REQUIRE(one.altitude_deg[18] > 5);  // the ridge in the east
 
   // Without the tile of the ridge, the rays to the east find only the flat ground.
