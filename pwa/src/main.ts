@@ -34,6 +34,7 @@ let heading: HeadingEstimate = { offsetDeg: 0, varianceDeg2: 15 * 15 };
 let dayOffset = 0;
 let minuteOfDay: number | null = null; // null: now
 let cameraOn = false;
+let cameraStarting = false;
 let aligning = false;
 let fovDeg = 65;
 
@@ -286,18 +287,20 @@ let datesKey = "";
 let datesText = "";
 let datesTimer = 0;
 
-function scheduleDates(center: Horizontal) {
-  const key = `${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
+function scheduleDates(center: Horizontal | null) {
+  if (!center || center.altitudeDeg < 0) {
+    clearTimeout(datesTimer);
+    datesKey = "";
+    datesText = "";
+    return;
+  }
+  const start = startOfLocalDay(0).getTime() / 1000;
+  const key = `${start}:${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key === datesKey) return;
   datesKey = key;
   clearTimeout(datesTimer);
   // The old text stays until the new result is ready, so sensor noise does not make it flicker.
-  if (center.altitudeDeg < 0) {
-    datesText = "";
-    return;
-  }
   datesTimer = window.setTimeout(() => {
-    const start = startOfLocalDay(0).getTime() / 1000;
     const dates = sunradar.findDates(observer, center, start, start + 365 * 86400);
     datesText = dates.length
       ? "In the crosshair: " +
@@ -332,7 +335,7 @@ function frame() {
   const crossing = usable
     ? (sunradar.findAzimuthTimes(observer, center.azimuthDeg, d.start, d.end)[0] ?? null)
     : null;
-  if (usable) scheduleDates(center);
+  scheduleDates(usable ? center : null);
 
   draw(view, d, sun, center, crossing);
 
@@ -372,26 +375,33 @@ function frame() {
 
 function onOrientation(event: DeviceOrientationEvent & { webkitCompassHeading?: number }) {
   if (event.alpha === null || event.beta === null || event.gamma === null) return;
+  const compass = event.webkitCompassHeading;
+  // iOS gives -1 while the compass is not calibrated. Without a compass and without an absolute
+  // event, the heading is relative: the view follows the phone, and an alignment corrects it.
+  const hasCompass = compass !== undefined && Number.isFinite(compass) && compass >= 0;
   const q = fromDeviceOrientation(event.alpha, event.beta, event.gamma);
-  deviceToEnu =
-    event.webkitCompassHeading !== undefined ? withCompass(q, event.webkitCompassHeading) : q;
+  deviceToEnu = hasCompass ? withCompass(q, compass) : q;
   sensorsActive = true;
 }
 
 async function startSensors() {
-  const request = (
-    DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }
-  ).requestPermission;
-  if (request && (await request().catch(() => "denied")) !== "granted") {
-    showMessage("The orientation sensors are not allowed.");
-    return;
-  }
-  // Not "in window": the DOM types have the property, so TypeScript would narrow window to never.
-  const hasAbsolute = "ondeviceorientationabsolute" in (window as object);
-  if (hasAbsolute) {
-    window.addEventListener("deviceorientationabsolute", onOrientation as EventListener);
-  } else {
-    window.addEventListener("deviceorientation", onOrientation as EventListener);
+  if ("DeviceOrientationEvent" in window) {
+    const request = (
+      DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }
+    ).requestPermission;
+    if (
+      request &&
+      (await request.call(DeviceOrientationEvent).catch(() => "denied")) !== "granted"
+    ) {
+      showMessage("The orientation sensors are not allowed.");
+    } else {
+      // Not "in window": the DOM types have the property, so TypeScript would narrow window to never.
+      const hasAbsolute = "ondeviceorientationabsolute" in (window as object);
+      window.addEventListener(
+        hasAbsolute ? "deviceorientationabsolute" : "deviceorientation",
+        onOrientation as EventListener,
+      );
+    }
   }
   navigator.geolocation?.getCurrentPosition(
     (position) => {
@@ -417,11 +427,13 @@ function resetHeading() {
 }
 
 async function toggleCamera() {
+  if (cameraStarting) return;
   if (cameraOn) {
     (video.srcObject as MediaStream | null)?.getTracks().forEach((t) => t.stop());
     video.srcObject = null;
     cameraOn = false;
   } else {
+    cameraStarting = true;
     try {
       video.srcObject = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
@@ -430,7 +442,11 @@ async function toggleCamera() {
       await video.play();
       cameraOn = true;
     } catch {
+      (video.srcObject as MediaStream | null)?.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
       showMessage("The camera is not available.");
+    } finally {
+      cameraStarting = false;
     }
   }
   video.style.display = cameraOn ? "block" : "none";
@@ -462,6 +478,10 @@ function alignWithSun(view: View, x: number, y: number) {
   $("align-button").textContent = "Align with the sun";
   const sun = sunradar.sunPosition(Date.now() / 1000, observer);
   const tapped = sunradar.unproject(view, { x, y });
+  if (Math.abs(tapped.altitudeDeg) >= 89) {
+    showMessage("The point is too near the zenith or the nadir.");
+    return;
+  }
   if (Math.abs(tapped.altitudeDeg - sun.altitudeDeg) > 5) {
     showMessage("That point is not at the height of the sun. Tap the sun itself.");
     return;
@@ -504,6 +524,6 @@ $<HTMLInputElement>("fov").addEventListener("input", (e) => {
 if ("serviceWorker" in navigator && location.protocol !== "http:") {
   void navigator.serviceWorker.register("./sw.js");
 }
-if (!("DeviceOrientationEvent" in window)) $("start").classList.add("hidden");
+if (!("DeviceOrientationEvent" in window)) $("start").textContent = "Use location";
 
 requestAnimationFrame(frame);
