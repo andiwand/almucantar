@@ -5,6 +5,7 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The alignment with a landmark also works with a dropped place, for example offline without GPS.
 - The place works offline. The new button "Place" (or a tap on the place in the status) opens a
   search of 7342 places and a map of Natural Earth that is in the app. A tap on the map drops the
   place. The app keeps the last place and starts with it, also offline and without the location

@@ -552,13 +552,15 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                                 val sunUp = sunNow.altitudeDeg > 0
                                 val moonUsable =
                                     moonNow.altitudeDeg > 0 && moonFraction >= MIN_MOON_FRACTION
-                                val located = place.source == PlaceSource.DEVICE
+                                // A dropped place also works, for example offline without GPS,
+                                // if the user stands at it. The error of the drop is larger.
+                                val located = place.isKnown
                                 val landmarkDetail =
                                     when {
-                                        located -> "Pick it on a map, then aim at it"
                                         place.source == PlaceSource.MANUAL ->
-                                            "Needs your location (Place, then Use my location)"
-                                        else -> "Needs your location (allow location access)"
+                                            "Pick it on a map, then aim at it (you must be at the place)"
+                                        located -> "Pick it on a map, then aim at it"
+                                        else -> "Needs your location or a place (Place)"
                                     }
                                 AlignItem(
                                     "With the sun",
@@ -661,6 +663,9 @@ private fun alignWithBody(
  * Calibrates the heading with a landmark in the crosshair. The error of the bearing comes from the
  * location error and from the distance: an error e at a distance d is atan(e / d).
  */
+/** The assumed error of a place that the user dropped on the map, in meters. */
+private const val DROPPED_PLACE_ERROR_M = 500.0
+
 private fun alignWithLandmark(
     tracker: HeadingTracker,
     view: View?,
@@ -670,7 +675,8 @@ private fun alignWithLandmark(
     if (view == null || landmark == null) return "No landmark."
     val distance = Geo.distanceM(place.observer, landmark)
     if (distance < 50) return "The landmark is too near. Choose one that is farther away."
-    val positionError = (place.accuracyM ?: 50.0) + 5.0
+    // A dropped place has no accuracy: assume the error of a drop on the map, as on iOS.
+    val positionError = (place.accuracyM ?: DROPPED_PLACE_ERROR_M) + 5.0
     val sigma = Math.toDegrees(atan(positionError / distance)) + 0.3
     val center = ScreenPoint(view.camera.width / 2, view.camera.height / 2)
     return applyMeasurement(tracker, "landmark") {
