@@ -541,14 +541,18 @@ contain the same core.
 | M2 | Public and internal split, `SolarModel` enum, umbrella header, install rules, `AGENTS.md`, clang-format and clang-tidy in CI, Conventional Commits, `CHANGELOG.md`, Python binding of the M1 API | done |
 | M3 | WMM2025, orientation, camera model, projection, horizon | done: WMM agrees with the official test values to 0.001 nT; projection round-trip < 1e-6 px |
 | M4 | Search: `find_time`, `find_dates` | done: exact on the path (< 1 s), two dates per direction, one at the solstice, polar cases; a year takes about 50 ms |
-| M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. Not yet checked on a real phone. |
-| M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. Open: the outdoor check of 2° on a real phone. |
-| M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. Open: the indoor check of 2° on a real phone. |
-| M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. Open: a real flat visit. |
-| M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. Open: a test with the real sun. |
-| M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 10 node tests of the package, 4 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). Open: a test on phones (Chrome on Android, Safari on iOS). |
+| M5 | `core/android` AAR (JNI and Kotlin API), Android app shell without camera | done: 11 instrumented tests pass on an emulator; on the emulator, the projection of path, horizon, and sun agrees with a hand calculation for set sensor values. |
+| M6 | Camera overlay with intrinsics and distortion | implemented: Camera2 calibration and the CameraX sensor-to-view transform, with a JVM property test of the conversion. |
+| M7 | Heading filter (core) with game rotation vector, magnetometer, sun tap, moon tap, and landmark on a map; UI rework | implemented and tested in C++, Python, and on an emulator. |
+| M8 | Date slider, time slider, azimuth readout (vertical line through the crosshair), dates for the crosshair, solstice guides | implemented; checked on an emulator. |
+| M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. |
+| M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 10 node tests of the package, 4 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central, Android APK | implemented: `scripts/release.py` and git cliff, the release workflow with a dry run, `publish-core.yml` (npm, wheels for Linux and macOS, sdist, AAR), `android-release.yml`. Open: the accounts and secrets of the registries, Windows wheels. |
-| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. Open: a test on a real iPhone. |
+| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. |
+| M12 | Moon phase in the apps; store screenshots (a demo mode in the debug builds, fastlane lanes, the workflow `screenshots.yml`) | implemented: the lit part of the moon faces the sun on Android, iOS, and the PWA. Open: the store accounts and secrets (see M10). |
+
+The user tested most features on real phones in November 2026. So the device checks of M5 to
+M11 are closed.
 
 The Python binding comes early (M2), because it is the easiest binding to test. It
 also checks that the public API is easy to bind before the API grows, and it gives a
@@ -566,7 +570,7 @@ fast way to plot paths and to compare models.
   `LENS_DISTORTION` says `correctedImage(x_i, y_i) = sample_at(x_c, y_c, inputImage)`, so
   it maps the ideal point to the distorted point, the same direction as OpenCV and the
   core. kappa_4 and kappa_5 are p1 and p2.
-- **Licenses.** Check the NREL SPA license before we put the code in the repository.
+- **Licenses.** Resolved: the NREL SPA is not in the repository. The tests use JPL Horizons.
   Astronomy Engine (MIT), GeographicLib (MIT), and Eigen (MPL 2.0) are not a problem.
 - **WMM validity.** WMM2025 is valid until the end of 2029. Plan an update.
 
@@ -581,8 +585,8 @@ fast way to plot paths and to compare models.
   `at.stefl`.
 - Do we publish the C++ package to a Conan remote? Only if someone outside this
   repository needs it.
-- Do we show the moon as well? Astronomy Engine gives it at no extra cost, and the
-  calibration needs it anyway.
+- The moon: decided and done. The apps show the moon with its phase, and the alignment uses
+  it (M7, M12).
 - Do we want a shadow mode later (for example, which wall gets the sun)? This needs a
   3D model of the room, so it is out of scope now.
 
