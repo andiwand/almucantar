@@ -87,6 +87,22 @@ const std::vector<ReferencePosition>& moon_positions() {
   return kData;
 }
 
+const std::vector<ReferencePlanetPosition>& planet_positions() {
+  static const auto kData = [] {
+    std::vector<ReferencePlanetPosition> result;
+    for (const auto& f : read_csv("planets_airless.csv")) {
+      result.push_back(ReferencePlanetPosition{
+          .site = f.at(0),
+          .planet = f.at(1),
+          .unix_utc = std::stod(f.at(2)),
+          .position = {.azimuth_deg = std::stod(f.at(3)), .altitude_deg = std::stod(f.at(4))},
+      });
+    }
+    return result;
+  }();
+  return kData;
+}
+
 const std::vector<ReferenceEvent>& events() {
   static const auto kData = [] {
     std::vector<ReferenceEvent> result;

@@ -36,6 +36,16 @@ const std::vector<ReferencePosition>& refracted_positions();
 /// The airless apparent positions of the moon in 2026 (moon_airless.csv).
 const std::vector<ReferencePosition>& moon_positions();
 
+struct ReferencePlanetPosition {
+  std::string site;
+  std::string planet;  // "mercury" to "neptune"
+  double unix_utc = 0;
+  Horizontal position;
+};
+
+/// The airless apparent positions of the planets in 2026 (planets_airless.csv).
+const std::vector<ReferencePlanetPosition>& planet_positions();
+
 /// Rise, transit, and set times for 2026 (sun_events.csv).
 const std::vector<ReferenceEvent>& events();
 

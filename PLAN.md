@@ -671,6 +671,10 @@ Astronomy Engine (already in the core) gives the planets. Show the bright planet
 Mars, Jupiter, Saturn) as points with a name. A planet is also a target for the heading
 calibration at night. The cost is small.
 
+**Status:** the core part is done (`sky.hpp`, in C++ and Python): `planet_position()` agrees
+with JPL Horizons to 0.006°, and `planet_magnitude()` gives the brightness, so an app can show
+only the planets that the eye sees. No app uses it yet.
+
 ### 13.5 Milky Way
 
 Show the galactic plane and the galactic center as a line and a point, from fixed galactic
@@ -678,3 +682,6 @@ coordinates converted to the horizontal frame with Astronomy Engine. It is usefu
 night photography, and only together with 13.2 (planning). It needs the darkness of the sky
 (the sun more than 18° below the horizon, and the moon) to be useful. Decide how to integrate
 it after 13.1 and 13.2.
+
+**Status:** the core part is done (`sky.hpp`, in C++ and Python): `galactic_position()` for the
+galactic center and `galactic_plane()` for the center line. No app uses it yet.

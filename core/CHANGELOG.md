@@ -18,6 +18,9 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   azimuth from an `ElevationGrid` (a DEM), with the curvature of the Earth and the terrestrial
   refraction. `terrain_altitude_deg()` interpolates the profile, and `terrain_events()` finds the
   visible sunrise and sunset behind the terrain. In C++ and Python for now.
+- The planets and the Milky Way: `planet_position()` and `planet_magnitude()` for Mercury to
+  Neptune (within 0.006° of JPL Horizons), and `galactic_position()` and `galactic_plane()` for
+  the galactic center and the center line of the Milky Way. In C++ and Python only.
 - `find_time()` refines each minimum, so a search across many days finds the nearest match.
 - `find_dates()` includes matches in the final partial day.
 - Searches keep exact crossings at sample times and at the ends of an azimuth interval.

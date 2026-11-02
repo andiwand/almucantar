@@ -17,6 +17,9 @@ Files:
 - moon_airless.csv: site, unix_utc, azimuth_deg, altitude_deg. Apparent topocentric
   position of the center of the moon, without refraction.
 
+- planets_airless.csv: site, planet, unix_utc, azimuth_deg, altitude_deg. Apparent
+  topocentric position of the center of each planet, without refraction.
+
 To fetch only some files: python3 core/test/tools/fetch_horizons.py moon
 """
 
@@ -51,6 +54,17 @@ JD_UNIX_EPOCH = 2440587.5
 
 
 MOON_SPAN = ("2026-01-01", "2027-01-01", "617 m")
+
+PLANET_SPAN = ("2026-01-01", "2027-01-01", "4801 m")
+PLANETS = {
+    "mercury": "199",
+    "venus": "299",
+    "mars": "499",
+    "jupiter": "599",
+    "saturn": "699",
+    "uranus": "799",
+    "neptune": "899",
+}
 
 
 def query(site, start, stop, step, apparent, rts=False, body="10"):
@@ -137,8 +151,27 @@ def write_moon():
     print("wrote", OUT / "moon_airless.csv")
 
 
+def write_planets():
+    with open(OUT / "planets_airless.csv", "w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["site", "planet", "unix_utc", "azimuth_deg", "altitude_deg"])
+        for site in SITES:
+            for planet, body in PLANETS.items():
+                start, stop, step = PLANET_SPAN
+                for unix, _, az, alt in query(
+                    site, start, stop, step, "AIRLESS", body=body
+                ):
+                    w.writerow([site, planet, f"{unix:.3f}", f"{az:.9f}", f"{alt:.9f}"])
+    print("wrote", OUT / "planets_airless.csv")
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    jobs = {"sun": write_positions, "events": write_events, "moon": write_moon}
+    jobs = {
+        "sun": write_positions,
+        "events": write_events,
+        "moon": write_moon,
+        "planets": write_planets,
+    }
     for name in sys.argv[1:] or jobs:
         jobs[name]()

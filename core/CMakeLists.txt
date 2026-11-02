@@ -26,6 +26,7 @@ set(SUNRADAR_SOURCE_FILES
   src/sunradar/magnetic.cpp
   src/sunradar/moon.cpp
   src/sunradar/search.cpp
+  src/sunradar/sky.cpp
   src/sunradar/sun.cpp
   src/sunradar/terrain.cpp
   src/sunradar/version.cpp

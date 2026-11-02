@@ -551,6 +551,41 @@ void bind_terrain(py::module_& m) {
         "Finds the times when the sun crosses the terrain horizon.");
 }
 
+void bind_sky(py::module_& m) {
+  using namespace sunradar;
+  py::enum_<Planet>(m, "Planet")
+      .value("mercury", Planet::mercury)
+      .value("venus", Planet::venus)
+      .value("mars", Planet::mars)
+      .value("jupiter", Planet::jupiter)
+      .value("saturn", Planet::saturn)
+      .value("uranus", Planet::uranus)
+      .value("neptune", Planet::neptune);
+
+  const SkyOptions defaults;
+  py::class_<SkyOptions>(m, "SkyOptions")
+      .def(py::init([](const bool refraction, const Atmosphere& atmosphere) {
+             return SkyOptions{.refraction = refraction, .atmosphere = atmosphere};
+           }),
+           "refraction"_a = defaults.refraction, "atmosphere"_a = defaults.atmosphere)
+      .def_readwrite("refraction", &SkyOptions::refraction)
+      .def_readwrite("atmosphere", &SkyOptions::atmosphere);
+
+  m.def("planet_position", &planet_position, "planet"_a, "unix_utc"_a, "observer"_a,
+        "options"_a = SkyOptions{},
+        "Returns the apparent topocentric position of the center of a planet.");
+  m.def("planet_magnitude", &planet_magnitude, "planet"_a, "unix_utc"_a,
+        "Returns the visual magnitude of a planet. A smaller value is brighter.");
+  m.attr("GALACTIC_CENTER_LONGITUDE_DEG") = kGalacticCenterLongitudeDeg;
+  m.attr("GALACTIC_CENTER_LATITUDE_DEG") = kGalacticCenterLatitudeDeg;
+  m.def("galactic_position", &galactic_position, "galactic_longitude_deg"_a,
+        "galactic_latitude_deg"_a, "unix_utc"_a, "observer"_a, "options"_a = SkyOptions{},
+        "Returns the position of a direction in the galactic system for the observer.");
+  m.def("galactic_plane", &galactic_plane, "unix_utc"_a, "observer"_a, "step_deg"_a = 1.0,
+        "options"_a = SkyOptions{},
+        "Returns the galactic plane (the center line of the Milky Way) for the observer.");
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -562,6 +597,7 @@ PYBIND11_MODULE(_core, m) {
   bind_heading(m);
   bind_moon(m);
   bind_terrain(m);
+  bind_sky(m);
   m.def(
       "version", [] { return std::string(sunradar::version()); },
       "Returns the version of the core library.");
