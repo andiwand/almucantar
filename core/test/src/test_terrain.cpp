@@ -426,7 +426,7 @@ TEST_CASE("terrain_events finds the moon behind the terrain", "[terrain]") {
   // The sun is the default, so the moon gives other times.
   REQUIRE(first(terrain_events(vienna, constant_profile(0), start, end), true) !=
           first(flat, true));
-  REQUIRE_THROWS_AS(terrain_events(vienna, constant_profile(0), start, end,
-                                   {.body = static_cast<Body>(7)}),
-                    std::invalid_argument);
+  REQUIRE_THROWS_AS(
+      terrain_events(vienna, constant_profile(0), start, end, {.body = static_cast<Body>(7)}),
+      std::invalid_argument);
 }

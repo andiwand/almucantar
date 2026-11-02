@@ -49,7 +49,11 @@ def dependency_archives(graph: dict) -> list[pathlib.Path]:
     archives = []
     for node in graph["graph"]["nodes"].values():
         folder = node.get("package_folder")
-        if node.get("context") != "host" or not folder or node.get("ref", "").startswith("sunradar"):
+        if (
+            node.get("context") != "host"
+            or not folder
+            or node.get("ref", "").startswith("sunradar")
+        ):
             continue
         archives += sorted((pathlib.Path(folder) / "lib").glob("*.a"))
     return archives
@@ -70,7 +74,9 @@ def build(profile: str, conan: str) -> pathlib.Path:
         "--format=json",
     ]
     print("+", " ".join(command), flush=True)
-    result = subprocess.run(command, cwd=CORE, check=True, stdout=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        command, cwd=CORE, check=True, stdout=subprocess.PIPE, text=True
+    )
     dependencies = dependency_archives(json.loads(result.stdout))
     preset = f"conan-{FOLDERS[profile]}"
     run(["cmake", "--preset", preset, "-DSUNRADAR_WARNINGS_AS_ERRORS=ON"])

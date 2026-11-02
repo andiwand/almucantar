@@ -577,21 +577,20 @@ void bind_terrain(py::module_& m) {
 
   const TerrainEventOptions events;
   py::class_<TerrainEventOptions>(m, "TerrainEventOptions")
-      .def(
-          py::init([](const Body body, const SolarModel model, const bool refraction,
-                      const Atmosphere& atmosphere, const double limb_deg,
-                      const double search_step_s, const double tolerance_s) {
-            return TerrainEventOptions{.body = body,
-                                       .model = model,
-                                       .refraction = refraction,
-                                       .atmosphere = atmosphere,
-                                       .limb_deg = limb_deg,
-                                       .search_step_s = search_step_s,
-                                       .tolerance_s = tolerance_s};
-          }),
-          "body"_a = events.body, "model"_a = events.model, "refraction"_a = events.refraction,
-          "atmosphere"_a = events.atmosphere, "limb_deg"_a = events.limb_deg,
-          "search_step_s"_a = events.search_step_s, "tolerance_s"_a = events.tolerance_s)
+      .def(py::init([](const Body body, const SolarModel model, const bool refraction,
+                       const Atmosphere& atmosphere, const double limb_deg,
+                       const double search_step_s, const double tolerance_s) {
+             return TerrainEventOptions{.body = body,
+                                        .model = model,
+                                        .refraction = refraction,
+                                        .atmosphere = atmosphere,
+                                        .limb_deg = limb_deg,
+                                        .search_step_s = search_step_s,
+                                        .tolerance_s = tolerance_s};
+           }),
+           "body"_a = events.body, "model"_a = events.model, "refraction"_a = events.refraction,
+           "atmosphere"_a = events.atmosphere, "limb_deg"_a = events.limb_deg,
+           "search_step_s"_a = events.search_step_s, "tolerance_s"_a = events.tolerance_s)
       .def_readwrite("body", &TerrainEventOptions::body)
       .def_readwrite("model", &TerrainEventOptions::model)
       .def_readwrite("refraction", &TerrainEventOptions::refraction)

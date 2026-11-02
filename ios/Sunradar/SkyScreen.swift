@@ -255,8 +255,12 @@ struct SkyScreen: SwiftUI.View {
         var fov = size.width < size.height ? 60.0 : 90.0
         if ScreenshotMode.scene != nil {
             // 65° across the shorter side of the screen, as on Android.
-            let half = 32.5 * Double.pi / 180
-            fov = size.width <= size.height ? 65 : 2 * atan(tan(half) * size.width / size.height) * 180 / .pi
+            // Explicit Double values: the mix of CGFloat, Double, and literals in one expression
+            // is too slow for the type checker of the CI compiler.
+            let half: Double = 32.5 * Double.pi / 180
+            let aspect = Double(size.width) / Double(size.height)
+            let wideFov: Double = 2 * atan(tan(half) * aspect) * 180 / Double.pi
+            fov = size.width <= size.height ? 65 : wideFov
         }
         let virtualCamera =
             (try? cameraFromFov(width: size.width, height: size.height, horizontalFovDeg: fov)) ?? Sunradar.Camera()

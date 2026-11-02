@@ -263,7 +263,8 @@ std::vector<MapTile> map_tiles(const Observer& observer, const double max_distan
   require_positive(max_distance_m, "max_distance_m");
   require(max_distance_m <= kMaxDistanceM, "max_distance_m is greater than 500 km");
   require(zoom >= 0 && zoom <= 12, "zoom is not in the range [0, 12]");
-  const int n = 1 << zoom;
+  // zoom is in [0, 12] here, so the shift of an unsigned value is safe.
+  const auto n = static_cast<int>(1U << static_cast<unsigned>(zoom));
   const double reach_deg = max_distance_m / kEarthRadiusM * kRadToDeg;
   const double north = std::min(observer.latitude_deg + reach_deg, kMaxMercatorLatitudeDeg);
   const double south = std::max(observer.latitude_deg - reach_deg, -kMaxMercatorLatitudeDeg);
