@@ -362,3 +362,183 @@ final class TerrainHorizonTests: XCTestCase {
         XCTAssertEqual(lines[1].map(\.altitudeDeg), [4, 1])
     }
 }
+
+/// The prefix files of the coarse check (PLAN.md 14.3), with a fake server that supports Range.
+/// The test files have no level 2, so the cache uses level 1 as the coarse level.
+final class DemCachePrefixTests: XCTestCase {
+    private var directory: URL!
+    private let server = FakeServer()
+    private let clock = Clock()
+    private let innsbruck = ElevationTile(latitudeDeg: 47, longitudeDeg: 11)
+
+    private func makeCache(headerBytes: Int) throws -> DemCache {
+        let clock = clock
+        return try DemCache(
+            directory: directory, http: server, now: { clock.now }, coarseLevel: 1, headerBytes: headerBytes)
+    }
+
+    private func rows(_ tile: DemTile) -> Int? {
+        if case .grid(let grid) = tile { return grid.rows }
+        return nil
+    }
+
+    private var prefixFile: URL { directory.appendingPathComponent("N47_00_E011_00.l1.tif") }
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    func testThePrefixDownloadsInTwoSteps() async throws {
+        let body = TestGeotiff.tile(innsbruck, heightM: 500)
+        let size = try elevationGeotiffPrefixSize(body, level: 1)
+        XCTAssertEqual(size, TestGeotiff.headerSize + 64)
+        XCTAssertLessThan(size, body.count)
+        server.put(innsbruck, body)
+        // The header has all directories, but not the data of the overview.
+        let cache = try makeCache(headerBytes: TestGeotiff.headerSize)
+        let result = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(result), 4)
+        XCTAssertEqual(server.requests.map { $0.headers["Range"] }, ["bytes=0-319", "bytes=320-383"])
+        XCTAssertEqual(try Data(contentsOf: prefixFile), body.prefix(size))
+        let entry = await cache.index["N47_00_E011_00.l1"]
+        XCTAssertEqual(entry?.size, Int64(size))
+        XCTAssertEqual(entry?.etag, "\"a\"")
+        // The prefix file is not the full file.
+        let state = await (cache.contains(innsbruck), cache.containsCoarse(innsbruck))
+        XCTAssertFalse(state.0)
+        XCTAssertTrue(state.1)
+        // The next time, it comes from the cache.
+        let again = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(again), 4)
+        XCTAssertEqual(server.requests.count, 2)
+    }
+
+    func testAShortHeaderGetsALongerOne() async throws {
+        // A file of the core: 16 bytes are too short to tell the size of the prefix.
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../..").standardized
+        let body = try Data(contentsOf: root.appendingPathComponent("core/test/data/geotiff/float_tiles_deflate_p3.tif"))
+        XCTAssertEqual(try elevationGeotiffPrefixSize(body.prefix(16), level: 1), 0)
+        server.put(innsbruck, body)
+        let cache = try makeCache(headerBytes: 16)
+        let result = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(result), 4)
+        XCTAssertEqual(server.requests.first?.headers["Range"], "bytes=0-15")
+        XCTAssertEqual(server.requests[1].headers["Range"], "bytes=16-63")
+        XCTAssertEqual(server.fullRequests(innsbruck), 0)
+        let size = try elevationGeotiffPrefixSize(body, level: 1)
+        XCTAssertEqual(try Data(contentsOf: prefixFile), body.prefix(size))
+    }
+
+    func testA404IsTheSeaAlsoForThePrefix() async throws {
+        let cache = try makeCache(headerBytes: 16384)
+        guard case .sea = await cache.coarseTile(innsbruck, keep: []) else { return XCTFail("not the sea") }
+        guard case .sea = await cache.coarseTile(innsbruck, keep: []) else { return XCTFail("not the sea") }
+        XCTAssertEqual(server.requests.count, 1)
+        XCTAssertEqual(server.requests[0].headers["Range"], "bytes=0-16383")
+        let contains = await cache.containsCoarse(innsbruck)
+        XCTAssertTrue(contains)
+    }
+
+    func testAServerWithoutRangeSendsTheWholeFile() async throws {
+        let body = TestGeotiff.tile(innsbruck, heightM: 500)
+        server.put(innsbruck, body)
+        server.ignoresRange = true
+        let cache = try makeCache(headerBytes: 64)
+        let result = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(result), 4)
+        XCTAssertEqual(server.requests.count, 1)
+        // The cache keeps only the prefix.
+        let size = try elevationGeotiffPrefixSize(body, level: 1)
+        XCTAssertEqual(try Data(contentsOf: prefixFile).count, size)
+    }
+
+    func testAnOldPrefixGetsAConditionalRangeRequest() async throws {
+        let body = TestGeotiff.tile(innsbruck, heightM: 500)
+        server.put(innsbruck, body)
+        let cache = try makeCache(headerBytes: 16384)
+        _ = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(server.requests.count, 1)
+        // Younger than 180 days: no request.
+        clock.advance(days: 179)
+        _ = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(server.requests.count, 1)
+        // Older: a conditional Range request. 304 keeps the file.
+        clock.advance(days: 2)
+        let result = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(result), 4)
+        XCTAssertEqual(server.requests.count, 2)
+        XCTAssertEqual(server.requests[1].headers["If-None-Match"], "\"a\"")
+        XCTAssertEqual(server.requests[1].headers["Range"], "bytes=0-16383")
+        var entry = await cache.index["N47_00_E011_00.l1"]
+        XCTAssertEqual(entry?.checked, clock.now)
+        // A new file on the server: 206 replaces the prefix.
+        clock.advance(days: 181)
+        let changed = TestGeotiff.tile(innsbruck, size: 16, heightM: 700)
+        server.put(innsbruck, changed, etag: "\"b\"")
+        let replaced = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(replaced), 8)
+        entry = await cache.index["N47_00_E011_00.l1"]
+        XCTAssertEqual(entry?.etag, "\"b\"")
+        XCTAssertEqual(entry?.checked, clock.now)
+        XCTAssertEqual(try Data(contentsOf: prefixFile), changed.prefix(try elevationGeotiffPrefixSize(changed, level: 1)))
+        // Offline, the old prefix stays.
+        clock.advance(days: 181)
+        server.online = false
+        let offline = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(offline), 8)
+    }
+
+    func testAFullFileServesTheCoarseLevel() async throws {
+        let body = TestGeotiff.tile(innsbruck, heightM: 500)
+        server.put(innsbruck, body)
+        let cache = try makeCache(headerBytes: 16384)
+        // First the prefix, then the full file: the full file replaces the prefix file.
+        _ = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: prefixFile.path))
+        let full = await cache.tile(innsbruck, level: 0, keep: [])
+        XCTAssertEqual(rows(full), 8)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: prefixFile.path))
+        let prefixEntry = await cache.index["N47_00_E011_00.l1"]
+        XCTAssertNil(prefixEntry)
+        // The coarse level comes from the full file, without a request.
+        server.clearRequests()
+        let coarse = await cache.coarseTile(innsbruck, keep: [])
+        XCTAssertEqual(rows(coarse), 4)
+        XCTAssertTrue(server.requests.isEmpty)
+        let total = await cache.totalBytes
+        XCTAssertEqual(total, Int64(body.count))
+    }
+
+    func testAKeptPrefixSurvivesTheEviction() async throws {
+        let munich = ElevationTile(latitudeDeg: 48, longitudeDeg: 11)
+        let body = TestGeotiff.tile(innsbruck, heightM: 500)
+        server.put(innsbruck, body)
+        server.put(munich, TestGeotiff.tile(munich, heightM: 500))
+        let clock = clock
+        // Space for no file that is not kept.
+        let cache = try DemCache(
+            directory: directory, http: server, now: { clock.now }, maxBytes: 1, coarseLevel: 1, headerBytes: 16384)
+        _ = await cache.keep(name: "Innsbruck", observer: Observer(latitudeDeg: 47.26, longitudeDeg: 11.39), tiles: [innsbruck])
+        _ = await cache.coarseTile(innsbruck, keep: [])
+        clock.advance(days: 1)
+        _ = await cache.coarseTile(munich, keep: [])
+        clock.advance(days: 1)
+        _ = await cache.tile(munich, level: 0, keep: [])
+        // A third tile evicts Munich, but not the kept prefix of Innsbruck.
+        let verona = ElevationTile(latitudeDeg: 45, longitudeDeg: 10)
+        server.put(verona, TestGeotiff.tile(verona, heightM: 500))
+        clock.advance(days: 1)
+        _ = await cache.coarseTile(verona, keep: [])
+        let contains = await (cache.containsCoarse(innsbruck), cache.containsCoarse(munich), cache.containsCoarse(verona))
+        XCTAssertTrue(contains.0)
+        XCTAssertFalse(contains.1)
+        XCTAssertTrue(contains.2)
+        let summary = await cache.keptSummaries().first
+        XCTAssertEqual(summary?.tiles, 1)
+        XCTAssertEqual(summary?.bytes, Int64(try elevationGeotiffPrefixSize(body, level: 1)))
+    }
+}

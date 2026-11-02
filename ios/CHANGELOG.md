@@ -5,6 +5,12 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The terrain downloads much less where it does not matter. The app first downloads only the
+  first part of each elevation tile (an overview of about 370 m, about 300 KB of the 2–5 MB of a
+  tile) and shows this terrain line at once. Only if the terrain is 1° high or more, it also
+  downloads the full tiles near the place (nearer than 25 km). A flat place now needs about 2.5 MB
+  in place of about 44 MB, and Innsbruck about 7 MB. "Keep offline" keeps the same data.
+
 - Keep the terrain of a place offline, to prepare a trip. "Keep offline" in the place panel
   downloads all elevation tiles of the place ("Downloading 3/9", then "Ready offline: 9 tiles,
   44 MB"). The download continues when the panel closes. If tiles fail, the panel shows "2 tiles

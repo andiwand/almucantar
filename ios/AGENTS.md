@@ -14,17 +14,17 @@ features and the behavior.
 | `Sunradar/MapPicker.swift` | The MapKit map to pick a landmark. |
 | `Sunradar/BaseMap.swift` | The offline base map (`assets/basemap/basemap.json`, Natural Earth, a resource of the app): the decode, the search, the nearest place and its time zone, and Web Mercator (`MapViewport`). `BaseMapStore` decodes it once, off the main thread. |
 | `Sunradar/PlacePanel.swift` | The place panel: the search and the offline map, drawn with a `Canvas` (`BaseMapDrawing`), where a tap drops the place. It also has "Keep offline" and the list of the kept places. |
-| `Sunradar/KeptPlaces.swift` | "Keep offline" (`PLAN.md` 13.3): it downloads the tiles of `elevationTiles(place, 100 km)` and keeps the state and the list of the kept places. `SkyScreen` owns it, so the download continues when the panel closes. |
+| `Sunradar/KeptPlaces.swift` | "Keep offline" (`PLAN.md` 13.3): it downloads the same data as the terrain (the prefix files of the tiles of `elevationTiles(place, 100 km)`, and the full near tiles if the threshold applies) and keeps the state and the list of the kept places. `SkyScreen` owns it, so the download continues when the panel closes. |
 | `Sunradar/PlaceTime.swift` | The calendar, the day, and the text of the times in the time zone of the place. |
 | `Sunradar/SunDetector.swift` | The saturated regions of a luminance image (the same algorithm as on Android). |
 | `Sunradar/Geo.swift` | The bearing, the distance, and the angle between two directions. |
 | `Sunradar/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
 | `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
 | `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
-| `Sunradar/DemCache.swift` | The persistent cache of the Copernicus GLO-90 tiles in Application Support/`dem`, with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
-| `Sunradar/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles, calculates the profile off the main thread, and derives the hidden parts of the path and the visible sunrise and sunset (`TerrainDay`). |
+| `Sunradar/DemCache.swift` | The persistent cache of the Copernicus GLO-90 tiles in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
+| `Sunradar/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles in two steps (the coarse check, then the full near tiles if the terrain is high), calculates the profile off the main thread, and derives the hidden parts of the path and the visible sunrise and sunset (`TerrainDay`). |
 | `Sunradar/SettingsView.swift` | The settings (the terrain horizon) and the credits. |
-| `SunradarTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), and of the base map, the search, and the time zones (`PlaceTests.swift`). |
+| `SunradarTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
 | `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
 | `fastlane/` | The lanes `screenshots` and `upload_listing`. |
 | `Sunradar/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
@@ -75,6 +75,21 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   the dictionary of the tiles; the cache still reads it. The eviction never deletes a tile of a kept
   place, and these tiles do not count toward the limit of 400 MB. The revalidation after 180 days
   applies to all tiles. "Remove" only deletes the record, so its tiles become normal cache tiles.
+- The terrain loads in two steps (`PLAN.md` 14.3). The PWA and Android have the same steps:
+  1. The coarse check: for each tile, the cache downloads only the prefix that level 2 needs
+     (`elevationGeotiffPrefixSize`): first `bytes=0-16383`, then the rest of the prefix. A size of 0
+     gets a header that is 4 times longer. 404 is the sea. A 200 for a Range request is the whole
+     file; the cache keeps only the prefix. The app shows the coarse profile at once.
+  2. If the coarse profile reaches `TerrainHorizon.fullTerrainMinDeg` (1°), the full files of the
+     tiles nearer than `fullResolutionM` (25 km), and the profile again with level 0 for these
+     tiles. Below 1°, the app downloads nothing more.
+- A full file also serves level 2, so the cache downloads no prefix if it has the full file, and it
+  deletes the prefix file when it stores the full file. The revalidation of a prefix file is a
+  conditional Range request (If-None-Match and Range): 304 keeps the file, 206 or 200 replaces it.
+- A kept place keeps the tile names. The eviction protects both entries of each kept tile (the full
+  file and the prefix file), because the terrain uses the one that the cache has.
+- `calculateProfile` sorts the grids, because the core takes the first tile with data at the edge
+  of two tiles. Without a fixed order, the same grids can give a slightly different profile.
 - `TerrainHorizon` and `KeptPlaces` use the same actor, `DemCache.shared`, because both write the
   index. Do not make a second `DemCache` for the same directory.
 - `terrainAltitudeDeg()` converts the whole profile for each call. Call it when the profile or the

@@ -2,7 +2,8 @@ import Foundation
 import Sunradar
 
 /// The places that the user keeps offline (PLAN.md 13.3, "download this region"). "Keep offline"
-/// downloads all tiles of the terrain of a place, and the DemCache keeps them out of the eviction.
+/// downloads the terrain data of a place, the same as `TerrainHorizon` loads, and the DemCache
+/// keeps it out of the eviction.
 /// The sky screen owns this object, so the download continues when the place panel closes.
 @MainActor
 final class KeptPlaces: ObservableObject {
@@ -59,7 +60,9 @@ final class KeptPlaces: ObservableObject {
         places = await cache.keptSummaries()
     }
 
-    /// Keeps the terrain tiles of a place offline: the same tiles as the terrain horizon uses. A
+    /// Keeps the terrain tiles of a place offline: the same data as the terrain horizon uses
+    /// (PLAN.md 14.3). It downloads the prefix files of all tiles. If the coarse profile reaches
+    /// `TerrainHorizon.fullTerrainMinDeg`, it also downloads the full files of the near tiles. A
     /// second call during a download does nothing.
     func keep(name: String, observer: Observer) {
         guard let cache, !downloading else { return }
@@ -71,31 +74,55 @@ final class KeptPlaces: ObservableObject {
             await refresh()
             let keep = Set(tiles.map(DemCache.name))
             var done = 0
-            var missing = 0
-            await withTaskGroup(of: Bool.self) { group in
-                var next = 0
-                func add() {
-                    guard next < tiles.count else { return }
-                    let tile = tiles[next]
-                    next += 1
-                    // The level does not matter: the cache stores the whole file. Level 0 checks
-                    // that the core can read the file. A sea tile (404) counts as ready.
-                    group.addTask {
-                        if case .unavailable = await cache.tile(tile, level: 0, keep: keep) { return false }
-                        return true
+            var total = tiles.count
+            // A tile that fails in both steps counts one time.
+            var missing = Set<String>()
+            var grids: [(distanceM: Double, grid: ElevationGrid)] = []
+            var sea = Set<String>()
+
+            /// Loads the tiles, `parallelDownloads` at the same time. A sea tile (404) counts as
+            /// ready.
+            @MainActor func fetch(_ tiles: [ElevationTile], full: Bool) async {
+                await withTaskGroup(of: (tile: ElevationTile, result: DemTile).self) { group in
+                    var next = 0
+                    func add() {
+                        guard next < tiles.count else { return }
+                        let tile = tiles[next]
+                        next += 1
+                        group.addTask {
+                            let result =
+                                full
+                                ? await cache.tile(tile, level: 0, keep: keep) : await cache.coarseTile(tile, keep: keep)
+                            return (tile, result)
+                        }
+                    }
+                    for _ in 0..<Self.parallelDownloads { add() }
+                    while let finished = await group.next() {
+                        done += 1
+                        switch finished.result {
+                        case .grid(let grid): grids.append((finished.tile.distanceM, grid))
+                        case .sea: sea.insert(DemCache.name(finished.tile))
+                        case .unavailable: missing.insert(DemCache.name(finished.tile))
+                        }
+                        state = .downloading(done: done, total: total)
+                        add()
                     }
                 }
-                for _ in 0..<Self.parallelDownloads { add() }
-                while let ok = await group.next() {
-                    done += 1
-                    if !ok { missing += 1 }
-                    state = .downloading(done: done, total: tiles.count)
-                    add()
-                }
+            }
+
+            // Step 1: the coarse check, with the prefix files of all tiles.
+            await fetch(tiles, full: false)
+            // Step 2: the full files of the near tiles, if the terrain is high.
+            let profile = await TerrainHorizon.calculateProfile(observer: observer, grids: grids)
+            if TerrainHorizon.needsFullResolution(profile) {
+                let near = tiles.filter { TerrainHorizon.isNear($0) && !sea.contains(DemCache.name($0)) }
+                total += near.count
+                state = .downloading(done: done, total: total)
+                await fetch(near, full: true)
             }
             await refresh()
-            if missing > 0 {
-                state = .missing(count: missing)
+            if !missing.isEmpty {
+                state = .missing(count: missing.count)
             } else {
                 let summary = places.first { $0.id == place.id }
                 state = .ready(tiles: summary?.tiles ?? tiles.count, bytes: summary?.bytes ?? 0)

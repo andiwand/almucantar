@@ -46,15 +46,25 @@ enum DemTile {
     case unavailable
 }
 
-/// The persistent cache of the Copernicus GLO-90 tiles: one GeoTIFF file per tile and a JSON
-/// index. A tile that is older than `maxAge` gets a conditional request. If the network fails,
-/// the old tile stays, so the app works offline. If the files are larger than `maxBytes`, the
-/// tiles that were used least recently are deleted, but not the tiles in `keep`.
+/// The persistent cache of the Copernicus GLO-90 tiles: GeoTIFF files and a JSON index. A tile has
+/// two kinds of entries (PLAN.md 14.3):
+///
+/// - The full file (`N47_00_E011_00.tif`), for the near tiles at full resolution.
+/// - The prefix file (`N47_00_E011_00.l2.tif`): only the first part of the file, with the
+///   directories and the overview at `coarseLevel`. An HTTP Range request downloads it. It is
+///   about 300 KB of the 2–5 MB of a tile.
+///
+/// A full file also serves `coarseLevel`, so the cache downloads no prefix if it has the full
+/// file, and it deletes the prefix file when it stores the full file.
+///
+/// An entry that is older than `maxAge` gets a conditional request. If the network fails, the old
+/// entry stays, so the app works offline. If the files are larger than `maxBytes`, the entries
+/// that were used least recently are deleted, but not the entries of the tiles in `keep`.
 ///
 /// The user can keep the tiles of a place offline (`KeptPlace`, PLAN.md 13.3). The eviction never
-/// deletes a tile of a kept place, and these tiles do not count toward `maxBytes`.
+/// deletes an entry of a kept tile, and these entries do not count toward `maxBytes`.
 actor DemCache {
-    /// The data of one tile in the index.
+    /// The data of one entry in the index: a full file or a prefix file.
     struct Entry: Codable, Equatable {
         var etag: String?
         var lastModified: String?
@@ -82,9 +92,9 @@ actor DemCache {
     /// A kept place with the tiles that the cache has now.
     struct KeptSummary: Equatable, Identifiable, Sendable {
         var place: KeptPlace
-        /// The tiles that the cache has: files on the disk and the sea.
+        /// The tiles that the cache has: a full file, a prefix file, or the sea.
         var tiles: Int
-        /// The size of the files on the disk.
+        /// The size of the files on the disk (the full files and the prefix files).
         var bytes: Int64
         var id: String { place.id }
     }
@@ -97,25 +107,40 @@ actor DemCache {
 
     static let defaultMaxBytes: Int64 = 400 * 1024 * 1024
     static let defaultMaxAge: TimeInterval = 180 * 86400
+    /// The overview for the coarse check: level 2 of a Copernicus tile has 300 x 300 samples
+    /// (about 370 m).
+    static let defaultCoarseLevel = 2
+    /// The first Range request asks for this many bytes. For a Copernicus tile, it has all
+    /// directories, so `elevationGeotiffPrefixSize` can give the size of the prefix.
+    static let defaultHeaderBytes = 16384
+    /// A header that is still too short gets 4 times more bytes, up to this size.
+    private static let maxHeaderBytes = 4 * 1024 * 1024
 
     let directory: URL
     private let http: HTTPClient
     private let now: @Sendable () -> Date
     private let maxBytes: Int64
     private let maxAge: TimeInterval
+    /// The level of the prefix files. The tests use level 1, because their small files have no
+    /// level 2.
+    nonisolated let coarseLevel: Int
+    private let headerBytes: Int
     private(set) var index: [String: Entry]
     /// The places that the user keeps offline, in the order of the "Keep offline" action.
     private(set) var kept: [KeptPlace]
 
     init(
         directory: URL, http: HTTPClient, now: @escaping @Sendable () -> Date = { Date() },
-        maxBytes: Int64 = DemCache.defaultMaxBytes, maxAge: TimeInterval = DemCache.defaultMaxAge
+        maxBytes: Int64 = DemCache.defaultMaxBytes, maxAge: TimeInterval = DemCache.defaultMaxAge,
+        coarseLevel: Int = DemCache.defaultCoarseLevel, headerBytes: Int = DemCache.defaultHeaderBytes
     ) throws {
         self.directory = directory
         self.http = http
         self.now = now
         self.maxBytes = maxBytes
         self.maxAge = maxAge
+        self.coarseLevel = coarseLevel
+        self.headerBytes = headerBytes
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
         // The tiles come from the network again, so they are not in the backup. The flag of the
@@ -154,23 +179,40 @@ actor DemCache {
             tile.longitudeDeg < 0 ? "W" : "E", abs(tile.longitudeDeg))
     }
 
+    /// The name of the prefix file of a tile in the index, for example N47_00_E011_00.l2.
+    nonisolated func prefixName(_ tile: ElevationTile) -> String { prefixName(Self.name(tile)) }
+
+    nonisolated func prefixName(_ name: String) -> String { "\(name).l\(coarseLevel)" }
+
     /// The URL of a tile of Copernicus GLO-90 on AWS Open Data.
     static func url(_ tile: ElevationTile) -> URL {
         let file = "Copernicus_DSM_COG_30_\(name(tile))_DEM"
         return URL(string: "https://copernicus-dem-90m.s3.amazonaws.com/\(file)/\(file).tif")!
     }
 
-    /// True if the cache has the tile (a file or the sea), so it does not need the network.
-    func contains(_ tile: ElevationTile) -> Bool {
-        guard let entry = index[Self.name(tile)] else { return false }
-        return entry.sea || FileManager.default.fileExists(atPath: file(Self.name(tile)).path)
+    /// True if the cache has the full file of the tile or the sea, so it does not need the network.
+    func contains(_ tile: ElevationTile) -> Bool { has(Self.name(tile)) }
+
+    /// True if the cache has the tile at `coarseLevel`: the full file, the prefix file, or the sea.
+    func containsCoarse(_ tile: ElevationTile) -> Bool { has(Self.name(tile)) || has(prefixName(tile)) }
+
+    /// True if the index has the entry and its file exists (or it is the sea).
+    private func has(_ name: String) -> Bool {
+        guard let entry = index[name] else { return false }
+        return entry.sea || FileManager.default.fileExists(atPath: file(name).path)
     }
 
     /// The total size of the files in the index.
     var totalBytes: Int64 { index.values.reduce(0) { $0 + $1.size } }
 
-    /// The names of the tiles of all kept places.
-    var keptNames: Set<String> { Set(kept.flatMap(\.tiles)) }
+    /// The names of the entries of the given tiles: the full files and the prefix files.
+    nonisolated func entryNames(_ tiles: some Sequence<String>) -> Set<String> {
+        Set(tiles.flatMap { [$0, prefixName($0)] })
+    }
+
+    /// The names of the entries of the tiles of all kept places. A kept tile keeps its full file
+    /// and its prefix file, because the terrain uses the one that the cache has.
+    var keptNames: Set<String> { entryNames(kept.flatMap(\.tiles)) }
 
     /// The size of the files that are not kept. The limit `maxBytes` applies to this size.
     var cacheBytes: Int64 {
@@ -216,28 +258,45 @@ actor DemCache {
             var tiles = 0
             var bytes: Int64 = 0
             for name in place.tiles {
-                guard let entry = index[name] else { continue }
-                if entry.sea || FileManager.default.fileExists(atPath: file(name).path) {
-                    tiles += 1
-                    bytes += entry.size
-                }
+                let present = [name, prefixName(name)].filter(has)
+                if !present.isEmpty { tiles += 1 }
+                bytes += present.reduce(0) { $0 + (index[$1]?.size ?? 0) }
             }
             return KeptSummary(place: place, tiles: tiles, bytes: bytes)
         }
     }
 
-    /// Returns a tile, read at `level`. The tile comes from the cache, or from the network if the
-    /// cache does not have it or if it is older than `maxAge`. The names in `keep` are the tiles
-    /// of the current place; the eviction does not delete them.
+    /// Returns a tile from its full file, read at `level`. The tile comes from the cache, or from
+    /// the network if the cache does not have it or if it is older than `maxAge`. The names in
+    /// `keep` are the tiles of the current place; the eviction does not delete their entries.
     func tile(_ tile: ElevationTile, level: Int, keep: Set<String>) async -> DemTile {
-        let name = Self.name(tile)
+        await load(tile, kind: .full, level: level, keep: keep)
+    }
+
+    /// Returns a tile at `coarseLevel`. If the cache has the full file of the tile (or the sea), it
+    /// reads the full file. Otherwise it uses the prefix file, and downloads it if necessary.
+    func coarseTile(_ tile: ElevationTile, keep: Set<String>) async -> DemTile {
+        if has(Self.name(tile)) { return await load(tile, kind: .full, level: coarseLevel, keep: keep) }
+        return await load(tile, kind: .prefix, level: coarseLevel, keep: keep)
+    }
+
+    /// The two kinds of entries of a tile.
+    private enum Kind { case full, prefix }
+
+    private func entryName(_ tile: ElevationTile, _ kind: Kind) -> String {
+        kind == .full ? Self.name(tile) : prefixName(tile)
+    }
+
+    private func load(_ tile: ElevationTile, kind: Kind, level: Int, keep: Set<String>) async -> DemTile {
+        let name = entryName(tile, kind)
         let url = file(name)
+        let keep = entryNames(keep)
         // A file that the core cannot read is deleted and downloaded again, one time.
         var retried = false
         while true {
             if var entry = index[name], entry.sea || FileManager.default.fileExists(atPath: url.path) {
                 if now().timeIntervalSince(entry.checked) > maxAge {
-                    await revalidate(tile, entry: entry, keep: keep)
+                    await revalidate(tile, kind: kind, entry: entry, keep: keep)
                     guard let updated = index[name] else { return .unavailable }
                     entry = updated
                 }
@@ -250,40 +309,99 @@ actor DemCache {
                 if retried { return .unavailable }
                 retried = true
             }
-            if await download(tile, keep: keep) == .failed { return .unavailable }
+            if await download(tile, kind: kind, conditions: [:], keep: keep) == .failed { return .unavailable }
         }
     }
 
     // MARK: - The network
 
-    private enum DownloadResult { case file, sea, failed }
+    private enum DownloadResult { case file, sea, notModified, failed }
 
-    /// Downloads a tile without a condition and stores it.
-    private func download(_ tile: ElevationTile, keep: Set<String>) async -> DownloadResult {
-        guard let response = try? await http.get(Self.url(tile), headers: [:]) else { return .failed }
-        return store(tile, response: response, keep: keep)
+    /// Downloads an entry and stores it. With `conditions` (If-None-Match, If-Modified-Since),
+    /// the server can answer 304.
+    private func download(
+        _ tile: ElevationTile, kind: Kind, conditions: [String: String], keep: Set<String>
+    ) async -> DownloadResult {
+        switch kind {
+        case .full:
+            guard let response = try? await http.get(Self.url(tile), headers: conditions) else { return .failed }
+            if response.status == 304 { return .notModified }
+            return store(tile, kind: .full, response: response, keep: keep)
+        case .prefix:
+            let response = await downloadPrefix(Self.url(tile), conditions: conditions)
+            if response.status == 304 { return .notModified }
+            return store(tile, kind: .prefix, response: response, keep: keep)
+        }
     }
 
-    /// Asks the server if a tile changed. A network error or an unexpected answer keeps the old tile.
-    private func revalidate(_ tile: ElevationTile, entry: Entry, keep: Set<String>) async {
-        let name = Self.name(tile)
-        var headers: [String: String] = [:]
-        if !entry.sea {
-            if let etag = entry.etag { headers["If-None-Match"] = etag }
-            if let lastModified = entry.lastModified { headers["If-Modified-Since"] = lastModified }
+    /// Downloads the first part of a file that `coarseLevel` needs, with HTTP Range requests:
+    ///
+    /// 1. Ask for the first `headerBytes`, with the conditions.
+    /// 2. Ask `elevationGeotiffPrefixSize` for the size of the prefix. If it gives 0, the header is
+    ///    too short: ask for 4 times more bytes and try again.
+    /// 3. Ask for the rest of the prefix and join the parts.
+    ///
+    /// The answer has the status 200 and the prefix as its body, or the status of the server
+    /// (304, 404, an error), or the status 0 if the network or the file fails. A server that sends
+    /// the whole file (200) for a Range request is also correct: the cache cuts the prefix from it.
+    private func downloadPrefix(_ url: URL, conditions: [String: String]) async -> HTTPResponse {
+        let failed = HTTPResponse(status: 0, body: Data())
+        var headers = conditions
+        headers["Range"] = "bytes=0-\(headerBytes - 1)"
+        guard let first = try? await http.get(url, headers: headers) else { return failed }
+        guard first.status == 200 || first.status == 206 else { return first }
+        var data = first.body
+        // The file has no more bytes than `data` if the server sent all of it.
+        var complete = first.status == 200 || data.count < headerBytes
+        while true {
+            guard let size = try? elevationGeotiffPrefixSize(data, level: coarseLevel) else { return failed }
+            if size > 0 && size <= data.count {
+                return HTTPResponse(
+                    status: 200, body: Data(data.prefix(size)), etag: first.etag, lastModified: first.lastModified)
+            }
+            if complete || data.count >= Self.maxHeaderBytes { return failed }
+            // Size 0: the header is too short. Else: the level needs `size` bytes.
+            let end = size > 0 ? size : data.count * 4
+            guard let rest = try? await http.get(url, headers: ["Range": "bytes=\(data.count)-\(end - 1)"]) else {
+                return failed
+            }
+            switch rest.status {
+            case 206:
+                // A different ETag is a new file on the server: the parts do not match.
+                if let a = first.etag, let b = rest.etag, a != b { return failed }
+                let asked = end - data.count
+                data.append(rest.body)
+                complete = rest.body.count < asked
+            case 200:
+                data = rest.body
+                complete = true
+            default:
+                return failed
+            }
         }
-        guard let response = try? await http.get(Self.url(tile), headers: headers) else { return }
-        if response.status == 304 || (entry.sea && response.status == 404) {
+    }
+
+    /// Asks the server if an entry changed. A network error or an unexpected answer keeps the old
+    /// entry. For a prefix file, the request is a conditional Range request.
+    private func revalidate(_ tile: ElevationTile, kind: Kind, entry: Entry, keep: Set<String>) async {
+        let name = entryName(tile, kind)
+        var conditions: [String: String] = [:]
+        if !entry.sea {
+            if let etag = entry.etag { conditions["If-None-Match"] = etag }
+            if let lastModified = entry.lastModified { conditions["If-Modified-Since"] = lastModified }
+        }
+        // 200, 206, and 404 replace the entry in `download`. 304 keeps it.
+        if await download(tile, kind: kind, conditions: conditions, keep: keep) == .notModified {
             index[name]?.checked = now()
             saveIndex()
-        } else {
-            _ = store(tile, response: response, keep: keep)
         }
     }
 
-    /// Stores the answer of a full request: a file for 200, the sea for 404.
-    private func store(_ tile: ElevationTile, response: HTTPResponse, keep: Set<String>) -> DownloadResult {
-        let name = Self.name(tile)
+    /// Stores the answer of a request for an entry: a file for 200 (for a prefix file,
+    /// `downloadPrefix` gives 200 with the prefix), the sea for 404. A full file replaces the prefix
+    /// file of the tile.
+    private func store(_ tile: ElevationTile, kind: Kind, response: HTTPResponse, keep: Set<String>) -> DownloadResult {
+        let name = entryName(tile, kind)
         let t = now()
         switch response.status {
         case 200:
@@ -295,6 +413,11 @@ actor DemCache {
             index[name] = Entry(
                 etag: response.etag, lastModified: response.lastModified, checked: t, used: t,
                 size: Int64(response.body.count), sea: false)
+            if kind == .full {
+                // The full file also serves the coarse level.
+                try? FileManager.default.removeItem(at: file(prefixName(tile)))
+                index[prefixName(tile)] = nil
+            }
             evict(keep: keep.union([name]))
             saveIndex()
             return .file

@@ -3,8 +3,14 @@ import Sunradar
 
 /// The terrain horizon of the current place: it loads the DEM tiles from the DemCache and
 /// calculates the horizon profile off the main thread. The profile is calculated again when the
-/// place moves more than `moveM`, or when a new tile arrives. Until the profile is ready, the
-/// app shows the 0° horizon.
+/// place moves more than `moveM`. Until the profile is ready, the app shows the 0° horizon.
+///
+/// The terrain loads in two steps (PLAN.md 14.3), so a flat place downloads only about 3 MB:
+///
+/// 1. The coarse check: all tiles at the coarse level of the cache (the prefix files, about
+///    370 m). The app shows this profile at once.
+/// 2. If the coarse profile reaches `fullTerrainMinDeg`, the near tiles (`fullResolutionM`) at
+///    full resolution, and the profile again.
 @MainActor
 final class TerrainHorizon: ObservableObject {
     enum Status: Equatable {
@@ -25,21 +31,24 @@ final class TerrainHorizon: ObservableObject {
     @Published private(set) var revision = 0
     @Published private(set) var status = Status.off
 
-    /// The tiles nearer than this are read at full resolution, the others at level 1.
-    static let fullResolutionM = 25_000.0
-    static let maxDistanceM = 100_000.0
+    /// If the terrain is higher than this, the app loads the near tiles at full resolution. A
+    /// terrain of 1° moves the sunrise by about 5–8 minutes in Europe. Below it, the coarse
+    /// profile is sufficient.
+    nonisolated static let fullTerrainMinDeg = 1.0
+    /// The tiles nearer than this are read at full resolution if the terrain is high. Farther
+    /// away, the coarse level is sufficient, because a sample of 370 m is a small angle there.
+    nonisolated static let fullResolutionM = 25_000.0
+    nonisolated static let maxDistanceM = 100_000.0
     /// A smaller move of the place does not change the profile.
     static let moveM = 500.0
     /// The number of downloads at the same time.
-    private static let parallelDownloads = 3
+    nonisolated static let parallelDownloads = 3
 
     private let cache: DemCache?
     private var observer: Observer?
     private var job: Task<Void, Never>?
     /// The grids in memory, by the name of the tile, with their level.
     private var grids: [String: (level: Int, distanceM: Double, grid: ElevationGrid)] = [:]
-    private var calculating = false
-    private var calculateAgain = false
 
     init(cache: DemCache? = DemCache.shared) {
         self.cache = cache
@@ -64,33 +73,97 @@ final class TerrainHorizon: ObservableObject {
         job = Task { await load(observer) }
     }
 
+    /// Waits for the end of the work for the current place. The tests use it.
+    func waitForLoad() async { await job?.value }
+
+    /// True if the terrain of the profile is high enough for the near tiles at full resolution.
+    nonisolated static func needsFullResolution(_ profile: HorizonProfile?) -> Bool {
+        guard let profile else { return false }
+        return profile.altitudeDeg.contains { $0.isFinite && $0 >= fullTerrainMinDeg }
+    }
+
+    /// True if the tile is near enough for full resolution.
+    nonisolated static func isNear(_ tile: ElevationTile) -> Bool { tile.distanceM < fullResolutionM }
+
+    /// Calculates the profile off the main thread. Nil without the tile at the observer (the
+    /// distance 0), because the profile needs the ground there.
+    nonisolated static func calculateProfile(
+        observer: Observer, grids: [(distanceM: Double, grid: ElevationGrid)]
+    ) async -> HorizonProfile? {
+        guard grids.contains(where: { $0.distanceM == 0 }) else { return nil }
+        // The core takes the first tile with data at a place, so the order of tiles with the same
+        // cells changes the profile a little at the edges. A fixed order gives the same profile
+        // for the same grids.
+        let tiles = grids.map(\.grid).sorted {
+            ($0.northLatitudeDeg, $0.westLongitudeDeg) < ($1.northLatitudeDeg, $1.westLongitudeDeg)
+        }
+        return await Task.detached(priority: .userInitiated) {
+            try? horizonProfile(observer: observer, tiles: tiles)
+        }.value
+    }
+
     private func load(_ observer: Observer) async {
         guard let cache, let tiles = try? elevationTiles(observer: observer, maxDistanceM: Self.maxDistanceM) else {
             status = .missing
             return
         }
-        let wanted = tiles.map { (tile: $0, name: DemCache.name($0), level: $0.distanceM < Self.fullResolutionM ? 0 : 1) }
-        let keep = Set(wanted.map(\.name))
-        // Free the grids of the old place, and the grids at a different level.
-        grids = grids.filter { name, value in wanted.contains { $0.name == name && $0.level == value.level } }
-        for w in wanted { grids[w.name]?.distanceM = w.tile.distanceM }
-        let todo = wanted.filter { grids[$0.name] == nil }
-        var remaining = 0
-        for w in todo where await !cache.contains(w.tile) { remaining += 1 }
-        status = remaining > 0 ? .loading(remaining: remaining) : .ready
-        calculate()
+        let coarseLevel = cache.coarseLevel
+        let names = Set(tiles.map(DemCache.name))
+        // Free the grids of the old place, and the full grids of the tiles that are not near now.
+        grids = grids.filter { name, value in
+            tiles.contains { DemCache.name($0) == name && (value.level == coarseLevel || Self.isNear($0)) }
+        }
+        for tile in tiles { grids[DemCache.name(tile)]?.distanceM = tile.distanceM }
 
+        // Step 1: the coarse check.
+        let coarse = tiles.filter { grids[DemCache.name($0)] == nil }
+        let first = await fetch(coarse, full: false, keep: names, cache: cache)
+        if Task.isCancelled { return }
+        var missing = first.missing
+        let sea = first.sea
+        let coarseProfile = await publishProfile(observer)
+        if Task.isCancelled { return }
+
+        // Step 2: the near tiles at full resolution, if the terrain is high.
+        if Self.needsFullResolution(coarseProfile) {
+            let near = tiles.filter {
+                let name = DemCache.name($0)
+                return Self.isNear($0) && grids[name]?.level != 0 && !sea.contains(name)
+            }
+            if !near.isEmpty {
+                let second = await fetch(near, full: true, keep: names, cache: cache)
+                if Task.isCancelled { return }
+                missing = missing || second.missing
+                _ = await publishProfile(observer)
+                if Task.isCancelled { return }
+            }
+        }
+        status = missing ? .missing : .ready
+    }
+
+    /// Loads tiles from the cache, `parallelDownloads` at the same time, and keeps their grids.
+    /// It shows the number of tiles that are not in the cache in `status`.
+    private func fetch(
+        _ tiles: [ElevationTile], full: Bool, keep: Set<String>, cache: DemCache
+    ) async -> (missing: Bool, sea: Set<String>) {
+        let level = full ? 0 : cache.coarseLevel
+        var remaining = 0
+        for tile in tiles where await !(full ? cache.contains(tile) : cache.containsCoarse(tile)) { remaining += 1 }
+        status = remaining > 0 ? .loading(remaining: remaining) : .ready
         var missing = false
-        await withTaskGroup(of: (name: String, level: Int, distanceM: Double, result: DemTile, downloaded: Bool).self) { group in
+        var sea = Set<String>()
+        await withTaskGroup(of: (tile: ElevationTile, result: DemTile, downloaded: Bool).self) { group in
             var next = 0
             func add() {
-                guard next < todo.count else { return }
-                let w = todo[next]
+                guard next < tiles.count else { return }
+                let tile = tiles[next]
                 next += 1
                 group.addTask {
-                    let downloaded = await !cache.contains(w.tile)
-                    let result = await cache.tile(w.tile, level: w.level, keep: keep)
-                    return (w.name, w.level, w.tile.distanceM, result, downloaded)
+                    let downloaded = await !(full ? cache.contains(tile) : cache.containsCoarse(tile))
+                    let result =
+                        full
+                        ? await cache.tile(tile, level: 0, keep: keep) : await cache.coarseTile(tile, keep: keep)
+                    return (tile, result, downloaded)
                 }
             }
             for _ in 0..<Self.parallelDownloads { add() }
@@ -100,47 +173,29 @@ final class TerrainHorizon: ObservableObject {
                     return
                 }
                 if done.downloaded { remaining -= 1 }
+                let name = DemCache.name(done.tile)
                 switch done.result {
-                case .grid(let grid):
-                    grids[done.name] = (done.level, done.distanceM, grid)
-                    calculate()
-                case .sea: break
+                case .grid(let grid): grids[name] = (level, done.tile.distanceM, grid)
+                case .sea: sea.insert(name)
                 case .unavailable: missing = true
                 }
                 if remaining > 0 { status = .loading(remaining: remaining) }
                 add()
             }
         }
-        if Task.isCancelled { return }
-        status = missing ? .missing : .ready
+        return (missing, sea)
     }
 
-    /// Calculates the profile off the main thread. A request during a calculation runs after it.
-    private func calculate() {
-        guard let observer else { return }
-        // The profile needs the ground at the observer: the tile at the distance 0.
-        guard grids.values.contains(where: { $0.distanceM == 0 }) else { return }
-        if calculating {
-            calculateAgain = true
-            return
+    /// Calculates the profile from the grids in memory and shows it. Returns the profile.
+    private func publishProfile(_ observer: Observer) async -> HorizonProfile? {
+        let input = grids.values.map { (distanceM: $0.distanceM, grid: $0.grid) }
+        guard let result = await Self.calculateProfile(observer: observer, grids: input) else { return nil }
+        if self.observer == observer && !Task.isCancelled {
+            profile = result
+            lines = Self.lines(result)
+            revision += 1
         }
-        calculating = true
-        let tiles = grids.values.map(\.grid)
-        Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                try? horizonProfile(observer: observer, tiles: tiles)
-            }.value
-            calculating = false
-            if let result, self.observer == observer {
-                profile = result
-                lines = Self.lines(result)
-                revision += 1
-            }
-            if calculateAgain {
-                calculateAgain = false
-                calculate()
-            }
-        }
+        return result
     }
 
     /// The parts of the profile with data, as lines from azimuth 0 to 360.
