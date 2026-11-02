@@ -657,6 +657,7 @@ function setPlace(next: StoredPlace) {
   localStorage.setItem(PLACE_KEY, JSON.stringify(next));
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
+  renderPlaceCard();
   // Only the declination changes, so an alignment before stays.
   const old = declination;
   declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
@@ -831,21 +832,44 @@ function dropPlace(at: Observer, name?: string) {
   drawMap();
 }
 
-$("place-button").addEventListener("click", async () => {
-  const panel = $("place-panel");
-  panel.classList.toggle("hidden");
-  if (panel.classList.contains("hidden")) return;
+/** The card at the bottom of the panel: the name of the place, its coordinates, and its zone. */
+function renderPlaceCard() {
+  // A dropped place has the name "near X · coordinates": the card shows the coordinates below.
+  $("place-title").textContent = placeText.split(" · ")[0] || "Your location";
+  // The readable name of the zone ("Central European Standard Time"), not the IANA ID.
+  const zoneName =
+    new Intl.DateTimeFormat(undefined, { timeZone: zone, timeZoneName: "long" })
+      .formatToParts(new Date())
+      .find((part) => part.type === "timeZoneName")?.value ?? zone;
+  $("place-subtitle").textContent =
+    `${observer.latitudeDeg.toFixed(3)}°, ${observer.longitudeDeg.toFixed(3)}° · ${zoneName}`;
+}
+
+function centerMap() {
   mapView = { ...mapView, lon: observer.longitudeDeg, lat: observer.latitudeDeg };
+  drawMap();
+}
+
+$("place-button").addEventListener("click", async () => {
+  $("place-panel").classList.remove("hidden");
+  renderPlaceCard();
+  mapView = { ...mapView, zoom: 7 };
+  centerMap();
   if (await loadBaseMap()) drawMap();
 });
 $("place-close").addEventListener("click", () => $("place-panel").classList.add("hidden"));
 $("place-here").addEventListener("click", () => {
   navigator.geolocation?.getCurrentPosition(
-    (position) => setPlace(gpsPlace(position)),
+    (position) => {
+      setPlace(gpsPlace(position));
+      centerMap();
+    },
     () => showMessage("No location: the place stays."),
     { enableHighAccuracy: false, timeout: 20000 },
   );
-  $("place-panel").classList.add("hidden");
+});
+window.addEventListener("resize", () => {
+  if (!$("place-panel").classList.contains("hidden")) drawMap();
 });
 for (const [id, step] of [
   ["place-zoom-in", 1],
@@ -856,20 +880,41 @@ for (const [id, step] of [
     drawMap();
   });
 }
-searchInput.addEventListener("input", () => {
+const PIN_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4-5-6.5-8.4-6.5-11.5a6.5 6.5 0 0 1 13 0C18.5 12.6 16 16 12 21z" /><circle cx="12" cy="9.5" r="2" class="fill" /></svg>';
+
+function showResults() {
   results.replaceChildren();
-  if (!baseMap) return;
-  for (const p of searchPlaces(baseMap.places, searchInput.value)) {
+  $("place-clear").classList.toggle("hidden", searchInput.value === "");
+  const found = baseMap ? searchPlaces(baseMap.places, searchInput.value) : [];
+  results.classList.toggle("hidden", found.length === 0);
+  for (const p of found) {
     const item = document.createElement("button");
-    item.textContent = `${p.name}, ${p.country}`;
+    item.innerHTML = PIN_ICON;
+    const text = document.createElement("span");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = p.name;
+    const country = document.createElement("span");
+    country.className = "country";
+    country.textContent = p.country;
+    text.append(name, country);
+    item.append(text);
     item.addEventListener("click", () => {
       mapView = { lon: p.lon, lat: p.lat, zoom: Math.max(mapView.zoom, 9) };
       dropPlace({ latitudeDeg: p.lat, longitudeDeg: p.lon }, p.name);
-      results.replaceChildren();
       searchInput.value = "";
+      searchInput.blur();
+      showResults();
     });
     results.append(item);
   }
+}
+searchInput.addEventListener("input", showResults);
+$("place-clear").addEventListener("click", () => {
+  searchInput.value = "";
+  showResults();
+  searchInput.focus();
 });
 
 // Drag to move the map, tap to drop the place, and the wheel to zoom.
@@ -933,9 +978,12 @@ function renderKept() {
   keptList.replaceChildren();
   for (const kept of tileCache.kept) {
     const row = document.createElement("div");
-    row.className = "row";
+    row.className = "kept";
     const text = document.createElement("span");
-    text.textContent = `${kept.name} · ${kept.urls.length} tiles, ${megabytes(tileCache.bytesOf(kept.urls))}`;
+    text.textContent = kept.name;
+    const size = document.createElement("small");
+    size.textContent = `${kept.urls.length} tiles, ${megabytes(tileCache.bytesOf(kept.urls))}`;
+    text.append(size);
     const remove = document.createElement("button");
     remove.textContent = "Remove";
     remove.addEventListener("click", () => {

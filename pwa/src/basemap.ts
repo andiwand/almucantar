@@ -236,7 +236,11 @@ export function drawBaseMap(
   const maxRank = Math.min(10, Math.round(view.zoom * 1.6));
   ctx.font = "12px system-ui";
   ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  // A dark halo (the color of the sea), so a name stays readable over the lines of the map.
+  ctx.strokeStyle = "#0e2440";
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.setLineDash([]);
   const used: [number, number][] = [];
   for (const place of map.places) {
     if (place.rank > maxRank) continue;
@@ -246,23 +250,44 @@ export function drawBaseMap(
       const sy = y - top;
       if (sx < 0 || sy < 0 || sx > width || sy > height) continue;
       // Skip a label that is too near to one that is already drawn.
-      if (used.some(([ux, uy]) => Math.abs(ux - sx) < 70 && Math.abs(uy - sy) < 16)) continue;
+      if (used.some(([ux, uy]) => Math.abs(ux - sx) < 90 && Math.abs(uy - sy) < 22)) continue;
       used.push([sx, sy]);
-      ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
-      ctx.fillText(place.name, sx + 4, sy - 3);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeText(place.name, sx + 5, sy - 4);
+      ctx.fillText(place.name, sx + 5, sy - 4);
     }
   }
 
   if (pin) {
     const [x, y] = toWorld(pin.longitudeDeg, pin.latitudeDeg, view.zoom);
-    ctx.fillStyle = "#ffc83d";
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 1.5;
-    for (const k of copies) {
-      ctx.beginPath();
-      ctx.arc(x + k * size - left, y - top, 7, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.stroke();
-    }
+    for (const k of copies) drawPin(ctx, x + k * size - left, y - top);
   }
+}
+
+/** A map pin with its tip at (x, y): a yellow drop with a dark outline, and a shadow. */
+function drawPin(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const r = 11;
+  const headY = y - 1.75 * r;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  ctx.beginPath();
+  ctx.ellipse(x, y, 5, 2, 0, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  // The two sides touch the round head (at 150° and 30° from the top); the arc closes the top.
+  ctx.lineTo(x - r * 0.87, headY + r * 0.5);
+  ctx.arc(x, headY, r, (150 * Math.PI) / 180, (30 * Math.PI) / 180);
+  ctx.closePath();
+  ctx.fillStyle = "#ffc83d";
+  ctx.fill();
+  ctx.strokeStyle = "#3a2a00";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = "#3a2a00";
+  ctx.beginPath();
+  ctx.arc(x, headY, 4, 0, 2 * Math.PI);
+  ctx.fill();
 }

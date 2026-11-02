@@ -5,6 +5,9 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The Place panel looks like a map app: a full-screen map, a rounded search bar with a back arrow,
+  results with the country, round map buttons, a pin, and a card with the place, its time zone, and
+  "Keep offline".
 - The terrain loads much less data: first coarse tiles (about 400 KB), and the detailed tiles near
   the place only where the terrain is higher than 1°. Berlin needs 0.4 MB, Vienna 1.4 MB, and no
   place needs the 9 MB of before.
