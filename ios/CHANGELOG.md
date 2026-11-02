@@ -5,6 +5,11 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The terrain line ignores the terrain nearer than 2 km. The elevation data (Copernicus) includes
+  buildings and forests, so a city showed a false wall of several degrees around you. In the centre
+  of Vienna, the highest terrain is now 2.3° (the Kahlenberg, 8 km away) in place of 5.6°. The
+  mountains stay: in Innsbruck the Nordkette is still 18.9° high. "Keep offline" uses the same rule.
+
 - The terrain downloads much less where it does not matter. The app first downloads only the
   first part of each elevation tile (an overview of about 370 m, about 300 KB of the 2–5 MB of a
   tile) and shows this terrain line at once. Only if the terrain is 1° high or more, it also

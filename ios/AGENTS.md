@@ -21,7 +21,8 @@ features and the behavior.
 | `Sunradar/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
 | `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
 | `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
-| `Sunradar/DemCache.swift` | The persistent cache of the Copernicus GLO-90 tiles in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
+| `Sunradar/ElevationSource.swift` | The source of the elevation tiles (`ElevationSource`): the name, the attribution, `isSurfaceModel`, the URL of a tile, the coarse level, the full level, and the distance of the full tiles. `CopernicusSource` (Copernicus GLO-90) is the only source now. `horizonOptions` gives the options of the profile: `nearClearanceM` (2000 m) for a surface model, else 0. The PWA has the same idea (`pwa/src/terrain.ts`). |
+| `Sunradar/DemCache.swift` | The persistent cache of the tiles of an `ElevationSource` (`DemCache.defaultSource`, Copernicus GLO-90) in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
 | `Sunradar/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles in two steps (the coarse check, then the full near tiles if the terrain is high), calculates the profile off the main thread, and derives the hidden parts of the path and the visible sunrise and sunset (`TerrainDay`). |
 | `Sunradar/SettingsView.swift` | The settings (the terrain horizon) and the credits. |
 | `SunradarTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
@@ -81,8 +82,17 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
      gets a header that is 4 times longer. 404 is the sea. A 200 for a Range request is the whole
      file; the cache keeps only the prefix. The app shows the coarse profile at once.
   2. If the coarse profile reaches `TerrainHorizon.fullTerrainMinDeg` (1°), the full files of the
-     tiles nearer than `fullResolutionM` (25 km), and the profile again with level 0 for these
-     tiles. Below 1°, the app downloads nothing more.
+     tiles nearer than `ElevationSource.fullResolutionM` (25 km), and the profile again with
+     `fullLevel` (0) for these tiles. Below 1°, the app downloads nothing more.
+- The facts of the data come from the `ElevationSource` of the cache (`cache.source`), never from
+  constants in the terrain logic. Copernicus is a surface model: its heights include buildings and
+  forests, so a city gives a false wall of several degrees around the observer. Both steps and
+  "Keep offline" use `source.horizonOptions`, which ignores the terrain nearer than
+  `nearClearanceM` (2000 m) for a surface model. The coarse check against 1° must use the same
+  options as the full profile, or a city downloads the full tiles for a wall that the full profile
+  does not show. The PWA uses the same clearance (`NEAR_CLEARANCE_M`).
+- The cache keeps the tiles by their name, not by their source. A new source needs a new directory
+  of the cache, or the cache gives the files of the old source.
 - A full file also serves level 2, so the cache downloads no prefix if it has the full file, and it
   deletes the prefix file when it stores the full file. The revalidation of a prefix file is a
   conditional Range request (If-None-Match and Range): 304 keeps the file, 206 or 200 replaces it.

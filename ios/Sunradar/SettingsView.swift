@@ -11,10 +11,8 @@ struct SettingsView: SwiftUI.View {
     @AppStorage(Settings.terrainHorizon) private var terrainHorizon = true
     @Environment(\.dismiss) private var dismiss
 
-    /// The attribution that the license of the Copernicus DEM requires.
-    static let copernicusAttribution =
-        "Terrain: Copernicus DEM GLO-90, © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, "
-        + "provided under COPERNICUS by the European Union and ESA; all rights reserved."
+    /// The attribution that the license of the elevation data requires.
+    static let terrainAttribution = "Terrain: " + DemCache.defaultSource.attribution
 
     var body: some SwiftUI.View {
         NavigationStack {
@@ -27,7 +25,7 @@ struct SettingsView: SwiftUI.View {
                             + "elevation data around your place (a few MB per square degree) and keeps it for offline use.")
                 }
                 Section("Credits") {
-                    Text(Self.copernicusAttribution).font(.footnote)
+                    Text(Self.terrainAttribution).font(.footnote)
                     Text("Map: Natural Earth (public domain), naturalearthdata.com").font(.footnote)
                 }
             }

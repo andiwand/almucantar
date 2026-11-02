@@ -7,6 +7,18 @@ import XCTest
 /// The two steps of the terrain (PLAN.md 14.3): the coarse check, and the near tiles at full
 /// resolution only if the terrain is high. The tiles are small GeoTIFF files with level 1 as the
 /// coarse level.
+/// A bare-earth source for the tests: other URLs, level 1 as the coarse level, and no clearance of
+/// the near path.
+private struct BareEarthSource: ElevationSource {
+    let name = "Bare earth"
+    let attribution = "Test data"
+    let isSurfaceModel = false
+    let coarseLevel = 1
+    let fullLevel = 0
+    let fullResolutionM = 25_000.0
+    func url(_ tile: ElevationTile) -> URL { URL(string: "https://bare.example/\(DemCache.name(tile)).tif")! }
+}
+
 @MainActor
 final class TerrainLoadTests: XCTestCase {
     private var directory: URL!
@@ -29,15 +41,28 @@ final class TerrainLoadTests: XCTestCase {
     }
 
     /// All tiles at 500 m. If `mountains`, the tile north of the place is at 3000 m: about 2.4°
-    /// high at a distance of 55 km.
-    private func serveTiles(mountains: Bool) {
+    /// high at a distance of 55 km. If `wall`, the tile of the place has a ring of 600 m from 700 m
+    /// to 1300 m around the place, like the buildings of a city in a surface model: about 5° high.
+    private func serveTiles(mountains: Bool, wall: Bool = false, source: any ElevationSource = CopernicusSource()) {
         for tile in tiles {
             let high = mountains && tile.latitudeDeg == 48 && tile.longitudeDeg == 11
-            server.put(tile, TestGeotiff.tile(tile, heightM: high ? 3000 : 500))
+            let data: Data
+            if wall && tile.distanceM == 0 {
+                // Samples of about 220 m x 150 m, and about 430 m x 290 m at level 1.
+                data = TestGeotiff.tile(tile, size: 512) { latitude, longitude in
+                    let north = (latitude - here.latitudeDeg) * 111_195
+                    let east = (longitude - here.longitudeDeg) * 111_195 * cos(here.latitudeDeg * .pi / 180)
+                    let distance = (north * north + east * east).squareRoot()
+                    return distance > 700 && distance < 1300 ? 600 : 500
+                }
+            } else {
+                data = TestGeotiff.tile(tile, heightM: high ? 3000 : 500)
+            }
+            server.put(tile, data, source: source)
         }
     }
 
-    private var nearNames: Set<String> { Set(tiles.filter(TerrainHorizon.isNear).map(DemCache.name)) }
+    private var nearNames: Set<String> { Set(tiles.filter(CopernicusSource().isNear).map(DemCache.name)) }
 
     private func maxAltitude(_ profile: HorizonProfile?) -> Double {
         profile?.altitudeDeg.filter(\.isFinite).max() ?? -.infinity
@@ -50,6 +75,79 @@ final class TerrainLoadTests: XCTestCase {
         XCTAssertTrue(TerrainHorizon.needsFullResolution(high))
         XCTAssertFalse(TerrainHorizon.needsFullResolution(nil))
         XCTAssertEqual(nearNames, ["N47_00_E011_00"])
+    }
+
+    func testTheOptionsOfTheSource() throws {
+        XCTAssertEqual(nearClearanceM, 2000)
+        let copernicus = CopernicusSource()
+        XCTAssertTrue(copernicus.isSurfaceModel)
+        XCTAssertEqual(copernicus.horizonOptions.minDistanceM, 2000)
+        XCTAssertEqual(copernicus.coarseLevel, 2)
+        XCTAssertEqual(copernicus.fullLevel, 0)
+        XCTAssertEqual(BareEarthSource().horizonOptions.minDistanceM, 0)
+        // The other options stay at the defaults of the core.
+        XCTAssertEqual(copernicus.horizonOptions.maxDistanceM, HorizonOptions().maxDistanceM)
+        // The cache takes the coarse level from the source.
+        XCTAssertEqual(try DemCache(directory: directory, http: server).coarseLevel, 2)
+        XCTAssertEqual(try DemCache(directory: directory, http: server, source: BareEarthSource()).coarseLevel, 1)
+    }
+
+    /// Copernicus is a surface model: the coarse check ignores the wall near the place, so the
+    /// app downloads only the prefixes.
+    func testASurfaceModelIgnoresTheWallNearThePlace() async throws {
+        serveTiles(mountains: false, wall: true)
+        let terrain = TerrainHorizon(cache: try makeCache())
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .ready)
+        XCTAssertLessThan(maxAltitude(terrain.profile), TerrainHorizon.fullTerrainMinDeg)
+        XCTAssertEqual(terrain.revision, 1)
+        XCTAssertTrue(server.fullRequestNames.isEmpty)
+    }
+
+    /// A bare-earth source has no clearance: the same wall is real terrain, so the coarse check
+    /// reaches the threshold and the cache downloads the full near tiles from the URLs of the source.
+    func testABareEarthSourceKeepsTheWallAndUsesItsURLs() async throws {
+        let source = BareEarthSource()
+        serveTiles(mountains: false, wall: true, source: source)
+        let cache = try DemCache(directory: directory, http: server, source: source, headerBytes: 16384)
+        let terrain = TerrainHorizon(cache: cache)
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .ready)
+        XCTAssertGreaterThan(maxAltitude(terrain.profile), 4)
+        XCTAssertEqual(terrain.revision, 2)
+        XCTAssertEqual(server.fullRequestNames, nearNames)
+        XCTAssertTrue(server.requests.allSatisfy { $0.url.host == "bare.example" })
+        let index = await cache.index
+        XCTAssertNotNil(index["N47_00_E011_00"])
+        XCTAssertNotNil(index["N48_00_E011_00.l1"])
+    }
+
+    /// The full profile uses the same options as the coarse check: the mountains need the full near
+    /// tiles, and the wall near the place still does not count.
+    func testTheFullProfileOfASurfaceModelIgnoresTheWall() async throws {
+        serveTiles(mountains: true, wall: true)
+        let terrain = TerrainHorizon(cache: try makeCache())
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .ready)
+        XCTAssertEqual(terrain.revision, 2)
+        XCTAssertEqual(server.fullRequestNames, nearNames)
+        let highest = maxAltitude(terrain.profile)
+        XCTAssertGreaterThanOrEqual(highest, TerrainHorizon.fullTerrainMinDeg)
+        XCTAssertLessThan(highest, 3)
+    }
+
+    /// "Keep offline" uses the same options as the terrain: at the wall it keeps only the prefixes.
+    func testKeepOfflineIgnoresTheWallOfASurfaceModel() async throws {
+        serveTiles(mountains: false, wall: true)
+        let kept = KeptPlaces(cache: try makeCache())
+        kept.keep(name: "City", observer: here)
+        await kept.waitForDownload()
+        guard case .ready(let count, _) = kept.state else { return XCTFail("not ready: \(kept.state)") }
+        XCTAssertEqual(count, tiles.count)
+        XCTAssertTrue(server.fullRequestNames.isEmpty)
     }
 
     func testAFlatPlaceDownloadsOnlyThePrefixes() async throws {

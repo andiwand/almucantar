@@ -69,6 +69,7 @@ final class KeptPlaces: ObservableObject {
         // The list fails only for a place that is not valid.
         guard let tiles = try? elevationTiles(observer: observer, maxDistanceM: TerrainHorizon.maxDistanceM) else { return }
         state = .downloading(done: 0, total: tiles.count)
+        let source = cache.source
         job = Task {
             let place = await cache.keep(name: name, observer: observer, tiles: tiles)
             await refresh()
@@ -92,7 +93,8 @@ final class KeptPlaces: ObservableObject {
                         group.addTask {
                             let result =
                                 full
-                                ? await cache.tile(tile, level: 0, keep: keep) : await cache.coarseTile(tile, keep: keep)
+                                ? await cache.tile(tile, level: source.fullLevel, keep: keep)
+                                : await cache.coarseTile(tile, keep: keep)
                             return (tile, result)
                         }
                     }
@@ -112,10 +114,12 @@ final class KeptPlaces: ObservableObject {
 
             // Step 1: the coarse check, with the prefix files of all tiles.
             await fetch(tiles, full: false)
-            // Step 2: the full files of the near tiles, if the terrain is high.
-            let profile = await TerrainHorizon.calculateProfile(observer: observer, grids: grids)
+            // Step 2: the full files of the near tiles, if the terrain is high. The check uses the
+            // same options as the terrain, so it downloads the same tiles.
+            let profile = await TerrainHorizon.calculateProfile(
+                observer: observer, grids: grids, options: source.horizonOptions)
             if TerrainHorizon.needsFullResolution(profile) {
-                let near = tiles.filter { TerrainHorizon.isNear($0) && !sea.contains(DemCache.name($0)) }
+                let near = tiles.filter { source.isNear($0) && !sea.contains(DemCache.name($0)) }
                 total += near.count
                 state = .downloading(done: done, total: total)
                 await fetch(near, full: true)

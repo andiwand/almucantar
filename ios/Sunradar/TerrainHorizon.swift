@@ -9,8 +9,12 @@ import Sunradar
 ///
 /// 1. The coarse check: all tiles at the coarse level of the cache (the prefix files, about
 ///    370 m). The app shows this profile at once.
-/// 2. If the coarse profile reaches `fullTerrainMinDeg`, the near tiles (`fullResolutionM`) at
-///    full resolution, and the profile again.
+/// 2. If the coarse profile reaches `fullTerrainMinDeg`, the near tiles
+///    (`ElevationSource.fullResolutionM`) at full resolution, and the profile again.
+///
+/// The facts of the data come from the `ElevationSource` of the cache. Both steps use its
+/// `horizonOptions`, so for a surface model the coarse check and the full profile ignore the
+/// terrain nearer than `nearClearanceM`.
 @MainActor
 final class TerrainHorizon: ObservableObject {
     enum Status: Equatable {
@@ -35,9 +39,6 @@ final class TerrainHorizon: ObservableObject {
     /// terrain of 1° moves the sunrise by about 5–8 minutes in Europe. Below it, the coarse
     /// profile is sufficient.
     nonisolated static let fullTerrainMinDeg = 1.0
-    /// The tiles nearer than this are read at full resolution if the terrain is high. Farther
-    /// away, the coarse level is sufficient, because a sample of 370 m is a small angle there.
-    nonisolated static let fullResolutionM = 25_000.0
     nonisolated static let maxDistanceM = 100_000.0
     /// A smaller move of the place does not change the profile.
     static let moveM = 500.0
@@ -82,13 +83,11 @@ final class TerrainHorizon: ObservableObject {
         return profile.altitudeDeg.contains { $0.isFinite && $0 >= fullTerrainMinDeg }
     }
 
-    /// True if the tile is near enough for full resolution.
-    nonisolated static func isNear(_ tile: ElevationTile) -> Bool { tile.distanceM < fullResolutionM }
-
-    /// Calculates the profile off the main thread. Nil without the tile at the observer (the
-    /// distance 0), because the profile needs the ground there.
+    /// Calculates the profile off the main thread, with the options of the source
+    /// (`ElevationSource.horizonOptions`). Nil without the tile at the observer (the distance 0),
+    /// because the profile needs the ground there.
     nonisolated static func calculateProfile(
-        observer: Observer, grids: [(distanceM: Double, grid: ElevationGrid)]
+        observer: Observer, grids: [(distanceM: Double, grid: ElevationGrid)], options: HorizonOptions
     ) async -> HorizonProfile? {
         guard grids.contains(where: { $0.distanceM == 0 }) else { return nil }
         // The core takes the first tile with data at a place, so the order of tiles with the same
@@ -98,7 +97,7 @@ final class TerrainHorizon: ObservableObject {
             ($0.northLatitudeDeg, $0.westLongitudeDeg) < ($1.northLatitudeDeg, $1.westLongitudeDeg)
         }
         return await Task.detached(priority: .userInitiated) {
-            try? horizonProfile(observer: observer, tiles: tiles)
+            try? horizonProfile(observer: observer, tiles: tiles, options: options)
         }.value
     }
 
@@ -108,10 +107,11 @@ final class TerrainHorizon: ObservableObject {
             return
         }
         let coarseLevel = cache.coarseLevel
+        let source = cache.source
         let names = Set(tiles.map(DemCache.name))
         // Free the grids of the old place, and the full grids of the tiles that are not near now.
         grids = grids.filter { name, value in
-            tiles.contains { DemCache.name($0) == name && (value.level == coarseLevel || Self.isNear($0)) }
+            tiles.contains { DemCache.name($0) == name && (value.level == coarseLevel || source.isNear($0)) }
         }
         for tile in tiles { grids[DemCache.name(tile)]?.distanceM = tile.distanceM }
 
@@ -121,20 +121,20 @@ final class TerrainHorizon: ObservableObject {
         if Task.isCancelled { return }
         var missing = first.missing
         let sea = first.sea
-        let coarseProfile = await publishProfile(observer)
+        let coarseProfile = await publishProfile(observer, options: source.horizonOptions)
         if Task.isCancelled { return }
 
         // Step 2: the near tiles at full resolution, if the terrain is high.
         if Self.needsFullResolution(coarseProfile) {
             let near = tiles.filter {
                 let name = DemCache.name($0)
-                return Self.isNear($0) && grids[name]?.level != 0 && !sea.contains(name)
+                return source.isNear($0) && grids[name]?.level != source.fullLevel && !sea.contains(name)
             }
             if !near.isEmpty {
                 let second = await fetch(near, full: true, keep: names, cache: cache)
                 if Task.isCancelled { return }
                 missing = missing || second.missing
-                _ = await publishProfile(observer)
+                _ = await publishProfile(observer, options: source.horizonOptions)
                 if Task.isCancelled { return }
             }
         }
@@ -146,7 +146,7 @@ final class TerrainHorizon: ObservableObject {
     private func fetch(
         _ tiles: [ElevationTile], full: Bool, keep: Set<String>, cache: DemCache
     ) async -> (missing: Bool, sea: Set<String>) {
-        let level = full ? 0 : cache.coarseLevel
+        let level = full ? cache.source.fullLevel : cache.coarseLevel
         var remaining = 0
         for tile in tiles where await !(full ? cache.contains(tile) : cache.containsCoarse(tile)) { remaining += 1 }
         status = remaining > 0 ? .loading(remaining: remaining) : .ready
@@ -162,7 +162,7 @@ final class TerrainHorizon: ObservableObject {
                     let downloaded = await !(full ? cache.contains(tile) : cache.containsCoarse(tile))
                     let result =
                         full
-                        ? await cache.tile(tile, level: 0, keep: keep) : await cache.coarseTile(tile, keep: keep)
+                        ? await cache.tile(tile, level: level, keep: keep) : await cache.coarseTile(tile, keep: keep)
                     return (tile, result, downloaded)
                 }
             }
@@ -187,9 +187,11 @@ final class TerrainHorizon: ObservableObject {
     }
 
     /// Calculates the profile from the grids in memory and shows it. Returns the profile.
-    private func publishProfile(_ observer: Observer) async -> HorizonProfile? {
+    private func publishProfile(_ observer: Observer, options: HorizonOptions) async -> HorizonProfile? {
         let input = grids.values.map { (distanceM: $0.distanceM, grid: $0.grid) }
-        guard let result = await Self.calculateProfile(observer: observer, grids: input) else { return nil }
+        guard let result = await Self.calculateProfile(observer: observer, grids: input, options: options) else {
+            return nil
+        }
         if self.observer == observer && !Task.isCancelled {
             profile = result
             lines = Self.lines(result)

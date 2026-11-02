@@ -46,13 +46,13 @@ enum DemTile {
     case unavailable
 }
 
-/// The persistent cache of the Copernicus GLO-90 tiles: GeoTIFF files and a JSON index. A tile has
-/// two kinds of entries (PLAN.md 14.3):
+/// The persistent cache of the elevation tiles of an `ElevationSource` (Copernicus GLO-90 in the
+/// app): GeoTIFF files and a JSON index. A tile has two kinds of entries (PLAN.md 14.3):
 ///
 /// - The full file (`N47_00_E011_00.tif`), for the near tiles at full resolution.
 /// - The prefix file (`N47_00_E011_00.l2.tif`): only the first part of the file, with the
-///   directories and the overview at `coarseLevel`. An HTTP Range request downloads it. It is
-///   about 300 KB of the 2–5 MB of a tile.
+///   directories and the overview at `coarseLevel`. An HTTP Range request downloads it. For
+///   Copernicus, it is about 300 KB of the 2–5 MB of a tile.
 ///
 /// A full file also serves `coarseLevel`, so the cache downloads no prefix if it has the full
 /// file, and it deletes the prefix file when it stores the full file.
@@ -107,9 +107,8 @@ actor DemCache {
 
     static let defaultMaxBytes: Int64 = 400 * 1024 * 1024
     static let defaultMaxAge: TimeInterval = 180 * 86400
-    /// The overview for the coarse check: level 2 of a Copernicus tile has 300 x 300 samples
-    /// (about 370 m).
-    static let defaultCoarseLevel = 2
+    /// The source of the app. Change it here to use other tiles.
+    static let defaultSource: any ElevationSource = CopernicusSource()
     /// The first Range request asks for this many bytes. For a Copernicus tile, it has all
     /// directories, so `elevationGeotiffPrefixSize` can give the size of the prefix.
     static let defaultHeaderBytes = 16384
@@ -117,12 +116,14 @@ actor DemCache {
     private static let maxHeaderBytes = 4 * 1024 * 1024
 
     let directory: URL
+    /// The source of the tiles: their URLs and their levels.
+    nonisolated let source: any ElevationSource
     private let http: HTTPClient
     private let now: @Sendable () -> Date
     private let maxBytes: Int64
     private let maxAge: TimeInterval
-    /// The level of the prefix files. The tests use level 1, because their small files have no
-    /// level 2.
+    /// The level of the prefix files: `source.coarseLevel`, if the init gives no other level. The
+    /// tests use level 1, because their small files have no level 2.
     nonisolated let coarseLevel: Int
     private let headerBytes: Int
     private(set) var index: [String: Entry]
@@ -130,16 +131,18 @@ actor DemCache {
     private(set) var kept: [KeptPlace]
 
     init(
-        directory: URL, http: HTTPClient, now: @escaping @Sendable () -> Date = { Date() },
+        directory: URL, http: HTTPClient, source: any ElevationSource = DemCache.defaultSource,
+        now: @escaping @Sendable () -> Date = { Date() },
         maxBytes: Int64 = DemCache.defaultMaxBytes, maxAge: TimeInterval = DemCache.defaultMaxAge,
-        coarseLevel: Int = DemCache.defaultCoarseLevel, headerBytes: Int = DemCache.defaultHeaderBytes
+        coarseLevel: Int? = nil, headerBytes: Int = DemCache.defaultHeaderBytes
     ) throws {
         self.directory = directory
+        self.source = source
         self.http = http
         self.now = now
         self.maxBytes = maxBytes
         self.maxAge = maxAge
-        self.coarseLevel = coarseLevel
+        self.coarseLevel = coarseLevel ?? source.coarseLevel
         self.headerBytes = headerBytes
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -172,7 +175,7 @@ actor DemCache {
         return try DemCache(directory: support.appendingPathComponent("dem", isDirectory: true), http: URLSessionHTTPClient())
     }
 
-    /// The Copernicus name of a tile, for example N47_00_E011_00.
+    /// The name of a tile in the index, for example N47_00_E011_00 (the format of Copernicus).
     static func name(_ tile: ElevationTile) -> String {
         String(
             format: "%@%02d_00_%@%03d_00", tile.latitudeDeg < 0 ? "S" : "N", abs(tile.latitudeDeg),
@@ -184,11 +187,8 @@ actor DemCache {
 
     nonisolated func prefixName(_ name: String) -> String { "\(name).l\(coarseLevel)" }
 
-    /// The URL of a tile of Copernicus GLO-90 on AWS Open Data.
-    static func url(_ tile: ElevationTile) -> URL {
-        let file = "Copernicus_DSM_COG_30_\(name(tile))_DEM"
-        return URL(string: "https://copernicus-dem-90m.s3.amazonaws.com/\(file)/\(file).tif")!
-    }
+    /// The URL of a tile at the source.
+    nonisolated func url(_ tile: ElevationTile) -> URL { source.url(tile) }
 
     /// True if the cache has the full file of the tile or the sea, so it does not need the network.
     func contains(_ tile: ElevationTile) -> Bool { has(Self.name(tile)) }
@@ -324,11 +324,11 @@ actor DemCache {
     ) async -> DownloadResult {
         switch kind {
         case .full:
-            guard let response = try? await http.get(Self.url(tile), headers: conditions) else { return .failed }
+            guard let response = try? await http.get(url(tile), headers: conditions) else { return .failed }
             if response.status == 304 { return .notModified }
             return store(tile, kind: .full, response: response, keep: keep)
         case .prefix:
-            let response = await downloadPrefix(Self.url(tile), conditions: conditions)
+            let response = await downloadPrefix(url(tile), conditions: conditions)
             if response.status == 304 { return .notModified }
             return store(tile, kind: .prefix, response: response, keep: keep)
         }

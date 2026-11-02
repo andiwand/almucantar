@@ -13,6 +13,8 @@ final class FakeServer: HTTPClient, @unchecked Sendable {
 
     private let lock = NSLock()
     private var files: [URL: File] = [:]
+    /// The names of the tiles (`DemCache.name`) by their URL.
+    private var names: [URL: String] = [:]
     private var _requests: [(url: URL, headers: [String: String])] = []
     private var _online = true
     private var _ignoresRange = false
@@ -29,24 +31,29 @@ final class FakeServer: HTTPClient, @unchecked Sendable {
         set { lock.withLock { _ignoresRange = newValue } }
     }
 
-    func put(_ tile: ElevationTile, _ data: Data, etag: String = "\"a\"") {
-        lock.withLock { files[DemCache.url(tile)] = File(data: data, etag: etag) }
+    /// Serves the file of a tile at its URL of the source.
+    func put(
+        _ tile: ElevationTile, _ data: Data, etag: String = "\"a\"", source: any ElevationSource = CopernicusSource()
+    ) {
+        let url = source.url(tile)
+        lock.withLock {
+            files[url] = File(data: data, etag: etag)
+            names[url] = DemCache.name(tile)
+        }
     }
 
     func clearRequests() { lock.withLock { _requests = [] } }
 
     /// The requests for the tile without a Range header: the downloads of the full file.
     func fullRequests(_ tile: ElevationTile) -> Int {
-        requests.filter { $0.url == DemCache.url(tile) && $0.headers["Range"] == nil }.count
+        let url = CopernicusSource().url(tile)
+        return requests.filter { $0.url == url && $0.headers["Range"] == nil }.count
     }
 
     /// The names of the tiles that had a request without a Range header.
     var fullRequestNames: Set<String> {
-        Set(
-            requests.filter { $0.headers["Range"] == nil }.map {
-                $0.url.lastPathComponent.replacingOccurrences(of: "Copernicus_DSM_COG_30_", with: "")
-                    .replacingOccurrences(of: "_DEM.tif", with: "")
-            })
+        let names = lock.withLock { self.names }
+        return Set(requests.filter { $0.headers["Range"] == nil }.compactMap { names[$0.url] })
     }
 
     func get(_ url: URL, headers: [String: String]) async throws -> HTTPResponse {
@@ -79,9 +86,32 @@ enum TestGeotiff {
     static let headerSize = 320
 
     static func tile(_ tile: ElevationTile, size: Int = 8, heightM: Float) -> Data {
+        self.tile(tile, size: size) { _, _ in heightM }
+    }
+
+    /// A tile with the height of `heightM(latitudeDeg, longitudeDeg)` at the center of each sample.
+    static func tile(
+        _ tile: ElevationTile, size: Int, heightM: (_ latitudeDeg: Double, _ longitudeDeg: Double) -> Float
+    ) -> Data {
         let half = size / 2
-        let full = [Float](repeating: heightM, count: size * size)
-        let overview = [Float](repeating: heightM, count: half * half)
+        /// The samples of a level with `count` x `count` samples, row by row from the north.
+        func samples(_ count: Int) -> [Float] {
+            let step = 1.0 / Double(count)
+            let north = Double(tile.latitudeDeg + 1)
+            let west = Double(tile.longitudeDeg)
+            var values: [Float] = []
+            values.reserveCapacity(count * count)
+            for row in 0..<count {
+                let latitude = north - (Double(row) + 0.5) * step
+                for column in 0..<count {
+                    let longitude = west + (Double(column) + 0.5) * step
+                    values.append(heightM(latitude, longitude))
+                }
+            }
+            return values
+        }
+        let full = samples(size)
+        let overview = samples(half)
         let ifd0 = 8
         let doubles = ifd0 + 2 + (12 * 10) + 4
         let ifd1 = doubles + (9 * 8)

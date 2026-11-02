@@ -74,7 +74,7 @@ final class DemCacheTests: XCTestCase {
         XCTAssertEqual(DemCache.name(innsbruck), "N47_00_E011_00")
         XCTAssertEqual(DemCache.name(ElevationTile(latitudeDeg: -9, longitudeDeg: -75)), "S09_00_W075_00")
         XCTAssertEqual(
-            DemCache.url(innsbruck).absoluteString,
+            CopernicusSource().url(innsbruck).absoluteString,
             "https://copernicus-dem-90m.s3.amazonaws.com/Copernicus_DSM_COG_30_N47_00_E011_00_DEM/"
                 + "Copernicus_DSM_COG_30_N47_00_E011_00_DEM.tif")
     }
