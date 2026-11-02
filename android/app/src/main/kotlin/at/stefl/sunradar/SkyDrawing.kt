@@ -14,10 +14,12 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.withRotation
+import at.stefl.sunradar.core.DirectionLine
 import at.stefl.sunradar.core.Horizontal
 import at.stefl.sunradar.core.Polylines
 import at.stefl.sunradar.core.View
 import at.stefl.sunradar.core.project
+import at.stefl.sunradar.core.projectLine
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -31,6 +33,12 @@ import kotlin.math.sqrt
 object SkyColors {
     val sky = Color(0xFF0B1A30)
     val horizon = Color(0xCCFFFFFF)
+    /** The 0° horizon when the terrain line exists. */
+    val horizonFaint = Color(0x4DFFFFFF)
+    val terrain = Color(0xFFC5E1A5)
+    val terrainFill = Color(0x33557A46)
+    /** The path behind the terrain. */
+    val hiddenPath = Color(0x66FFC83D)
     val nightPath = Color(0x80FFC83D)
     val dayPath = Color(0xFFFFC83D)
     val glow = Color(0x40FFC83D)
@@ -93,6 +101,29 @@ fun DrawScope.drawPolylines(lines: Polylines, color: Color, stroke: Stroke) {
         }
         drawPath(path, color, style = stroke)
     }
+}
+
+/**
+ * Fills closed rings of directions. The projection clips a ring to the valid area; the parts of a
+ * clipped ring are joined with straight lines, which lie outside the screen or near its border. All
+ * rings are one path, so a shared edge of two rings shows no seam.
+ */
+fun DrawScope.fillRings(view: View, rings: List<DirectionLine>, color: Color) {
+    val path = Path()
+    for (ring in rings) {
+        val lines = projectLine(view, ring)
+        var started = false
+        for (line in 0 until lines.count) {
+            for (i in 0 until lines.size(line)) {
+                val x = lines.x(line, i).toFloat()
+                val y = lines.y(line, i).toFloat()
+                if (started) path.lineTo(x, y) else path.moveTo(x, y)
+                started = true
+            }
+        }
+        if (started) path.close()
+    }
+    drawPath(path, color)
 }
 
 fun dashed(width: Float, dash: Float) =

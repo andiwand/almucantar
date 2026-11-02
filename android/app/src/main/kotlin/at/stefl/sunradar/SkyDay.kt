@@ -5,6 +5,7 @@ import at.stefl.sunradar.core.DirectionLine
 import at.stefl.sunradar.core.Horizontal
 import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.PathOptions
+import at.stefl.sunradar.core.PathPoint
 import at.stefl.sunradar.core.sunEvents
 import at.stefl.sunradar.core.sunPath
 import at.stefl.sunradar.core.sunPosition
@@ -21,7 +22,8 @@ data class HourMark(val direction: Horizontal, val label: String)
  * path has a point every 5 minutes, so it is dense enough for the clipping.
  */
 class SkyDay(val observer: Observer, val startUtc: Double, val endUtc: Double, zone: ZoneId) {
-    private val path = sunPath(observer, startUtc, endUtc, PathOptions(stepS = 300.0))
+    /** The path with a point every 5 minutes. */
+    val path: List<PathPoint> = sunPath(observer, startUtc, endUtc, PathOptions(stepS = 300.0))
 
     /** The full path, also below the horizon. */
     val fullPath: DirectionLine = DirectionLine.fromPath(path)

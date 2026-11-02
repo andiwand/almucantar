@@ -10,7 +10,7 @@ API of the AAR.
 | Path | What |
 |---|---|
 | `app/src/main/kotlin/at/stefl/sunradar/MainActivity.kt` | The activity and the location permission. |
-| `.../SkyScreen.kt` | The sky view (Compose): horizon, cardinal points, path, hour marks, sun, crosshair with the auto-mode time, and the status text. |
+| `.../SkyScreen.kt` | The sky view (Compose): horizon, terrain line, cardinal points, path, hour marks, sun, crosshair with the auto-mode time, and the status text. |
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
 | `.../HeadingTracker.kt` | The game rotation vector, the magnetometer (once per second), and the heading filter of the core. `apply()` takes a calibration, for example a sun tap. |
 | `.../SkyDrawing.kt` | Drawing helpers: upright labels, the arrow at the screen border, dashed lines. |
@@ -23,6 +23,9 @@ API of the AAR.
 | `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |
 | `.../CameraCalibration.kt` | Converts the Camera2 calibration and `PreviewView.getSensorToViewTransform()` to a `Camera` in view pixels. Pure Kotlin, tested in `app/src/test/`. |
 | `.../MoonPhase.kt` | The lit part of the moon: the direction toward the sun and the outline of the phase. Tested in `app/src/test/`. |
+| `.../DemCache.kt` | The persistent cache of the Copernicus GLO-90 tiles in `noBackupFilesDir/dem`: one file per tile and `index.json` (ETag, Last-Modified, time of the check and of the last use, size, sea flag). It evicts the least recently used tiles above 400 MB, checks a tile with the server after 180 days, treats 404 as the sea, and downloads a file that the core cannot read again one time. Pure Kotlin with a replaceable HTTP layer (`TileHttp`), tested in `app/src/test/`. |
+| `.../Terrain.kt` | The terrain horizon: `rememberTerrain` loads the tiles (level 0 nearer than 25 km, else level 1) and calculates the profile in the background, again after a move of 500 m or a new tile. `TerrainLines` (the line and the fill) and `TerrainDay` (the path behind the terrain, the visible sunrise and sunset) are the data of the drawing. Only a device location gets a terrain, and the demo mode gets none. |
+| `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Copernicus). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
 | `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `website/src/sky.ts`. |
 | `app/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sunradar.screenshot`. The release build has a no-op version in `app/src/release/`. |

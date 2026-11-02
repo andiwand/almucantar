@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.camerax.view)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.core)

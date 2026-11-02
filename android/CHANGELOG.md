@@ -5,6 +5,12 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The terrain horizon: the app downloads the elevation data of Copernicus DEM GLO-90 for 100 km
+  around the device location and draws the mountains as a line on the sky and on the camera
+  image. The parts of the sun path behind the mountains are dim and dashed. The status shows the
+  visible sunrise and sunset over the terrain. The app keeps the data (at most 400 MB) and checks
+  it with the server after 180 days; it works offline with the data that it has. The new
+  settings (⋮) can switch the terrain horizon off, and show the credits of the data.
 - The moon shows its phase. The lit part faces the sun.
 - The sun path, hour labels, and crosshair dates refresh when the device time zone changes.
 - Alignment near the zenith or nadir shows a message instead of closing the app.

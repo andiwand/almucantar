@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -165,6 +167,25 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                 zone,
             )
         }
+    // The terrain horizon needs the true place: the city of the time zone can be far away. The
+    // demo mode downloads nothing and shows no terrain.
+    val terrainSetting = rememberTerrainSetting()
+    val terrain by
+        rememberTerrain(
+            place.observer.takeIf { place.source == PlaceSource.DEVICE && scene == null },
+            terrainSetting.value && scene == null,
+        )
+    val terrainProfile = terrain.profile
+    val terrainLines = remember(terrainProfile) { terrainProfile?.let { TerrainLines(it) } }
+    val terrainDayState =
+        produceState<TerrainDay?>(null, day, terrainProfile, zone) {
+            value = terrainProfile?.let {
+                withContext(Dispatchers.Default) { TerrainDay(day, it, zone) }
+            }
+        }
+    // A terrain day of the day before stays until the new one is ready; it is not used.
+    val terrainDay = terrainDayState.value?.takeIf { it.day === day && terrainProfile != null }
+    var showSettings by remember { mutableStateOf(false) }
     val guides =
         remember(place.observer, date.year, zone) {
             solsticeGuides(place.observer, date.year, zone)
@@ -356,6 +377,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     val currentOnTap by rememberUpdatedState(onTap)
 
     MaterialTheme(colorScheme = darkColorScheme()) {
+        if (showSettings) SettingsDialog(terrainSetting) { showSettings = false }
         if (pickingLandmark) {
             MapPicker(place.observer) {
                 pickingLandmark = false
@@ -390,6 +412,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                     drawSky(
                         view,
                         day,
+                        Terrain(terrainLines, terrainDay, fill = !cameraOn),
                         guides,
                         sun,
                         moon,
@@ -411,7 +434,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                     .widthIn(max = 440.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StatusCard(place, tracker, day, cameraOn, viewCamera)
+                StatusCard(place, tracker, day, terrainDay, terrain.status, cameraOn, viewCamera)
                 message?.let { Panel { Text(it, color = Color.White) } }
                 aligning?.let { Panel { Text(alignHint(it), color = Color.White) } }
             }
@@ -456,6 +479,12 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                     } else if (aligning != null) {
                         Button(onClick = { aligning = null }) { Text("Cancel") }
                     } else {
+                        FilledTonalButton(
+                            onClick = { showSettings = true },
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                        ) {
+                            Text("⋮")
+                        }
                         Box {
                             Button(onClick = { alignMenu = true }) { Text("Align") }
                             DropdownMenu(
@@ -614,6 +643,8 @@ private fun StatusCard(
     place: Place,
     tracker: HeadingTracker,
     day: SkyDay,
+    terrainDay: TerrainDay?,
+    terrainStatus: String?,
     cameraOn: Boolean,
     camera: ViewCamera?,
 ) {
@@ -622,6 +653,8 @@ private fun StatusCard(
             Text(placeText(place), color = Color.White, fontWeight = FontWeight.SemiBold)
             HeadingText(tracker)
             Text(day.summary, color = Color(0xFFDDDDDD))
+            terrainDay?.let { Text(it.summary, color = SkyColors.terrain) }
+            terrainStatus?.let { Text(it, color = Color(0xFFFFB74D), fontSize = 12.sp) }
             if (cameraOn) Text(cameraText(camera), color = Color(0xFFDDDDDD))
         }
     }
@@ -721,9 +754,13 @@ private fun DrawScope.drawDetectedSun(sun: DetectedSun) {
     }
 }
 
+/** The terrain of the drawing. [fill] fills the area below the terrain line (sky view only). */
+private class Terrain(val lines: TerrainLines?, val day: TerrainDay?, val fill: Boolean)
+
 private fun DrawScope.drawSky(
     view: View,
     day: SkyDay,
+    terrain: Terrain,
     guides: List<DirectionLine>,
     sun: Horizontal,
     moon: MoonAt?,
@@ -735,14 +772,25 @@ private fun DrawScope.drawSky(
     val labels = labelPaint(14 * px)
     val small = labelPaint(12 * px, bold = false)
 
-    // The horizon with a tick every 15°, and the cardinal points upright above it.
-    drawPolylines(horizonLine(view), SkyColors.horizon, Stroke(1.5f * px))
+    // The terrain: a light fill below the terrain line in the sky view, and the line.
+    val terrainLines = terrain.lines
+    if (terrainLines != null) {
+        if (terrain.fill) fillRings(view, terrainLines.fill, SkyColors.terrainFill)
+        for (line in terrainLines.lines) {
+            drawPolylines(projectLine(view, line), SkyColors.terrain, Stroke(2 * px))
+        }
+    }
+
+    // The horizon with a tick every 15°, and the cardinal points upright above it. It is fainter
+    // when the terrain line exists.
+    val horizonColor = if (terrainLines != null) SkyColors.horizonFaint else SkyColors.horizon
+    drawPolylines(horizonLine(view), horizonColor, Stroke(1.5f * px))
     for (azimuth in 0 until 360 step 15) {
         val direction = Horizontal(azimuth.toDouble(), 0.0)
         val at = screenPoint(view, direction) ?: continue
         val up = upAt(view, direction, at)
         val length = if (azimuth % 90 == 0) 10 * px else 5 * px
-        drawLine(SkyColors.horizon, at, at + up * length, strokeWidth = 1.5f * px)
+        drawLine(horizonColor, at, at + up * length, strokeWidth = 1.5f * px)
         val label =
             when (azimuth) {
                 0 -> "N"
@@ -763,10 +811,15 @@ private fun DrawScope.drawSky(
 
     // The path: dashed below the horizon, bright with a glow above.
     drawPolylines(projectLine(view, day.fullPath), SkyColors.nightPath, dashed(2 * px, 8 * px))
-    for (segment in day.daySegments) {
+    // With the terrain, the parts behind the terrain are dim and dashed.
+    val terrainDay = terrain.day
+    for (segment in terrainDay?.visibleSegments ?: day.daySegments) {
         val lines = projectLine(view, segment)
         drawPolylines(lines, SkyColors.glow, Stroke(9 * px))
         drawPolylines(lines, SkyColors.dayPath, Stroke(3 * px))
+    }
+    terrainDay?.hiddenSegments?.forEach {
+        drawPolylines(projectLine(view, it), SkyColors.hiddenPath, dashed(3 * px, 6 * px))
     }
     for (mark in day.hourMarks) {
         val at = screenPoint(view, mark.direction) ?: continue
@@ -776,6 +829,12 @@ private fun DrawScope.drawSky(
     for (mark in day.horizonMarks) {
         val at = screenPoint(view, mark.direction) ?: continue
         drawCircle(Color.White, radius = 3 * px, center = at)
+        drawUprightText(mark.label, at, upAt(view, mark.direction, at), -22 * px, small)
+    }
+    // The visible sunrise and sunset over the terrain.
+    terrainDay?.marks?.forEach { mark ->
+        val at = screenPoint(view, mark.direction) ?: return@forEach
+        drawCircle(SkyColors.terrain, radius = 3 * px, center = at)
         drawUprightText(mark.label, at, upAt(view, mark.direction, at), -22 * px, small)
     }
 
