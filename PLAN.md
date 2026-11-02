@@ -683,8 +683,10 @@ camera.
 coastlines, the borders, the larger lakes and rivers, and 7342 places with their IANA time
 zones. A dropped place gets the time zone of the nearest place that has one.
 
-**Status:** the PWA is done: the Place panel (search and tap on the map), the last place in
-`localStorage`, and the times in the time zone of the place. Android and iOS: open.
+**Status:** done in the PWA, on Android, and on iOS: the Place panel (search and tap on the
+map, without a network), the last place, and the times in the time zone of the place. A dropped
+place and the last place also get the terrain horizon. Open: a "download this region" action for
+the terrain tiles of a trip.
 
 ### 13.4 Planets
 
