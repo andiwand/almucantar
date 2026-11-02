@@ -278,18 +278,27 @@ data class ElevationTile(
     val distanceM: Double = 0.0,
 )
 
+/** A body that can rise and set behind the terrain. */
+enum class Body {
+    SUN,
+    MOON,
+}
+
 data class TerrainEventOptions(
+    /** The sun or the moon. */
+    val body: Body = Body.SUN,
+    /** Used only for the sun. */
     val model: SolarModel = SolarModel.NOAA,
     val refraction: Boolean = true,
     val atmosphere: Atmosphere = Atmosphere(),
-    /** The sun is visible if its center plus this angle is above the terrain. */
+    /** The body is visible if its center plus this angle is above the terrain. */
     val limbDeg: Double = 0.2667,
     /** The interval of the first search. */
     val searchStepS: Double = 60.0,
     val toleranceS: Double = 0.5,
 )
 
-/** The times when the sun appears or goes away behind the terrain. */
+/** The times when the body appears or goes away behind the terrain. */
 data class TerrainEvents(
     /** POLAR_DAY: the sun stays above the terrain. POLAR_NIGHT: it stays behind or below. */
     val kind: DayKind,

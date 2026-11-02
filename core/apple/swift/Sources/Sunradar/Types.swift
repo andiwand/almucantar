@@ -474,21 +474,32 @@ public struct HorizonProfile: Sendable {
     }
 }
 
+/// A body that can rise and set behind the terrain.
+public enum Body: Int32, Sendable {
+    case sun = 0
+    case moon = 1
+}
+
 public struct TerrainEventOptions: Sendable {
+    /// The sun or the moon.
+    public var body: Body
+    /// Used only for the sun.
     public var model: SolarModel
     public var refraction: Bool
     public var atmosphere: Atmosphere
-    /// The sun is visible if its center plus this angle is above the terrain (the semi-diameter by default).
+    /// The body is visible if its center plus this angle is above the terrain (the semi-diameter by default).
     public var limbDeg: Double
     public var searchStepS: Double
     public var toleranceS: Double
     public init(
+        body: Body = Body(rawValue: TerrainEventOptions.c.body)!,
         model: SolarModel = SolarModel(rawValue: TerrainEventOptions.c.model)!,
         refraction: Bool = TerrainEventOptions.c.refraction,
         atmosphere: Atmosphere = Atmosphere(TerrainEventOptions.c.atmosphere),
         limbDeg: Double = TerrainEventOptions.c.limb_deg, searchStepS: Double = TerrainEventOptions.c.search_step_s,
         toleranceS: Double = TerrainEventOptions.c.tolerance_s
     ) {
+        self.body = body
         self.model = model
         self.refraction = refraction
         self.atmosphere = atmosphere
@@ -605,6 +616,6 @@ extension TerrainEventOptions {
     var c: sr_terrain_event_options {
         sr_terrain_event_options(
             model: model.rawValue, refraction: refraction, atmosphere: atmosphere.c, limb_deg: limbDeg,
-            search_step_s: searchStepS, tolerance_s: toleranceS)
+            search_step_s: searchStepS, tolerance_s: toleranceS, body: body.rawValue)
     }
 }

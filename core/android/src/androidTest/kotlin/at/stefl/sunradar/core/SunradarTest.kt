@@ -300,6 +300,20 @@ class SunradarTest {
         assertEquals(DayKind.POLAR_NIGHT, hidden.kind)
         assertTrue(hidden.crossings.isEmpty())
 
+        // The moon: the upper limb is on the horizon at each crossing.
+        val moon =
+            terrainEvents(
+                vienna,
+                flat,
+                dayStart,
+                dayStart + 3 * day,
+                TerrainEventOptions(body = Body.MOON),
+            )
+        assertTrue(moon.crossings.size in 5..7)
+        val rise = moon.crossings.first { it.rising }
+        assertTrue(moonPosition(rise.unixUtc + 2, vienna).altitudeDeg + 0.2667 > 0)
+        assertTrue(moonPosition(rise.unixUtc - 2, vienna).altitudeDeg + 0.2667 < 0)
+
         assertThrows(IllegalArgumentException::class.java) {
             terrainAltitudeDeg(HorizonProfile(1.0, DoubleArray(0), DoubleArray(0)), 0.0)
         }

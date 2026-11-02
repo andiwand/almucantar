@@ -175,7 +175,8 @@ HorizonOptions to_cpp(const sr_horizon_options& o) {
 }
 
 TerrainEventOptions to_cpp(const sr_terrain_event_options& o) {
-  return {.model = to_enum<SolarModel>(o.model, "model"),
+  return {.body = to_enum<Body>(o.body, "body"),
+          .model = to_enum<SolarModel>(o.model, "model"),
           .refraction = o.refraction,
           .atmosphere = to_cpp(o.atmosphere),
           .limb_deg = o.limb_deg,
@@ -267,8 +268,8 @@ sr_horizon_options sr_default_horizon_options(void) {
 }
 sr_terrain_event_options sr_default_terrain_event_options(void) {
   const TerrainEventOptions d;
-  return {static_cast<int>(d.model), d.refraction, to_c(d.atmosphere), d.limb_deg,
-          d.search_step_s,           d.tolerance_s};
+  return {static_cast<int>(d.model), d.refraction,  to_c(d.atmosphere),      d.limb_deg,
+          d.search_step_s,           d.tolerance_s, static_cast<int>(d.body)};
 }
 sr_camera sr_default_camera(void) { return to_c(Camera{}); }
 sr_view sr_default_view(void) {

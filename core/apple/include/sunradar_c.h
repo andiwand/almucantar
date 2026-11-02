@@ -162,6 +162,7 @@ typedef struct sr_terrain_event_options {
   bool refraction;
   sr_atmosphere atmosphere;
   double limb_deg, search_step_s, tolerance_s;
+  int body; /* 0: the sun, 1: the moon */
 } sr_terrain_event_options;
 typedef struct sr_terrain_events {
   int kind;

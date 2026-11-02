@@ -205,6 +205,15 @@ final class SunradarTests: XCTestCase {
         XCTAssertEqual(night.kind, .polarNight)
         XCTAssertTrue(night.crossings.isEmpty)
 
+        // The moon: the upper limb is on the horizon at each crossing.
+        let moon = try terrainEvents(
+            observer: vienna, profile: flat, startUtc: dayStart, endUtc: dayStart + 3 * day,
+            options: TerrainEventOptions(body: .moon))
+        XCTAssertTrue((5...7).contains(moon.crossings.count))
+        let rise = try XCTUnwrap(moon.crossings.first(where: \.rising))
+        XCTAssertGreaterThan(try moonPosition(rise.unixUtc + 2, observer: vienna).altitudeDeg + 0.2667, 0)
+        XCTAssertLessThan(try moonPosition(rise.unixUtc - 2, observer: vienna).altitudeDeg + 0.2667, 0)
+
         var bad = flat
         bad.distanceM = [1]
         XCTAssertThrowsError(try terrainAltitudeDeg(bad, azimuthDeg: 0))
@@ -216,6 +225,7 @@ final class SunradarTests: XCTestCase {
         XCTAssertEqual(HorizonOptions().c.max_distance_m, sr_default_horizon_options().max_distance_m)
         XCTAssertEqual(HorizonOptions().c.refraction_coefficient, sr_default_horizon_options().refraction_coefficient)
         XCTAssertEqual(TerrainEventOptions().c.limb_deg, sr_default_terrain_event_options().limb_deg)
+        XCTAssertEqual(TerrainEventOptions().body, .sun)
         XCTAssertEqual(TerrainEventOptions().c.atmosphere.pressure_hpa, sr_default_terrain_event_options().atmosphere.pressure_hpa)
         // Independent values, so a wrong wiring fails.
         XCTAssertEqual(HorizonOptions().azimuthStepDeg, 0.25)

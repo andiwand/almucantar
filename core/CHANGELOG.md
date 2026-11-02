@@ -23,7 +23,7 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   `terrarium_grid()` read the Web Mercator tiles of the AWS Terrain Tiles (Terrarium PNG), which
   allow CORS. The WASM package, the AAR, and the Swift package have all terrain functions.
 - `terrain_events()` also finds the moon behind the terrain: `TerrainEventOptions.body` is
-  `Body::sun` (the default) or `Body::moon`. In C++, Python, and WASM for now.
+  `Body::sun` (the default) or `Body::moon`, in all bindings.
 - The planets and the Milky Way: `planet_position()` and `planet_magnitude()` for Mercury to
   Neptune (within 0.006° of JPL Horizons), and `galactic_position()` and `galactic_plane()` for
   the galactic center and the center line of the Milky Way. In C++ and Python only.

@@ -170,4 +170,5 @@ internal fun TerrainEventOptions.pack() =
         limbDeg,
         searchStepS,
         toleranceS,
+        body.ordinal.toDouble(),
     )

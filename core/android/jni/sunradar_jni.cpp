@@ -31,8 +31,8 @@
 //                       observer_elevation_m, refraction_coefficient
 //   HorizonProfile [3 + 2 n]  azimuth_step_deg, observer_elevation_m, n, then
 //                       altitude_deg[n], then distance_m[n]
-//   TerrainEventOptions [7]  model, refraction, pressure_hpa, temperature_c, limb_deg,
-//                       search_step_s, tolerance_s
+//   TerrainEventOptions [8]  model, refraction, pressure_hpa, temperature_c, limb_deg,
+//                       search_step_s, tolerance_s, body
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -530,7 +530,9 @@ HorizonOptions horizon_options(const Doubles& o) {
 }
 
 TerrainEventOptions terrain_event_options(const Doubles& o) {
-  return {.model = to_enum<SolarModel>(o[0], "model"),
+  // The body is the last value of the array, but the first field of the struct.
+  return {.body = to_enum<Body>(o[7], "body"),
+          .model = to_enum<SolarModel>(o[0], "model"),
           .refraction = to_bool(o[1]),
           .atmosphere = {.pressure_hpa = o[2], .temperature_c = o[3]},
           .limb_deg = o[4],
@@ -634,7 +636,7 @@ SUNRADAR_JNI(terrainEvents)
     const TerrainEvents e =
         terrain_events(observer(Doubles(env, obs, 2, "observer")),
                        unpack_profile(Doubles(env, profile, 0, "profile")), start, end,
-                       terrain_event_options(Doubles(env, opts, 7, "options")));
+                       terrain_event_options(Doubles(env, opts, 8, "options")));
     std::vector<double> out{static_cast<double>(e.kind), static_cast<double>(e.crossings.size())};
     for (const Crossing& c : e.crossings) {
       out.push_back(c.unix_utc);
@@ -718,6 +720,7 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          t.atmosphere.temperature_c,
                          t.limb_deg,
                          t.search_step_s,
-                         t.tolerance_s});
+                         t.tolerance_s,
+                         static_cast<double>(t.body)});
   });
 }
