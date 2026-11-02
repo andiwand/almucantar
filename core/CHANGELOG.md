@@ -19,7 +19,9 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   terrestrial refraction. `terrain_altitude_deg()` interpolates the profile, and
   `terrain_events()` finds the visible sunrise and sunset behind the terrain.
   `read_elevation_geotiff()` reads a GeoTIFF tile, for example of Copernicus GLO-90, and
-  `elevation_tiles()` lists the tiles of 1° that a profile needs.
+  `elevation_tiles()` lists the tiles of 1° that a profile needs. For a web app, `map_tiles()` and
+  `terrarium_grid()` read the Web Mercator tiles of the AWS Terrain Tiles (Terrarium PNG), which
+  allow CORS. The WASM package has all terrain functions.
 - The planets and the Milky Way: `planet_position()` and `planet_magnitude()` for Mercury to
   Neptune (within 0.006° of JPL Horizons), and `galactic_position()` and `galactic_plane()` for
   the galactic center and the center line of the Milky Way. In C++ and Python only.

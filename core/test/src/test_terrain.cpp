@@ -310,3 +310,77 @@ TEST_CASE("elevation_tiles lists the tiles near the observer", "[terrain]") {
   REQUIRE_THROWS_AS(elevation_tiles({.latitude_deg = 47, .longitude_deg = 11}, 0),
                     std::invalid_argument);
 }
+
+namespace {
+
+/// The standard formula of the tile scheme of OpenStreetMap.
+std::pair<int, int> osm_tile(const Observer& o, const int zoom) {
+  const double n = std::ldexp(1.0, zoom);
+  const double phi = o.latitude_deg * kDegToRad;
+  return {static_cast<int>(std::floor((o.longitude_deg + 180) / 360 * n)),
+          static_cast<int>(
+              std::floor((1 - (std::asinh(std::tan(phi)) / 3.14159265358979323846)) / 2 * n))};
+}
+
+double mercator_latitude(const double y, const double n) {
+  return std::atan(std::sinh(3.14159265358979323846 * (1 - (2 * y / n)))) * kRadToDeg;
+}
+
+}  // namespace
+
+TEST_CASE("map_tiles lists the Web Mercator tiles near the observer", "[terrain]") {
+  const Observer vienna{.latitude_deg = 48.2082, .longitude_deg = 16.3738};
+  const std::vector<MapTile> tiles = map_tiles(vienna, 100'000, 10);
+  const auto [x, y] = osm_tile(vienna, 10);
+  REQUIRE(tiles.front().x == x);
+  REQUIRE(tiles.front().y == y);
+  REQUIRE(tiles.front().zoom == 10);
+  REQUIRE(tiles.front().distance_m == 0);
+  // A tile at zoom 10 is about 26 km wide and high here, so 200 km need about 8 by 8 tiles,
+  // without the corners.
+  REQUIRE(tiles.size() > 40);
+  REQUIRE(tiles.size() < 80);
+  for (const MapTile& t : tiles) {
+    REQUIRE(t.distance_m <= 101'000);
+    REQUIRE(std::abs(t.x - x) <= 5);
+    REQUIRE(std::abs(t.y - y) <= 5);
+  }
+  REQUIRE(map_tiles(vienna, 1000, 0).size() == 1);
+  REQUIRE_THROWS_AS(map_tiles(vienna, 1000, 13), std::invalid_argument);
+}
+
+TEST_CASE("terrarium_grid converts a tile to equal steps of latitude", "[terrain]") {
+  const MapTile tile{.zoom = 10, .x = 558, .y = 355};
+  const int size = 256;
+  const double n = 1024;
+  // Each pixel has the height 1000 * (latitude of its center - 48), so the height of the grid at
+  // a row must be 1000 * (latitude of the row - 48).
+  std::vector<std::uint8_t> rgba(static_cast<std::size_t>(size) * size * 4);
+  for (int r = 0; r < size; ++r) {
+    const double latitude = mercator_latitude(tile.y + ((r + 0.5) / size), n);
+    const double value = (1000 * (latitude - 48)) + 32768;
+    for (int c = 0; c < size; ++c) {
+      const std::size_t i =
+          ((static_cast<std::size_t>(r) * size) + static_cast<std::size_t>(c)) * 4;
+      rgba[i] = static_cast<std::uint8_t>(std::floor(value / 256));
+      rgba[i + 1] = static_cast<std::uint8_t>(static_cast<int>(std::floor(value)) % 256);
+      rgba[i + 2] = static_cast<std::uint8_t>(std::floor((value - std::floor(value)) * 256));
+      rgba[i + 3] = 255;
+    }
+  }
+  const ElevationGrid grid = terrarium_grid(rgba, size, size, tile);
+  REQUIRE(grid.rows == size);
+  REQUIRE(grid.columns == size);
+  REQUIRE_THAT(grid.north_latitude_deg, WithinAbs(mercator_latitude(355 + (0.5 / size), n), 1e-12));
+  REQUIRE_THAT(grid.west_longitude_deg,
+               WithinAbs(-180 + (360.0 * 558 / n) + (180.0 / n / size), 1e-12));
+  REQUIRE_THAT(grid.longitude_step_deg, WithinAbs(360.0 / n / size, 1e-15));
+  for (int r = 0; r < size; r += 15) {
+    const double latitude = grid.north_latitude_deg - (r * grid.latitude_step_deg);
+    INFO("row " << r);
+    // The linear interpolation between two rows of the image gives an error below 1 mm here.
+    REQUIRE_THAT(grid.heights_m[index(grid, r, 7)], WithinAbs(1000 * (latitude - 48), 0.01));
+  }
+  REQUIRE_THROWS_AS(terrarium_grid(rgba, size, size - 1, tile), std::invalid_argument);
+  REQUIRE_THROWS_AS(terrarium_grid(rgba, size, size, {.zoom = 1, .x = 2}), std::invalid_argument);
+}

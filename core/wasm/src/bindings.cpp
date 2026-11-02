@@ -410,6 +410,30 @@ val elevation_tiles_js(const Observer& o, double max_distance_m) {
   });
 }
 
+val map_tiles_js(const Observer& o, double max_distance_m, int zoom) {
+  return guarded([&] {
+    val result = val::array();
+    for (const MapTile& t : map_tiles(o, max_distance_m, zoom)) {
+      val x = val::object();
+      x.set("zoom", t.zoom);
+      x.set("x", t.x);
+      x.set("y", t.y);
+      x.set("distanceM", t.distance_m);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val terrarium_grid_js(const val& rgba, int width, int height, const val& tile) {
+  return guarded([&] {
+    const MapTile t{
+        .zoom = tile["zoom"].as<int>(), .x = tile["x"].as<int>(), .y = tile["y"].as<int>()};
+    return grid_to_js(terrarium_grid(emscripten::convertJSArrayToNumberVector<std::uint8_t>(rgba),
+                                     width, height, t));
+  });
+}
+
 val horizon_profile_js(const Observer& o, const val& tiles, const HorizonOptions& opt) {
   return guarded([&] {
     std::vector<ElevationGrid> grids;
@@ -571,6 +595,8 @@ EMSCRIPTEN_BINDINGS(sunradar) {
   function("moonIlluminatedFraction", &moon_illuminated_fraction_js);
   function("readElevationGeotiff", &read_elevation_geotiff_js);
   function("elevationTiles", &elevation_tiles_js);
+  function("mapTiles", &map_tiles_js);
+  function("terrariumGrid", &terrarium_grid_js);
   function("horizonProfile", &horizon_profile_js);
   function("terrainAltitudeDeg", &terrain_altitude_deg_js);
   function("terrainEvents", &terrain_events_js);

@@ -542,6 +542,30 @@ void bind_terrain(py::module_& m) {
       });
   m.def("elevation_tiles", &elevation_tiles, "observer"_a, "max_distance_m"_a,
         "Returns the tiles of 1° by 1° that a horizon profile needs, the nearest first.");
+  py::class_<MapTile>(m, "MapTile", "A tile of the Web Mercator scheme of web maps.")
+      .def(py::init([](const int zoom, const int x, const int y, const double distance_m) {
+             return MapTile{.zoom = zoom, .x = x, .y = y, .distance_m = distance_m};
+           }),
+           "zoom"_a, "x"_a, "y"_a, "distance_m"_a = 0.0)
+      .def_readwrite("zoom", &MapTile::zoom)
+      .def_readwrite("x", &MapTile::x)
+      .def_readwrite("y", &MapTile::y)
+      .def_readwrite("distance_m", &MapTile::distance_m)
+      .def("__repr__", [](const MapTile& t) {
+        return "MapTile(zoom=" + std::to_string(t.zoom) + ", x=" + std::to_string(t.x) +
+               ", y=" + std::to_string(t.y) + ", distance_m=" + num(t.distance_m) + ")";
+      });
+  m.def("map_tiles", &map_tiles, "observer"_a, "max_distance_m"_a, "zoom"_a,
+        "Returns the Web Mercator tiles that a horizon profile needs, the nearest first.");
+  m.def(
+      "terrarium_grid",
+      [](const py::bytes& rgba, const int width, const int height, const MapTile& tile) {
+        const std::string_view view(rgba);
+        return terrarium_grid(std::vector<std::uint8_t>(view.begin(), view.end()), width, height,
+                              tile);
+      },
+      "rgba"_a, "width"_a, "height"_a, "tile"_a,
+      "Converts the RGBA pixels of a Terrarium elevation tile to a grid.");
   m.def("horizon_profile", &horizon_profile, "observer"_a, "tiles"_a,
         "options"_a = HorizonOptions{}, "Calculates the terrain horizon from the grids in tiles.");
   m.def("terrain_altitude_deg", &terrain_altitude_deg, "profile"_a, "azimuth_deg"_a,

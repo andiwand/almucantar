@@ -50,6 +50,8 @@ export async function load(moduleOptions = {}) {
     moonIlluminatedFraction: (unixUtc) => m.moonIlluminatedFraction(unixUtc),
     readElevationGeotiff: (data, level = 0) => m.readElevationGeotiff(data, level),
     elevationTiles: (observer, maxDistanceM) => m.elevationTiles(observer, maxDistanceM),
+    mapTiles: (observer, maxDistanceM, zoom) => m.mapTiles(observer, maxDistanceM, zoom),
+    terrariumGrid: (rgba, width, height, tile) => m.terrariumGrid(rgba, width, height, tile),
     horizonProfile: (observer, tiles, options) => m.horizonProfile(observer, tiles, merge(d.horizonOptions, options)),
     terrainAltitudeDeg: (profile, azimuthDeg) => m.terrainAltitudeDeg(profile, azimuthDeg),
     terrainEvents: (observer, profile, startUtc, endUtc, options) =>

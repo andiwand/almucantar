@@ -36,6 +36,8 @@ export interface ElevationGrid {
 }
 /** A tile of 1° by 1°, named by its south-west corner (Copernicus N47_00_E011_00 is 47, 11). */
 export interface ElevationTile { latitudeDeg: number; longitudeDeg: number; distanceM: number }
+/** A tile of the Web Mercator scheme of web maps: x from west to east, y from north to south. */
+export interface MapTile { zoom: number; x: number; y: number; distanceM: number }
 export interface HorizonOptions {
   azimuthStepDeg: number; maxDistanceM: number; eyeHeightM: number; useGridElevation: boolean;
   observerElevationM: number; refractionCoefficient: number;
@@ -111,6 +113,13 @@ export interface Sunradar {
   readElevationGeotiff(data: Uint8Array, level?: number): ElevationGrid & { heightsM: Float32Array };
   /** The tiles of 1° that a horizon profile with maxDistanceM needs, the nearest first. */
   elevationTiles(observer: Observer, maxDistanceM: number): ElevationTile[];
+  /** The Web Mercator tiles of zoom (0 to 12) that a horizon profile with maxDistanceM needs, the nearest first. */
+  mapTiles(observer: Observer, maxDistanceM: number, zoom: number): MapTile[];
+  /**
+   * Converts the RGBA pixels of a Terrarium elevation tile (ImageData.data of a canvas) to a grid
+   * with equal steps in latitude.
+   */
+  terrariumGrid(rgba: Uint8Array | Uint8ClampedArray, width: number, height: number, tile: Pick<MapTile, "zoom" | "x" | "y">): ElevationGrid & { heightsM: Float32Array };
   horizonProfile(observer: Observer, tiles: ElevationGrid[], options?: Partial<HorizonOptions>): HorizonProfile;
   terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: number): number;
   terrainEvents(observer: Observer, profile: HorizonProfile, startUtc: number, endUtc: number, options?: Partial2<TerrainEventOptions>): TerrainEvents;

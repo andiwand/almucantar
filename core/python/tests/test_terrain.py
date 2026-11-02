@@ -81,3 +81,11 @@ def test_read_elevation_geotiff():
 def test_elevation_tiles():
     tiles = sunradar.elevation_tiles(VIENNA, 20000)
     assert (tiles[0].latitude_deg, tiles[0].longitude_deg) == (48, 16)
+
+
+def test_map_tiles_and_terrarium():
+    tiles = sunradar.map_tiles(VIENNA, 100000, 10)
+    assert (tiles[0].zoom, tiles[0].x, tiles[0].distance_m) == (10, 558, 0)
+    # 2 x 2 pixels at 500 m: 129 * 256 + 244 - 32768 = 500.
+    grid = sunradar.terrarium_grid(bytes([129, 244, 0, 255] * 4), 2, 2, tiles[0])
+    assert grid.heights_m == [500.0] * 4

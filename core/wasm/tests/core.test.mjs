@@ -176,3 +176,13 @@ test("terrain: GeoTIFF, tiles, profile, and events", async () => {
   structuredClone(profile);
   structuredClone(grid);
 });
+
+test("terrain: Web Mercator tiles and Terrarium pixels", () => {
+  const tiles = sunradar.mapTiles(vienna, 100000, 10);
+  assert.deepEqual([tiles[0].zoom, tiles[0].x, tiles[0].distanceM], [10, 558, 0]);
+  // A tile of 2 x 2 pixels, all at 500 m: red 129, green 244 (129 * 256 + 244 - 32768 = 500).
+  const rgba = new Uint8ClampedArray([129, 244, 0, 255, 129, 244, 0, 255, 129, 244, 0, 255, 129, 244, 0, 255]);
+  const grid = sunradar.terrariumGrid(rgba, 2, 2, tiles[0]);
+  assert.deepEqual(Array.from(grid.heightsM), [500, 500, 500, 500]);
+  assert.throws(() => sunradar.mapTiles(vienna, 1000, 13), RangeError);
+});

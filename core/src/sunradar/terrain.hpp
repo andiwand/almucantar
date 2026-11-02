@@ -78,6 +78,29 @@ struct ElevationTile {
 [[nodiscard]] std::vector<ElevationTile> elevation_tiles(const Observer& observer,
                                                          double max_distance_m);
 
+/// A tile of the Web Mercator tile scheme of web maps (the scheme of OpenStreetMap): `x` from west
+/// to east and `y` from north to south, both from 0 to `2^zoom - 1`.
+struct MapTile {
+  int zoom = 0;
+  int x = 0;
+  int y = 0;
+  double distance_m = 0;  ///< the distance from the observer to the nearest point of the tile
+};
+
+/// Returns the Web Mercator tiles of `zoom` that a horizon profile with `max_distance_m` needs,
+/// the nearest first. For example, zoom 10 has tiles of about 25 km at 50° latitude and pixels of
+/// about 100 m. Throws `std::invalid_argument` if `zoom` is not in the range [0, 12], or if an
+/// argument is not valid.
+[[nodiscard]] std::vector<MapTile> map_tiles(const Observer& observer, double max_distance_m,
+                                             int zoom);
+
+/// Converts the pixels of a Terrarium elevation tile (the format of the AWS Terrain Tiles,
+/// height = red * 256 + green + blue / 256 - 32768 meters) to a grid. `rgba` has 4 bytes for each
+/// pixel, row by row from the north, as a canvas gives them. The grid has the same size as the
+/// image and equal steps in latitude. Throws `std::invalid_argument` if an argument is not valid.
+[[nodiscard]] ElevationGrid terrarium_grid(const std::vector<std::uint8_t>& rgba, int width,
+                                           int height, const MapTile& tile);
+
 /// Calculates the terrain horizon of `observer` from the grids in `tiles`. The function follows a
 /// line from the observer for each azimuth, until `max_distance_m`. A point between two tiles
 /// uses the nearest sample at their edges, and a point outside all tiles has no data (for example

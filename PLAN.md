@@ -622,7 +622,10 @@ terrain around the place. It changes the visible sunrise and sunset by many minu
   The license allows free use, also commercial, with the attribution "© DLR e.V. 2010-2014 and ©
   Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA;
   all rights reserved". The bucket sends no CORS headers, so the PWA cannot download the tiles
-  directly.
+  directly. The PWA uses the AWS Terrain Tiles instead (Terrarium PNG, Web Mercator, zoom 10,
+  `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`, CORS allowed). The
+  core converts them with `terrarium_grid()`. Near Innsbruck the two sources agree to 8 m on
+  average.
 - **Status:** the core part is done (`terrain.hpp`): `elevation_tiles()` lists the tiles,
   `read_elevation_geotiff()` reads one, and `horizon_profile()` takes all of them. A grid of
   about 90 m within 100 km and a step of 0.25° takes about 70 ms on a laptop.

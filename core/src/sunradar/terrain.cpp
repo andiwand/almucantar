@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -33,6 +34,8 @@ constexpr double kMaxDistanceM = 500'000;
 constexpr double kMaxGridSamples = 200'000'000;
 constexpr double kMaxSearchSteps = 1'000'000;
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+/// The limit of the Web Mercator projection: the map is a square.
+constexpr double kMaxMercatorLatitudeDeg = 85.0511287798;
 
 void validate(const ElevationGrid& grid) {
   require_finite(grid.north_latitude_deg, "north_latitude_deg");
@@ -104,7 +107,9 @@ std::optional<double> height_at(const ElevationGrid& grid, const double latitude
 std::optional<double> height_in_tiles(const std::vector<ElevationGrid>& tiles,
                                       const double latitude_deg, const double longitude_deg,
                                       std::size_t& hint) {
-  for (const double margin : {0.0, 1.0}) {
+  // A margin of 1.5 cells, because the gap between two Web Mercator tiles in a grid with equal
+  // steps of latitude (see terrarium_grid()) can be a little larger than one step.
+  for (const double margin : {0.0, 1.5}) {
     if (hint < tiles.size()) {
       if (const auto h = height_at(tiles[hint], latitude_deg, longitude_deg, margin)) {
         return h;
@@ -121,6 +126,29 @@ std::optional<double> height_in_tiles(const std::vector<ElevationGrid>& tiles,
     }
   }
   return std::nullopt;
+}
+
+/// The distance from the observer to the nearest point of a box in latitude and longitude. The
+/// nearest point of the box is a good approximation of the nearest point for short distances.
+double box_distance_m(const Observer& observer, const double south_deg, const double north_deg,
+                      const double west_deg, const double width_deg) {
+  const double lat = std::clamp(observer.latitude_deg, south_deg, north_deg);
+  const double half = width_deg / 2;
+  const double offset = internal::wrap_180(observer.longitude_deg - west_deg - half);
+  const double lon = observer.longitude_deg - offset + std::clamp(offset, -half, half);
+  const double phi1 = observer.latitude_deg * kDegToRad;
+  const double phi2 = lat * kDegToRad;
+  const double dphi = phi2 - phi1;
+  const double dlambda = (lon - observer.longitude_deg) * kDegToRad;
+  const double a =
+      (std::sin(dphi / 2) * std::sin(dphi / 2)) +
+      (std::cos(phi1) * std::cos(phi2) * std::sin(dlambda / 2) * std::sin(dlambda / 2));
+  return 2 * kEarthRadiusM * std::asin(std::min(1.0, std::sqrt(a)));
+}
+
+/// The latitude of the Web Mercator row coordinate `y` (0 at the north edge, `n` at the south).
+double mercator_latitude_deg(const double y, const double n) {
+  return std::atan(std::sinh(std::numbers::pi * (1 - (2 * y / n)))) * kRadToDeg;
 }
 
 /// The highest terrain along one azimuth.
@@ -206,27 +234,10 @@ std::vector<ElevationTile> elevation_tiles(const Observer& observer, const doubl
       static_cast<int>(std::floor(std::max(observer.latitude_deg - reach_deg, -90.0)));
   const auto north = std::min(static_cast<int>(std::floor(observer.latitude_deg + reach_deg)), 89);
 
-  // The distance from the observer to the nearest point of a tile. The nearest point of the box
-  // in latitude and longitude is a good approximation for these short distances.
-  const auto distance_m = [&observer](const int latitude, const int longitude) {
-    const double lat = std::clamp(observer.latitude_deg, static_cast<double>(latitude),
-                                  static_cast<double>(latitude + 1));
-    const double offset = internal::wrap_180(observer.longitude_deg - longitude - 0.5);
-    const double lon = observer.longitude_deg - offset + std::clamp(offset, -0.5, 0.5);
-    const double phi1 = observer.latitude_deg * kDegToRad;
-    const double phi2 = lat * kDegToRad;
-    const double dphi = phi2 - phi1;
-    const double dlambda = (lon - observer.longitude_deg) * kDegToRad;
-    const double a =
-        (std::sin(dphi / 2) * std::sin(dphi / 2)) +
-        (std::cos(phi1) * std::cos(phi2) * std::sin(dlambda / 2) * std::sin(dlambda / 2));
-    return 2 * kEarthRadiusM * std::asin(std::min(1.0, std::sqrt(a)));
-  };
-
   std::vector<std::pair<double, ElevationTile>> found;
   for (int latitude = south; latitude <= north; ++latitude) {
     for (int longitude = -180; longitude < 180; ++longitude) {
-      const double d = distance_m(latitude, longitude);
+      const double d = box_distance_m(observer, latitude, latitude + 1, longitude, 1);
       // A small margin, because the box is an approximation of the nearest point.
       if (d <= max_distance_m * 1.01) {
         found.emplace_back(
@@ -242,6 +253,93 @@ std::vector<ElevationTile> elevation_tiles(const Observer& observer, const doubl
     tiles.push_back(entry.second);
   }
   return tiles;
+}
+
+std::vector<MapTile> map_tiles(const Observer& observer, const double max_distance_m,
+                               const int zoom) {
+  internal::validate(observer);
+  require_positive(max_distance_m, "max_distance_m");
+  require(max_distance_m <= kMaxDistanceM, "max_distance_m is greater than 500 km");
+  require(zoom >= 0 && zoom <= 12, "zoom is not in the range [0, 12]");
+  const int n = 1 << zoom;
+  const double reach_deg = max_distance_m / kEarthRadiusM * kRadToDeg;
+  const double north = std::min(observer.latitude_deg + reach_deg, kMaxMercatorLatitudeDeg);
+  const double south = std::max(observer.latitude_deg - reach_deg, -kMaxMercatorLatitudeDeg);
+  // The row of a latitude, from the inverse of mercator_latitude_deg().
+  const auto row = [n](const double latitude_deg) {
+    const double phi = latitude_deg * kDegToRad;
+    const double y = (1 - (std::asinh(std::tan(phi)) / std::numbers::pi)) / 2 * n;
+    return std::clamp(static_cast<int>(std::floor(y)), 0, n - 1);
+  };
+  const double width_deg = 360.0 / n;
+  std::vector<std::pair<double, MapTile>> found;
+  for (int y = row(north); y <= row(south); ++y) {
+    const double tile_north = mercator_latitude_deg(y, n);
+    const double tile_south = mercator_latitude_deg(y + 1, n);
+    for (int x = 0; x < n; ++x) {
+      const double d =
+          box_distance_m(observer, tile_south, tile_north, -180 + (x * width_deg), width_deg);
+      if (d <= max_distance_m * 1.01) {
+        found.emplace_back(d, MapTile{.zoom = zoom, .x = x, .y = y, .distance_m = d});
+      }
+    }
+  }
+  std::ranges::stable_sort(found, {}, &std::pair<double, MapTile>::first);
+  std::vector<MapTile> tiles;
+  tiles.reserve(found.size());
+  for (const auto& entry : found) {
+    tiles.push_back(entry.second);
+  }
+  return tiles;
+}
+
+ElevationGrid terrarium_grid(const std::vector<std::uint8_t>& rgba, const int width,
+                             const int height, const MapTile& tile) {
+  require(width >= 2 && width <= 4096, "width is not in the range [2, 4096]");
+  require(height >= 2 && height <= 4096, "height is not in the range [2, 4096]");
+  require(rgba.size() == static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4,
+          "rgba does not have width * height * 4 values");
+  require(tile.zoom >= 0 && tile.zoom <= 24, "zoom is not in the range [0, 24]");
+  const double n = std::ldexp(1.0, tile.zoom);
+  require(tile.x >= 0 && tile.x < n && tile.y >= 0 && tile.y < n,
+          "x or y is not in the tile range");
+
+  // The centers of the first and the last row. The rows of the image have equal steps in the
+  // Mercator projection, so the grid gets equal steps in latitude, with a linear interpolation
+  // between the two nearest rows of the image.
+  const auto row_y = [&](const double r) { return tile.y + ((r + 0.5) / height); };
+  const double north = mercator_latitude_deg(row_y(0), n);
+  const double south = mercator_latitude_deg(row_y(height - 1), n);
+  ElevationGrid grid;
+  grid.rows = height;
+  grid.columns = width;
+  grid.north_latitude_deg = north;
+  grid.latitude_step_deg = (north - south) / (height - 1);
+  grid.longitude_step_deg = 360.0 / n / width;
+  grid.west_longitude_deg = -180 + (360.0 * tile.x / n) + (0.5 * grid.longitude_step_deg);
+
+  const auto pixel_height = [&](const int r, const int c) {
+    const std::size_t i = ((static_cast<std::size_t>(r) * static_cast<std::size_t>(width)) +
+                           static_cast<std::size_t>(c)) *
+                          4;
+    // Terrarium: (red * 256 + green + blue / 256) - 32768 meters.
+    return (rgba[i] * 256.0) + rgba[i + 1] + (rgba[i + 2] / 256.0) - 32768.0;
+  };
+  grid.heights_m.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+  for (int r = 0; r < height; ++r) {
+    const double latitude = north - (r * grid.latitude_step_deg);
+    const double phi = latitude * kDegToRad;
+    const double y = ((1 - (std::asinh(std::tan(phi)) / std::numbers::pi)) / 2 * n);
+    const double source = std::clamp(((y - tile.y) * height) - 0.5, 0.0, height - 1.0);
+    const int r0 = std::min(static_cast<int>(source), height - 2);
+    const double t = source - r0;
+    for (int c = 0; c < width; ++c) {
+      const double h = ((1 - t) * pixel_height(r0, c)) + (t * pixel_height(r0 + 1, c));
+      grid.heights_m[(static_cast<std::size_t>(r) * static_cast<std::size_t>(width)) +
+                     static_cast<std::size_t>(c)] = static_cast<float>(h);
+    }
+  }
+  return grid;
 }
 
 HorizonProfile horizon_profile(const Observer& observer, const std::vector<ElevationGrid>& tiles,
