@@ -10,12 +10,50 @@
 // - It checks a tile again (a conditional request with the ETag) when the last check is older
 //   than MAX_AGE_MS. A network error keeps the old tile, so the app works offline.
 
-import type { ElevationGrid, HorizonProfile, MapTile, Observer, Sunradar } from "@sunradar/core";
+import type {
+  ElevationGrid,
+  HorizonOptions,
+  HorizonProfile,
+  MapTile,
+  Observer,
+  Sunradar,
+} from "@sunradar/core";
+
+/**
+ * A source of elevation tiles. The terrain needs only this description, so another source (for
+ * example a bare-earth model without buildings) can replace the Terrarium tiles.
+ */
+export interface ElevationSource {
+  name: string;
+  attributionUrl: string;
+  /**
+   * True if the heights include buildings and forests (a surface model). Then the profile ignores
+   * the terrain nearer than NEAR_CLEARANCE_M, because a city gives a false wall around the observer.
+   */
+  surfaceModel: boolean;
+  /** The zoom of the coarse tiles for the whole profile, and of the fine tiles near the observer. */
+  coarseZoom: number;
+  fineZoom: number;
+  tileUrl(tile: Pick<MapTile, "zoom" | "x" | "y">): string;
+  /** Converts the decoded RGBA pixels of a tile to a grid. */
+  grid(
+    sunradar: Pick<Sunradar, "terrariumGrid">,
+    rgba: Uint8ClampedArray,
+    width: number,
+    height: number,
+    tile: MapTile,
+  ): ElevationGrid;
+}
 
 /** The coarse tiles for the whole profile: about 420 m per pixel at 47° latitude. */
 export const COARSE_ZOOM = 8;
 /** The fine tiles near the observer, only where the terrain matters: about 100 m per pixel. */
 export const FINE_ZOOM = 10;
+/**
+ * The clearance of the near path for a surface model. Buildings smeared over cells of about 100 m
+ * add at most about 0.4° at this distance, and real mountains are usually farther away.
+ */
+export const NEAR_CLEARANCE_M = 2_000;
 export const TERRAIN_DISTANCE_M = 100_000;
 export const FINE_DISTANCE_M = 25_000;
 /**
@@ -30,9 +68,12 @@ export function terrainTiles(
   sunradar: Pick<Sunradar, "mapTiles">,
   observer: Observer,
   fine: boolean,
+  source: ElevationSource = TERRARIUM,
 ): MapTile[] {
-  const coarse = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, COARSE_ZOOM);
-  return fine ? [...coarse, ...sunradar.mapTiles(observer, FINE_DISTANCE_M, FINE_ZOOM)] : coarse;
+  const coarse = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, source.coarseZoom);
+  return fine
+    ? [...coarse, ...sunradar.mapTiles(observer, FINE_DISTANCE_M, source.fineZoom)]
+    : coarse;
 }
 export const MAX_CACHE_BYTES = 100 * 1024 * 1024;
 export const MAX_AGE_MS = 180 * 86_400_000;
@@ -42,6 +83,25 @@ export const ATTRIBUTION_URL = "https://github.com/tilezen/joerd/blob/master/doc
 
 export function tileUrl(tile: Pick<MapTile, "zoom" | "x" | "y">): string {
   return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${tile.zoom}/${tile.x}/${tile.y}.png`;
+}
+
+/**
+ * The AWS Terrain Tiles (Terrarium PNG). Their sources (SRTM, EU-DEM, and others) are mostly
+ * surface models with buildings and forests.
+ */
+export const TERRARIUM: ElevationSource = {
+  name: "Terrain Tiles on AWS",
+  attributionUrl: ATTRIBUTION_URL,
+  surfaceModel: true,
+  coarseZoom: COARSE_ZOOM,
+  fineZoom: FINE_ZOOM,
+  tileUrl,
+  grid: (sunradar, rgba, width, height, tile) => sunradar.terrariumGrid(rgba, width, height, tile),
+};
+
+/** The options of the profile for a source: the clearance of the near path for a surface model. */
+export function horizonOptions(source: ElevationSource): Partial<HorizonOptions> {
+  return { minDistanceM: source.surfaceModel ? NEAR_CLEARANCE_M : 0 };
 }
 
 /** What the cache knows about one tile. */
@@ -231,9 +291,10 @@ export async function keepOffline(
   name: string,
   onProgress: (done: number, total: number) => void,
   fine = true,
+  source: ElevationSource = TERRARIUM,
 ): Promise<KeepResult> {
   // The same tiles as the terrain uses: the fine ones only if the terrain matters at the place.
-  const urls = terrainTiles(sunradar, observer, fine).map(tileUrl);
+  const urls = terrainTiles(sunradar, observer, fine, source).map((t) => source.tileUrl(t));
   const id = `${observer.latitudeDeg.toFixed(4)},${observer.longitudeDeg.toFixed(4)}`;
   cache.keep({ id, name, observer, urls });
   let next = 0;
@@ -285,6 +346,8 @@ export type TerrainState =
 
 export interface TerrainDeps {
   sunradar: Pick<Sunradar, "mapTiles" | "terrariumGrid" | "horizonProfile">;
+  /** The source of the tiles; Terrarium if not given. */
+  source?: ElevationSource;
   cache: TileCache;
   decode(blob: Blob): Promise<{ rgba: Uint8ClampedArray; width: number; height: number }>;
   onChange(state: TerrainState): void;
@@ -319,14 +382,16 @@ export class Terrain {
 
   private async load(observer: Observer, generation: number) {
     const { sunradar, cache } = this.deps;
-    const coarseTiles = terrainTiles(sunradar, observer, false);
+    const source = this.deps.source ?? TERRARIUM;
+    const options = horizonOptions(source);
+    const coarseTiles = terrainTiles(sunradar, observer, false, source);
     this.set({ kind: "loading", done: 0, total: coarseTiles.length });
     const coarse = await this.fetchGrids(coarseTiles, generation, true);
     if (!coarse) return; // a newer place
     let profile: HorizonProfile;
     try {
       if (coarse.grids.length === 0) throw new Error("no terrain data (offline?)");
-      profile = sunradar.horizonProfile(observer, coarse.grids);
+      profile = sunradar.horizonProfile(observer, coarse.grids, options);
     } catch (e) {
       // For example, no tile has data at the place itself.
       this.set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
@@ -338,17 +403,17 @@ export class Terrain {
     if (fine) {
       // Show the coarse profile at once, then load the fine tiles near the observer.
       this.set({ kind: "ready", profile, missing, observer, fine });
-      const fineTiles = sunradar.mapTiles(observer, FINE_DISTANCE_M, FINE_ZOOM);
+      const fineTiles = sunradar.mapTiles(observer, FINE_DISTANCE_M, source.fineZoom);
       const near = await this.fetchGrids(fineTiles, generation, false);
       if (!near) return;
       missing += near.missing;
       try {
-        profile = sunradar.horizonProfile(observer, [...coarse.grids, ...near.grids]);
+        profile = sunradar.horizonProfile(observer, [...coarse.grids, ...near.grids], options);
       } catch {
         // The coarse profile stays.
       }
     }
-    const urls = terrainTiles(sunradar, observer, fine).map(tileUrl);
+    const urls = terrainTiles(sunradar, observer, fine, source).map((t) => source.tileUrl(t));
     await cache.evict(new Set(urls));
     if (generation !== this.generation) return;
     this.set({ kind: "ready", profile, missing, observer, fine });
@@ -365,6 +430,7 @@ export class Terrain {
     progress: boolean,
   ): Promise<{ grids: ElevationGrid[]; missing: number } | null> {
     const { sunradar, cache } = this.deps;
+    const source = this.deps.source ?? TERRARIUM;
     const grids: ElevationGrid[] = [];
     let missing = 0;
     let done = 0;
@@ -377,7 +443,7 @@ export class Terrain {
       }
       try {
         const { rgba, width, height } = await this.deps.decode(blob);
-        grids.push(sunradar.terrariumGrid(rgba, width, height, tile));
+        grids.push(source.grid(sunradar, rgba, width, height, tile));
       } catch {
         // A damaged file: remove it and download it again one time.
         await cache.remove(url);
@@ -385,7 +451,7 @@ export class Terrain {
         missing++;
       }
     };
-    const urls = tiles.map(tileUrl);
+    const urls = tiles.map((t) => source.tileUrl(t));
     let next = 0;
     const worker = async () => {
       while (next < tiles.length && generation === this.generation) {

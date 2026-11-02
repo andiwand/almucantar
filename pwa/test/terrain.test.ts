@@ -277,7 +277,7 @@ describe("the threshold of the terrain", () => {
       azimuthStepDeg: 90,
       altitudeDeg: [0, 5.5, 0, 0],
     } as unknown as HorizonProfile;
-    const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[]) =>
+    const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[], _options?: object) =>
       grids.length === 1 ? high : detailed,
     );
     const subject = new Terrain({
@@ -302,6 +302,8 @@ describe("the threshold of the terrain", () => {
     const ready = states.filter((s) => s.kind === "ready");
     expect(ready.map((s) => s.kind === "ready" && s.profile)).toEqual([high, detailed]);
     expect(horizonProfile.mock.calls.at(-1)?.[1]).toHaveLength(3);
+    // Terrarium is a surface model, so the profile clears the near path.
+    expect(horizonProfile.mock.calls.at(-1)?.[2]).toEqual({ minDistanceM: 2000 });
     expect(t.fetch).toHaveBeenCalledTimes(3);
   });
 });
