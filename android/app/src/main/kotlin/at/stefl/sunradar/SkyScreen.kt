@@ -526,17 +526,14 @@ private fun alignWithBody(
 ): String {
     val point = ScreenPoint(at.x.toDouble(), at.y.toDouble())
     val tapped = unproject(view, point)
-    if (abs(tapped.altitudeDeg) >= 89) return "The point is too near the zenith or the nadir."
     val altitudeError = abs(tapped.altitudeDeg - body.altitudeDeg)
     if (altitudeError > BODY_TAP_MAX_ALTITUDE_ERROR_DEG) {
         return "That point is %.0f° from the height of the %s. Tap the %s itself."
             .format(altitudeError, name, name)
     }
-    return applyMeasurement(
-        tracker,
-        headingFromDirection(view, point, body.azimuthDeg, BODY_TAP_SIGMA_DEG),
-        name,
-    )
+    return applyMeasurement(tracker, name) {
+        headingFromDirection(view, point, body.azimuthDeg, BODY_TAP_SIGMA_DEG)
+    }
 }
 
 /**
@@ -555,21 +552,26 @@ private fun alignWithLandmark(
     val positionError = (place.accuracyM ?: 50.0) + 5.0
     val sigma = Math.toDegrees(atan(positionError / distance)) + 0.3
     val center = ScreenPoint(view.camera.width / 2, view.camera.height / 2)
-    if (abs(unproject(view, center).altitudeDeg) >= 89) {
-        return "Hold the phone up and point the crosshair at the landmark."
+    return applyMeasurement(tracker, "landmark") {
+        headingFromDirection(view, center, Geo.bearingDeg(place.observer, landmark), sigma)
     }
-    return applyMeasurement(
-        tracker,
-        headingFromDirection(view, center, Geo.bearingDeg(place.observer, landmark), sigma),
-        "landmark",
-    )
 }
 
+/**
+ * Applies a measurement of the heading. The core rejects a direction that gives no heading (for
+ * example near the zenith) with an IllegalArgumentException, and its message goes to the user.
+ */
 private fun applyMeasurement(
     tracker: HeadingTracker,
-    measurement: at.stefl.sunradar.core.HeadingMeasurement,
     name: String,
+    measure: () -> at.stefl.sunradar.core.HeadingMeasurement,
 ): String {
+    val measurement =
+        try {
+            measure()
+        } catch (e: IllegalArgumentException) {
+            return "No alignment: ${e.message ?: "the direction gives no heading"}."
+        }
     val change = ((measurement.offsetDeg - tracker.estimate.offsetDeg + 540) % 360) - 180
     tracker.apply(measurement)
     return "Heading aligned with the %s (corrected by %.1f°, now ±%.1f°)."
