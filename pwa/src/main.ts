@@ -15,7 +15,14 @@ import type {
 import { litOutline, towardSun } from "./moon";
 import type { MoonAt } from "./moon";
 import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
-import { Terrain, TileCache, cacheStorageStore, decodePng, localStorageIndex } from "./terrain";
+import {
+  Terrain,
+  TileCache,
+  cacheStorageStore,
+  decodePng,
+  keepOffline,
+  localStorageIndex,
+} from "./terrain";
 import type { TerrainState } from "./terrain";
 import { browserTimeZone, fromWallTime, startOfDay, wallTime } from "./zone";
 import {
@@ -91,14 +98,15 @@ const MAX_CROSSHAIR_ALTITUDE_DEG = 75;
 const TERRAIN_SETTING = "sunradar-terrain-on";
 let terrainOn = localStorage.getItem(TERRAIN_SETTING) !== "false";
 let terrainVersion = 0;
+const tileCache = new TileCache({
+  store: cacheStorageStore(),
+  ...localStorageIndex(),
+  fetch: (url, init) => fetch(url, init),
+  now: () => Date.now(),
+});
 const terrain = new Terrain({
   sunradar,
-  cache: new TileCache({
-    store: cacheStorageStore(),
-    ...localStorageIndex(),
-    fetch: (url, init) => fetch(url, init),
-    now: () => Date.now(),
-  }),
+  cache: tileCache,
   decode: decodePng,
   onChange: (state: TerrainState) => {
     if (state.kind === "ready" || state.kind === "off") terrainVersion++;
@@ -819,6 +827,7 @@ function dropPlace(at: Observer, name?: string) {
     manual: true,
   });
   drawMap();
+  renderKept();
 }
 
 $("place-button").addEventListener("click", async () => {
@@ -906,3 +915,52 @@ if (place !== DEFAULT_PLACE) {
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
 }
+
+// --- Keep the terrain of a place offline (for a trip) ----------------------------------------------
+
+const keepButton = $<HTMLButtonElement>("place-keep");
+const keepStatus = $("place-keep-status");
+const keptList = $("place-kept");
+let keeping = false;
+
+const megabytes = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
+
+function renderKept() {
+  keptList.replaceChildren();
+  for (const kept of tileCache.kept) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const text = document.createElement("span");
+    text.textContent = `${kept.name} · ${kept.urls.length} tiles, ${megabytes(tileCache.bytesOf(kept.urls))}`;
+    const remove = document.createElement("button");
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      tileCache.release(kept.id);
+      renderKept();
+    });
+    row.append(text, remove);
+    keptList.append(row);
+  }
+  keepButton.disabled = keeping || !hasLocation;
+}
+
+keepButton.addEventListener("click", async () => {
+  if (keeping || !hasLocation) return;
+  keeping = true;
+  renderKept();
+  // Ask the browser not to clear the storage of the app when the disk gets full.
+  void navigator.storage?.persist?.();
+  const name = placeText.split(" · ")[0];
+  try {
+    const result = await keepOffline(sunradar, tileCache, observer, name, (done, total) => {
+      keepStatus.textContent = `Downloading ${done}/${total}`;
+    });
+    keepStatus.textContent = result.missing
+      ? `${result.missing} tiles missing, try again online`
+      : `Ready offline: ${result.tiles} tiles, ${megabytes(result.bytes)}`;
+  } finally {
+    keeping = false;
+    renderKept();
+  }
+});
+$("place-button").addEventListener("click", renderKept);

@@ -41,24 +41,68 @@ export interface BlobStore {
   delete(url: string): Promise<void>;
 }
 
+/**
+ * A place whose tiles the user keeps offline, for example for a trip. Its tiles are never evicted
+ * and do not count toward MAX_CACHE_BYTES.
+ */
+export interface KeptPlace {
+  id: string;
+  name: string;
+  observer: Observer;
+  urls: string[];
+}
+
 export interface TileCacheDeps {
   store: BlobStore;
   loadIndex(): Record<string, TileEntry>;
   saveIndex(index: Record<string, TileEntry>): void;
+  loadKept?(): KeptPlace[];
+  saveKept?(kept: KeptPlace[]): void;
   fetch(url: string, init?: RequestInit): Promise<Response>;
   now(): number;
 }
 
 export class TileCache {
   private index: Record<string, TileEntry>;
+  private keptPlaces: KeptPlace[];
 
   constructor(private readonly deps: TileCacheDeps) {
     this.index = deps.loadIndex();
+    this.keptPlaces = deps.loadKept?.() ?? [];
   }
 
   /** The total size of the cached tiles in bytes. */
   get bytes(): number {
     return Object.values(this.index).reduce((sum, e) => sum + e.bytes, 0);
+  }
+
+  /** The size of the cached tiles of `urls` in bytes. */
+  bytesOf(urls: Iterable<string>): number {
+    let sum = 0;
+    for (const url of new Set(urls)) sum += this.index[url]?.bytes ?? 0;
+    return sum;
+  }
+
+  /** The places that the user keeps offline. */
+  get kept(): readonly KeptPlace[] {
+    return this.keptPlaces;
+  }
+
+  /** The tiles of all kept places. */
+  keptUrls(): Set<string> {
+    return new Set(this.keptPlaces.flatMap((p) => p.urls));
+  }
+
+  /** Adds a kept place, or replaces the kept place with the same id. */
+  keep(place: KeptPlace): void {
+    this.keptPlaces = [...this.keptPlaces.filter((p) => p.id !== place.id), place];
+    this.deps.saveKept?.(this.keptPlaces);
+  }
+
+  /** Releases a kept place: its tiles become normal cache tiles again. */
+  release(id: string): void {
+    this.keptPlaces = this.keptPlaces.filter((p) => p.id !== id);
+    this.deps.saveKept?.(this.keptPlaces);
   }
 
   entry(url: string): TileEntry | undefined {
@@ -121,9 +165,11 @@ export class TileCache {
    * The tiles in keep stay.
    */
   async evict(keep: Set<string>, maxBytes = MAX_CACHE_BYTES): Promise<void> {
-    let total = this.bytes;
+    // The tiles of the kept places stay and do not count toward the limit.
+    const kept = this.keptUrls();
+    let total = this.bytes - this.bytesOf(kept);
     const candidates = Object.entries(this.index)
-      .filter(([url]) => !keep.has(url))
+      .filter(([url]) => !keep.has(url) && !kept.has(url))
       .sort(([, a], [, b]) => a.usedAt - b.usedAt);
     for (const [url, entry] of candidates) {
       if (total <= maxBytes) break;
@@ -145,6 +191,41 @@ export class TileCache {
   private save() {
     this.deps.saveIndex(this.index);
   }
+}
+
+export interface KeepResult {
+  tiles: number;
+  bytes: number;
+  missing: number;
+}
+
+/**
+ * Downloads all tiles of a place and keeps them offline. The place counts as kept before the
+ * download, so an eviction during the download does not remove its tiles. `onProgress` gets the
+ * number of tiles that are done.
+ */
+export async function keepOffline(
+  sunradar: Pick<Sunradar, "mapTiles">,
+  cache: TileCache,
+  observer: Observer,
+  name: string,
+  onProgress: (done: number, total: number) => void,
+): Promise<KeepResult> {
+  const urls = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, TERRAIN_ZOOM).map(tileUrl);
+  const id = `${observer.latitudeDeg.toFixed(4)},${observer.longitudeDeg.toFixed(4)}`;
+  cache.keep({ id, name, observer, urls });
+  let next = 0;
+  let done = 0;
+  let missing = 0;
+  const worker = async () => {
+    while (next < urls.length) {
+      const url = urls[next++];
+      if (!(await cache.get(url))) missing++;
+      onProgress(++done, urls.length);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return { tiles: urls.length, bytes: cache.bytesOf(urls), missing };
 }
 
 /** The distance between two places in meters (haversine). */
@@ -287,9 +368,24 @@ export function cacheStorageStore(name = "sunradar-terrain-v1"): BlobStore {
 }
 
 const INDEX_KEY = "sunradar-terrain-index-v1";
+const KEPT_KEY = "sunradar-terrain-kept-v1";
 
-export function localStorageIndex(): Pick<TileCacheDeps, "loadIndex" | "saveIndex"> {
+export function localStorageIndex(): Pick<
+  TileCacheDeps,
+  "loadIndex" | "saveIndex" | "loadKept" | "saveKept"
+> {
   return {
+    loadKept() {
+      try {
+        const kept = JSON.parse(localStorage.getItem(KEPT_KEY) ?? "[]") as KeptPlace[];
+        return Array.isArray(kept) ? kept : [];
+      } catch {
+        return [];
+      }
+    },
+    saveKept(kept) {
+      localStorage.setItem(KEPT_KEY, JSON.stringify(kept));
+    },
     loadIndex() {
       try {
         return JSON.parse(localStorage.getItem(INDEX_KEY) ?? "{}") as Record<string, TileEntry>;

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ElevationGrid, HorizonProfile, MapTile } from "@sunradar/core";
-import { MAX_AGE_MS, Terrain, TileCache, distanceM, tileUrl } from "../src/terrain";
-import type { BlobStore, TerrainDeps, TerrainState, TileEntry } from "../src/terrain";
+import { MAX_AGE_MS, Terrain, TileCache, distanceM, keepOffline, tileUrl } from "../src/terrain";
+import type { BlobStore, KeptPlace, TerrainDeps, TerrainState, TileEntry } from "../src/terrain";
 
 const DAY = 86_400_000;
 
@@ -15,15 +15,21 @@ function fakeStore() {
   return { blobs, store };
 }
 
-function setup(responses: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+function setup(
+  responses: (url: string, init?: RequestInit) => Response | Promise<Response>,
+  kept: KeptPlace[] = [],
+) {
   const { blobs, store } = fakeStore();
   let index: Record<string, TileEntry> = {};
+  let storedKept = kept;
   let now = 1_000 * DAY;
   const fetch = vi.fn(async (url: string, init?: RequestInit) => responses(url, init));
   const cache = new TileCache({
     store,
     loadIndex: () => index,
     saveIndex: (i) => (index = JSON.parse(JSON.stringify(i))),
+    loadKept: () => storedKept,
+    saveKept: (k) => (storedKept = JSON.parse(JSON.stringify(k))),
     fetch,
     now: () => now,
   });
@@ -32,6 +38,7 @@ function setup(responses: (url: string, init?: RequestInit) => Response | Promis
     blobs,
     fetch,
     index: () => index,
+    kept: () => storedKept,
     advance: (ms: number) => (now += ms),
   };
 }
@@ -179,4 +186,67 @@ test("distanceM", () => {
   expect(
     distanceM({ latitudeDeg: 47, longitudeDeg: 11 }, { latitudeDeg: 48, longitudeDeg: 11 }),
   ).toBeCloseTo(111_195, -1);
+});
+
+describe("kept places", () => {
+  const place = (urls: string[]): KeptPlace => ({
+    id: "trip",
+    name: "Trip",
+    observer: { latitudeDeg: 47, longitudeDeg: 11 },
+    urls,
+  });
+
+  test("the eviction does not remove or count the tiles of a kept place", async () => {
+    const t = setup(() => png(10));
+    for (const url of ["a", "b", "c", "d"]) {
+      await t.cache.get(url);
+      t.advance(1000);
+    }
+    t.cache.keep(place(["a", "b"]));
+    // Without the kept tiles, the cache has 20 bytes, so a limit of 20 removes nothing.
+    await t.cache.evict(new Set(), 20);
+    expect([...t.blobs.keys()].sort()).toEqual(["a", "b", "c", "d"]);
+    // A limit of 10 removes the oldest normal tile (c), not the older kept tiles.
+    await t.cache.evict(new Set(), 10);
+    expect([...t.blobs.keys()].sort()).toEqual(["a", "b", "d"]);
+  });
+
+  test("release makes the tiles normal cache tiles again", async () => {
+    const t = setup(() => png(10));
+    await t.cache.get("a");
+    t.cache.keep(place(["a"]));
+    t.cache.release("trip");
+    expect(t.kept()).toEqual([]);
+    await t.cache.evict(new Set(), 0);
+    expect(t.blobs.size).toBe(0);
+  });
+
+  test("the kept places survive a restart", () => {
+    const t = setup(() => png(10), [place(["x"])]);
+    expect(t.cache.kept.map((p) => p.id)).toEqual(["trip"]);
+    expect(t.cache.keptUrls()).toEqual(new Set(["x"]));
+  });
+
+  test("keepOffline downloads all tiles and reports the missing ones", async () => {
+    const t = setup((url) =>
+      url.endsWith("/2/2.png") ? new Response(null, { status: 500 }) : png(10),
+    );
+    const tiles: MapTile[] = [
+      { zoom: 10, x: 1, y: 2, distanceM: 0 },
+      { zoom: 10, x: 2, y: 2, distanceM: 1 },
+      { zoom: 10, x: 3, y: 2, distanceM: 2 },
+    ];
+    const progress: number[] = [];
+    const result = await keepOffline(
+      { mapTiles: () => tiles },
+      t.cache,
+      { latitudeDeg: 47, longitudeDeg: 11 },
+      "Innsbruck",
+      (done) => progress.push(done),
+    );
+    expect(result).toEqual({ tiles: 3, bytes: 20, missing: 1 });
+    expect(progress).toEqual([1, 2, 3]);
+    expect(t.kept()[0].name).toBe("Innsbruck");
+    expect(t.kept()[0].urls).toEqual(tiles.map(tileUrl));
+  });
 });

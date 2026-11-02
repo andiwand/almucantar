@@ -5,6 +5,8 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- "Keep offline" in the Place panel: the app downloads the terrain of the place for a trip and
+  keeps it. The cache does not remove these tiles, and "Remove" releases them.
 - The Place panel: search a place or tap it on a map, also offline. The map is in the app
   (Natural Earth). The app keeps the last place, and the times use the time zone of the place.
 - The terrain horizon: the sky view shows the mountains around the place, and the sun path is
