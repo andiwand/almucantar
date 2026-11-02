@@ -17,7 +17,10 @@ features and the behavior.
 | `Sunradar/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
 | `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
 | `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
-| `SunradarTests/` | The unit tests of the detector, of `Geo`, and of `MoonPhase`. |
+| `Sunradar/DemCache.swift` | The persistent cache of the Copernicus GLO-90 tiles in Application Support/`dem`, with the JSON index, the revalidation after 180 days, and the eviction over 400 MB. `HTTPClient` is the HTTP layer that the tests replace. |
+| `Sunradar/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles, calculates the profile off the main thread, and derives the hidden parts of the path and the visible sunrise and sunset (`TerrainDay`). |
+| `Sunradar/SettingsView.swift` | The settings (the terrain horizon) and the credits. |
+| `SunradarTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, and of the DEM cache (with a fake HTTP layer). |
 | `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
 | `fastlane/` | The lanes `screenshots` and `upload_listing`. |
 | `Sunradar/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
@@ -54,6 +57,10 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   divided by the size of the frame, is a capture device point. `layerPointConverted` maps it to the view.
 - The camera model has no distortion, because AVFoundation gives no lens distortion for the
   preview.
+- The demo mode makes `TerrainHorizon` without a cache, so it never downloads a tile and shows no
+  terrain.
+- `terrainAltitudeDeg()` converts the whole profile for each call. Call it when the profile or the
+  day changes (`TerrainDayCache`), not for each frame.
 
 ## Screenshots
 

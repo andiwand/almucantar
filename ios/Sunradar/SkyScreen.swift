@@ -96,6 +96,11 @@ struct DetectedSun {
 struct SkyScreen: SwiftUI.View {
     @StateObject private var motion = MotionTracker()
     @StateObject private var location = LocationProvider()
+    // The demo mode has no terrain cache, so it never downloads a tile.
+    @StateObject private var terrain = TerrainHorizon(cache: ScreenshotMode.scene == nil ? try? DemCache.standard() : nil)
+    @AppStorage(Settings.terrainHorizon) private var terrainOn = true
+    @State private var terrainDayCache = TerrainDayCache()
+    @State private var showSettings = false
     // The demo mode of the store screenshots sets the time, the time panel, and the drawn sky.
     @State private var now = ScreenshotMode.scene?.date ?? Date()
     @State private var dayOffset = 0.0
@@ -140,6 +145,7 @@ struct SkyScreen: SwiftUI.View {
             let selectedDate = calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!
             let observer = location.observer
             let day = dayCache.day(observer: observer, date: selectedDate, calendar: calendar)
+            let terrainDay = terrainDayCache.day(day, observer: observer, terrain: terrain)
             let time = selectedTime(day: day)
             let view = makeView(size: size)
             let sun = try? sunPosition(time, observer: observer)
@@ -170,15 +176,15 @@ struct SkyScreen: SwiftUI.View {
                 }
                 Canvas { context, _ in
                     draw(
-                        &context, view: view, day: day, sun: sun, moon: moon, landmark: landmarkDirection, center: center,
-                        crossing: crossing)
+                        &context, view: view, day: day, terrainDay: terrainDay, sun: sun, moon: moon,
+                        landmark: landmarkDirection, center: center, crossing: crossing)
                     if let detected { drawDetected(&context, detected) }
                 }
                 .ignoresSafeArea()
                 .gesture(dragGesture(view: view, detected: detected))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    statusPanel(day: day)
+                    statusPanel(day: day, terrainDay: terrainDay)
                     if let message { panel { Text(message) } }
                     if let aligning { panel { Text(hint(aligning)) } }
                     Spacer()
@@ -210,9 +216,15 @@ struct SkyScreen: SwiftUI.View {
                     motion.start()
                     location.start()
                 }
+                updateTerrain()
             }
             .onReceive(timer) { if ScreenshotMode.scene == nil { now = $0 } }
-            .onChange(of: location.observer) { motion.observer = location.observer }
+            .onChange(of: location.observer) {
+                motion.observer = location.observer
+                updateTerrain()
+            }
+            .onChange(of: terrainOn) { updateTerrain() }
+            .sheet(isPresented: $showSettings) { SettingsView() }
             .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
                 MapPicker(observer: location.observer) { picked in
@@ -228,6 +240,13 @@ struct SkyScreen: SwiftUI.View {
                 await searchDates(center: usable ? center : nil)
             }
         }
+    }
+
+    /// The demo mode shows no terrain. Without a location, the place is the default (Vienna), so the
+    /// app waits for the location before it downloads tiles.
+    private func updateTerrain() {
+        if terrainOn && ScreenshotMode.scene == nil && location.accuracyM == nil { return }
+        terrain.update(observer: location.observer, enabled: terrainOn && ScreenshotMode.scene == nil)
     }
 
     // MARK: - The view
@@ -479,14 +498,46 @@ struct SkyScreen: SwiftUI.View {
         return length > 0 ? (edge, CGPoint(x: dx / length, y: dy / length)) : nil
     }
 
+    /// Fills the area below the terrain line, in narrow parts of the azimuth. The projection cuts a
+    /// part at the border of the view, so a narrow part keeps the error of the cut small.
+    private func fillTerrain(_ context: inout GraphicsContext, _ view: Sunradar.View, color: Color) {
+        let chunk = 12
+        var fill = Path()
+        for line in terrain.lines {
+            var start = 0
+            while start < line.count - 1 {
+                let top = Array(line[start...min(start + chunk, line.count - 1)])
+                start += chunk
+                let bottom = [top.last!, top.first!].map { Horizontal(azimuthDeg: $0.azimuthDeg, altitudeDeg: -89) }
+                guard let pieces = try? projectLine(view, top + bottom + [top[0]]), !pieces.isEmpty else { continue }
+                // The last piece continues into the first one, because the polygon is closed.
+                let ordered = pieces.count > 1 ? [pieces.last!] + pieces.dropLast() : pieces
+                let points = ordered.flatMap { $0 }
+                fill.move(to: CGPoint(x: points[0].x, y: points[0].y))
+                for p in points.dropFirst() { fill.addLine(to: CGPoint(x: p.x, y: p.y)) }
+                fill.closeSubpath()
+            }
+        }
+        context.fill(fill, with: .color(color))
+    }
+
     private func draw(
-        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, sun: Horizontal?, moon: MoonAt?,
-        landmark: Horizontal?, center: Horizontal?, crossing: AzimuthCrossing?
+        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, terrainDay: TerrainDay?, sun: Horizontal?,
+        moon: MoonAt?, landmark: Horizontal?, center: Horizontal?, crossing: AzimuthCrossing?
     ) {
         let yellow = Color(red: 1, green: 0.784, blue: 0.239)
         let blue = Color(red: 0.498, green: 0.847, blue: 1)
+        let green = Color(red: 0.6, green: 0.86, blue: 0.56)
+        let hasTerrain = !terrain.lines.isEmpty
+        if hasTerrain && !cameraOn { fillTerrain(&context, view, color: green.opacity(0.12)) }
         if let horizon = try? horizonLine(view) {
-            context.stroke(path(horizon), with: .color(.white.opacity(0.8)), lineWidth: 1.5)
+            // The 0° horizon stays, but the terrain line is the one that the user sees.
+            context.stroke(path(horizon), with: .color(.white.opacity(hasTerrain ? 0.3 : 0.8)), lineWidth: hasTerrain ? 1 : 1.5)
+        }
+        for line in terrain.lines {
+            if let lines = try? projectLine(view, line) {
+                context.stroke(path(lines), with: .color(green), lineWidth: 2)
+            }
         }
         for (az, name) in [(0.0, "N"), (90.0, "E"), (180.0, "S"), (270.0, "W")] {
             label(&context, view, Horizontal(azimuthDeg: az, altitudeDeg: 0), name, gap: 14)
@@ -499,10 +550,15 @@ struct SkyScreen: SwiftUI.View {
         if let lines = try? projectLine(view, day.path) {
             context.stroke(path(lines), with: .color(yellow.opacity(0.5)), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
         }
-        for segment in day.daySegments {
+        for segment in terrainDay?.visible ?? day.daySegments {
             guard let lines = try? projectLine(view, segment) else { continue }
             context.stroke(path(lines), with: .color(yellow.opacity(0.25)), lineWidth: 9)
             context.stroke(path(lines), with: .color(yellow), lineWidth: 3)
+        }
+        // The parts of the path behind the terrain: dimmer and dashed.
+        for segment in terrainDay?.hidden ?? [] {
+            guard let lines = try? projectLine(view, segment) else { continue }
+            context.stroke(path(lines), with: .color(yellow.opacity(0.6)), style: StrokeStyle(lineWidth: 2.5, dash: [5, 5]))
         }
         for hour in day.hours {
             guard let p = point(view, hour.direction) else { continue }
@@ -580,12 +636,25 @@ struct SkyScreen: SwiftUI.View {
             .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func statusPanel(day: SkyDay) -> some SwiftUI.View {
+    private func statusPanel(day: SkyDay, terrainDay: TerrainDay?) -> some SwiftUI.View {
         panel {
             VStack(alignment: .leading, spacing: 2) {
                 Text(location.text).bold()
                 headingText
                 Text(day.summary).foregroundColor(.white.opacity(0.85))
+                if let terrainDay, !terrainDay.summary.isEmpty {
+                    Text(terrainDay.summary).foregroundColor(Color(red: 0.6, green: 0.86, blue: 0.56))
+                }
+                switch terrain.status {
+                case .loading(let remaining):
+                    Text("Loading the terrain (\(remaining) \(remaining == 1 ? "tile" : "tiles"))…")
+                        .font(.footnote).foregroundColor(.white.opacity(0.7))
+                case .missing:
+                    Text(terrain.profile == nil ? "No terrain data (offline)" : "Terrain data incomplete (offline)")
+                        .font(.footnote).foregroundColor(.orange)
+                case .off, .ready:
+                    EmptyView()
+                }
             }
         }
     }
@@ -711,6 +780,14 @@ struct SkyScreen: SwiftUI.View {
                 Button("Cancel") { aligning = nil }.buttonStyle(.borderedProminent)
             } else {
                 alignMenu
+                // The menu of the app: the settings and the credits. It is hidden during an alignment.
+                Menu {
+                    Button("Settings and credits") { showSettings = true }
+                } label: {
+                    Image(systemName: "ellipsis").rotationEffect(.degrees(90)).frame(width: 16, height: 22)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Menu")
             }
         }
         .tint(Color(red: 0.81, green: 0.74, blue: 1))

@@ -5,6 +5,12 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The terrain horizon: a line of the mountains around you, from the Copernicus DEM GLO-90. The
+  parts of the sun path behind the terrain are dashed, and the status panel shows the visible
+  sunrise and sunset. The app downloads the elevation tiles of the place and keeps them for
+  offline use. A setting switches it off. The new menu button (⋮) at the end of the button row
+  opens the settings and the credits.
+
 - The hour marks on the path use 24 hours in every locale, as on Android.
 - The moon shows its phase. The lit part faces the sun.
 - A camera permission reply cannot start capture after the camera view closes.
