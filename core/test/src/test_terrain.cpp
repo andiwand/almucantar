@@ -285,6 +285,8 @@ TEST_CASE("elevation_tiles lists the tiles near the observer", "[terrain]") {
       elevation_tiles({.latitude_deg = 47.1, .longitude_deg = 11.1}, 20'000);
   REQUIRE(near.front().latitude_deg == 47);
   REQUIRE(near.front().longitude_deg == 11);
+  REQUIRE(near.front().distance_m == 0);
+  REQUIRE_THAT(near[1].distance_m, WithinAbs(7'600, 100));  // the tile to the west
   REQUIRE(as_set(near) == std::set<std::pair<int, int>>{{47, 11}, {46, 11}, {47, 10}, {46, 10}});
   REQUIRE(elevation_tiles({.latitude_deg = 47.5, .longitude_deg = 11.5}, 20'000).size() == 1);
 

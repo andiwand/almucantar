@@ -229,7 +229,9 @@ std::vector<ElevationTile> elevation_tiles(const Observer& observer, const doubl
       const double d = distance_m(latitude, longitude);
       // A small margin, because the box is an approximation of the nearest point.
       if (d <= max_distance_m * 1.01) {
-        found.emplace_back(d, ElevationTile{.latitude_deg = latitude, .longitude_deg = longitude});
+        found.emplace_back(
+            d,
+            ElevationTile{.latitude_deg = latitude, .longitude_deg = longitude, .distance_m = d});
       }
     }
   }

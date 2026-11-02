@@ -67,10 +67,13 @@ struct HorizonProfile {
 struct ElevationTile {
   int latitude_deg = 0;   ///< -90 to 89
   int longitude_deg = 0;  ///< -180 to 179
+  /// The distance from the observer to the nearest point of the tile, 0 for the tile of the
+  /// observer. A far tile can use an overview (see `read_elevation_geotiff()`) to save memory.
+  double distance_m = 0;
 };
 
 /// Returns the tiles of 1° by 1° that a horizon profile with `max_distance_m` needs: all tiles
-/// that have a point nearer than `max_distance_m` to the observer, the tile of the observer first.
+/// that have a point nearer than `max_distance_m` to the observer, the nearest first.
 /// Throws `std::invalid_argument` if an argument is not valid.
 [[nodiscard]] std::vector<ElevationTile> elevation_tiles(const Observer& observer,
                                                          double max_distance_m);
