@@ -210,3 +210,89 @@ data class MoonOptions(val refraction: Boolean = true, val atmosphere: Atmospher
 
 /** The sun has a given azimuth. */
 data class AzimuthCrossing(val unixUtc: Double, val sun: Horizontal)
+
+/**
+ * A digital elevation model (DEM) as a plain grid of heights, for example a tile of Copernicus
+ * GLO-90. The sample in row `r` and column `c` is at the latitude `northLatitudeDeg - r *
+ * latitudeStepDeg` and the longitude `westLongitudeDeg + c * longitudeStepDeg`. So the rows go from
+ * north to south. The heights stay in a [FloatArray], because a tile has more than a million.
+ */
+class ElevationGrid(
+    /** The latitude of row 0. */
+    val northLatitudeDeg: Double,
+    /** The longitude of column 0. */
+    val westLongitudeDeg: Double,
+    /** The distance between two rows, positive. */
+    val latitudeStepDeg: Double,
+    /** The distance between two columns, positive. */
+    val longitudeStepDeg: Double,
+    /** At least 2. */
+    val rows: Int,
+    /** At least 2. */
+    val columns: Int,
+    /** The heights above sea level in meters, row by row. NaN is a sample without data. */
+    val heightsM: FloatArray,
+)
+
+data class HorizonOptions(
+    /** The distance between two azimuths of the profile. 360 must be a multiple of it. */
+    val azimuthStepDeg: Double = 0.25,
+    /** The terrain farther away is not used, at most 500 km. */
+    val maxDistanceM: Double = 100_000.0,
+    /** The height of the eye above the ground. */
+    val eyeHeightM: Double = 1.6,
+    /**
+     * If true, the elevation of the ground comes from the tiles, else from [observerElevationM].
+     */
+    val useGridElevation: Boolean = true,
+    val observerElevationM: Double = 0.0,
+    /** The coefficient of the terrestrial refraction. 0.13 is the standard value. */
+    val refractionCoefficient: Double = 0.13,
+)
+
+/**
+ * The altitude of the terrain horizon for each azimuth. The entry `i` is for the azimuth `i *
+ * azimuthStepDeg`. NaN is a direction without data. Do not change the arrays after the first use,
+ * because the class keeps them in packed form for the native calls.
+ */
+class HorizonProfile(
+    val azimuthStepDeg: Double,
+    val altitudeDeg: DoubleArray,
+    val distanceM: DoubleArray,
+    /** The elevation of the ground at the observer. */
+    val observerElevationM: Double = 0.0,
+) {
+    internal val packed: DoubleArray by lazy { pack() }
+}
+
+/**
+ * A tile of 1° by 1° of a global DEM, named by its south-west corner. Copernicus names the tile
+ * with [latitudeDeg] 47 and [longitudeDeg] 11 `N47_00_E011_00`.
+ */
+data class ElevationTile(
+    /** -90 to 89. */
+    val latitudeDeg: Int,
+    /** -180 to 179. */
+    val longitudeDeg: Int,
+    /** The distance from the observer to the nearest point of the tile, 0 for the own tile. */
+    val distanceM: Double = 0.0,
+)
+
+data class TerrainEventOptions(
+    val model: SolarModel = SolarModel.NOAA,
+    val refraction: Boolean = true,
+    val atmosphere: Atmosphere = Atmosphere(),
+    /** The sun is visible if its center plus this angle is above the terrain. */
+    val limbDeg: Double = 0.2667,
+    /** The interval of the first search. */
+    val searchStepS: Double = 60.0,
+    val toleranceS: Double = 0.5,
+)
+
+/** The times when the sun appears or goes away behind the terrain. */
+data class TerrainEvents(
+    /** POLAR_DAY: the sun stays above the terrain. POLAR_NIGHT: it stays behind or below. */
+    val kind: DayKind,
+    /** All crossings, in time order. `rising` is an appearance. */
+    val crossings: List<Crossing>,
+)

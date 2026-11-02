@@ -222,3 +222,89 @@ fun headingFilterUpdateMagnetometer(
             options.pack(),
         )
         .toHeadingFilter()
+
+/**
+ * Reads one image of a GeoTIFF file with heights in latitude and longitude, for example a tile of
+ * Copernicus GLO-90. [level] 0 is the full image, and 1, 2, ... are the overviews (each has half
+ * the size of the one before). Throws IllegalArgumentException if the file is not valid or not
+ * supported.
+ */
+fun readElevationGeotiff(data: ByteArray, level: Int = 0): ElevationGrid {
+    val header = DoubleArray(6)
+    val heights = SunradarNative.readElevationGeotiff(data, level, header)
+    return ElevationGrid(
+        header[0],
+        header[1],
+        header[2],
+        header[3],
+        header[4].toInt(),
+        header[5].toInt(),
+        heights,
+    )
+}
+
+/**
+ * Returns the tiles of 1° by 1° that a horizon profile with [maxDistanceM] needs: all tiles that
+ * have a point nearer than [maxDistanceM] to the observer, the nearest first.
+ */
+fun elevationTiles(observer: Observer, maxDistanceM: Double): List<ElevationTile> {
+    val r = SunradarNative.elevationTiles(observer.pack(), maxDistanceM)
+    return List(r.size / 3) {
+        ElevationTile(r[3 * it].toInt(), r[3 * it + 1].toInt(), r[3 * it + 2])
+    }
+}
+
+/**
+ * Calculates the terrain horizon of [observer] from the grids in [tiles]. A point outside all tiles
+ * has no data (for example the sea). Throws IllegalArgumentException if an argument is not valid,
+ * or if [HorizonOptions.useGridElevation] is true and the tiles have no data at the observer.
+ */
+fun horizonProfile(
+    observer: Observer,
+    tiles: List<ElevationGrid>,
+    options: HorizonOptions = HorizonOptions(),
+): HorizonProfile {
+    val headers = DoubleArray(6 * tiles.size)
+    tiles.forEachIndexed { i, tile -> tile.packHeader().copyInto(headers, 6 * i) }
+    return SunradarNative.horizonProfile(
+            observer.pack(),
+            headers,
+            Array(tiles.size) { tiles[it].heightsM },
+            options.pack(),
+        )
+        .toHorizonProfile()
+}
+
+/**
+ * Returns the altitude of the terrain horizon at [azimuthDeg], with a linear interpolation between
+ * the azimuths of [profile]. Returns NaN if a neighbor has no data.
+ */
+fun terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: Double): Double =
+    SunradarNative.terrainAltitudeDeg(profile.packed, azimuthDeg)
+
+/**
+ * Finds the times between the two times when the sun crosses the terrain horizon [profile]: the
+ * visible sunrise and sunset, and the times when a peak hides the sun during the day. An azimuth
+ * without data uses the altitude 0.
+ */
+fun terrainEvents(
+    observer: Observer,
+    profile: HorizonProfile,
+    startUtc: Double,
+    endUtc: Double,
+    options: TerrainEventOptions = TerrainEventOptions(),
+): TerrainEvents {
+    val r =
+        SunradarNative.terrainEvents(
+            observer.pack(),
+            profile.packed,
+            startUtc,
+            endUtc,
+            options.pack(),
+        )
+    val count = r[1].toInt()
+    return TerrainEvents(
+        kind = DayKind.entries[r[0].toInt()],
+        crossings = List(count) { Crossing(r[2 + 2 * it], r[3 + 2 * it] != 0.0) },
+    )
+}

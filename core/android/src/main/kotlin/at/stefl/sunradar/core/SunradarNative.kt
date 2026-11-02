@@ -134,6 +134,31 @@ internal object SunradarNative {
 
     @JvmStatic external fun moonIlluminatedFraction(unixUtc: Double): Double
 
+    /** Returns the heights and writes the other 6 values of the grid into [header]. */
+    @JvmStatic
+    external fun readElevationGeotiff(data: ByteArray, level: Int, header: DoubleArray): FloatArray
+
+    @JvmStatic external fun elevationTiles(observer: DoubleArray, maxDistanceM: Double): DoubleArray
+
+    @JvmStatic
+    external fun horizonProfile(
+        observer: DoubleArray,
+        headers: DoubleArray,
+        heights: Array<FloatArray>,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic external fun terrainAltitudeDeg(profile: DoubleArray, azimuthDeg: Double): Double
+
+    @JvmStatic
+    external fun terrainEvents(
+        observer: DoubleArray,
+        profile: DoubleArray,
+        startUtc: Double,
+        endUtc: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
     /**
      * The C++ defaults of the option structs, Camera, View, and the heading filter, for the tests.
      */

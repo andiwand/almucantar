@@ -12,7 +12,7 @@ packaged as the AAR `at.stefl.sunradar:core-android`. The build loop is in
 | `jni/CMakeLists.txt` | The `sunradar_jni` target: hidden visibility, so only the JNI functions are exported. |
 | `build_native.py` | Conan and CMake for each ABI into `native/prebuilt/jniLibs/<abi>/`. The Gradle task `buildNative` and CI run it. |
 | `src/main/kotlin/` | The Kotlin API: `Types.kt` (value types), `Sunradar.kt` (functions), `Lines.kt` (packed lines), `Pack.kt` (array layouts), `SunradarNative.kt` (the `external` functions). |
-| `src/androidTest/` | Instrumented tests. They run on a device or an emulator. |
+| `src/androidTest/` | Instrumented tests. They run on a device or an emulator. Their assets are the GeoTIFF test files of the core (`../test/data/geotiff/`). |
 
 ## Design
 
@@ -20,6 +20,13 @@ packaged as the AAR `at.stefl.sunradar:core-android`. The build loop is in
   `DoubleArray`. So the C++ code needs no `FindClass` or `GetFieldID`, and a frame allocates
   only a few arrays. The layouts are in `sunradar_jni.cpp` and in `Pack.kt`. Change both, or
   neither.
+- Bulk data is the exception: the GeoTIFF file crosses as a `ByteArray`, and the heights of an
+  `ElevationGrid` cross as a `FloatArray` (one per tile, in an `Array<FloatArray>`). A tile has
+  more than a million heights, so a `DoubleArray` or a list of boxed values costs too much.
+  `readElevationGeotiff` returns the heights and writes the other values into a `DoubleArray`
+  that the caller gives.
+- `HorizonProfile` keeps its packed form after the first native call. So do not change its arrays
+  after the first use.
 - Enums cross as ordinals. The order of the Kotlin constants must be the same as in C++.
 - The Kotlin defaults must be the same as the C++ defaults. The test
   `defaultsAreTheSameAsInCpp` compares them with the native function `defaults()`.

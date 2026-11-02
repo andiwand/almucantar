@@ -112,7 +112,11 @@ android {
     // Pushing the test APK to a cold emulator can take longer than the default timeout.
     installation { timeOutInMs = 10 * 60 * 1000 }
 
-    sourceSets { named("main") { jniLibs.srcDir("native/prebuilt/jniLibs") } }
+    sourceSets {
+        named("main") { jniLibs.srcDir("native/prebuilt/jniLibs") }
+        // The GeoTIFF test files of the core, for the instrumented tests.
+        named("androidTest") { assets.srcDir("../test/data/geotiff") }
+    }
 
     lint {
         abortOnError = true
@@ -148,7 +152,7 @@ mavenPublishing {
         name = "core-android"
         description =
             "The sunradar core for Android: sun and moon position, sun path, magnetic declination, " +
-                "camera projection, and a heading filter"
+                "camera projection, a heading filter, and the terrain horizon"
         url = "https://github.com/andiwand/sunradar"
         licenses {
             license {

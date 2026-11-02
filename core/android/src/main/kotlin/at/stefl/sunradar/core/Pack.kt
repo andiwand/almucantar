@@ -118,3 +118,56 @@ internal fun HeadingFilterOptions.pack() =
 
 internal fun MoonOptions.pack() =
     doubleArrayOf(refraction.pack(), atmosphere.pressureHpa, atmosphere.temperatureC)
+
+internal fun ElevationGrid.packHeader() =
+    doubleArrayOf(
+        northLatitudeDeg,
+        westLongitudeDeg,
+        latitudeStepDeg,
+        longitudeStepDeg,
+        rows.toDouble(),
+        columns.toDouble(),
+    )
+
+internal fun HorizonOptions.pack() =
+    doubleArrayOf(
+        azimuthStepDeg,
+        maxDistanceM,
+        eyeHeightM,
+        useGridElevation.pack(),
+        observerElevationM,
+        refractionCoefficient,
+    )
+
+internal fun HorizonProfile.pack(): DoubleArray {
+    require(altitudeDeg.size == distanceM.size) { "altitudeDeg and distanceM differ in size" }
+    val n = altitudeDeg.size
+    val out = DoubleArray(3 + 2 * n)
+    out[0] = azimuthStepDeg
+    out[1] = observerElevationM
+    out[2] = n.toDouble()
+    altitudeDeg.copyInto(out, 3)
+    distanceM.copyInto(out, 3 + n)
+    return out
+}
+
+internal fun DoubleArray.toHorizonProfile(): HorizonProfile {
+    val n = this[2].toInt()
+    return HorizonProfile(
+        this[0],
+        copyOfRange(3, 3 + n),
+        copyOfRange(3 + n, 3 + 2 * n),
+        this[1],
+    )
+}
+
+internal fun TerrainEventOptions.pack() =
+    doubleArrayOf(
+        model.ordinal.toDouble(),
+        refraction.pack(),
+        atmosphere.pressureHpa,
+        atmosphere.temperatureC,
+        limbDeg,
+        searchStepS,
+        toleranceS,
+    )

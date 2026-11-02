@@ -1,6 +1,7 @@
 package at.stefl.sunradar.core
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -46,7 +47,9 @@ class SunradarTest {
                 HeadingEstimate().pack() +
                 MoonOptions().pack() +
                 doubleArrayOf(DEFAULT_HEADING_DRIFT_DEG2_PER_S) +
-                HeadingFilterOptions().pack()
+                HeadingFilterOptions().pack() +
+                HorizonOptions().pack() +
+                TerrainEventOptions().pack()
         assertEquals(expected.toList(), SunradarNative.defaults().toList())
     }
 
@@ -209,6 +212,97 @@ class SunradarTest {
             findAzimuthTimes(vienna, sunPosition(at, vienna).azimuthDeg, dayStart, dayStart + day)
         assertEquals(1, crossings.size)
         assertEquals(at, crossings[0].unixUtc, 1.0)
+    }
+
+    @Test
+    fun readElevationGeotiff() {
+        val bytes =
+            InstrumentationRegistry.getInstrumentation()
+                .context
+                .assets
+                .open("float_tiles_deflate_p3.tif")
+                .use { it.readBytes() }
+        val grid = readElevationGeotiff(bytes)
+        assertEquals(7, grid.rows)
+        assertEquals(5, grid.columns)
+        assertEquals(35, grid.heightsM.size)
+        assertEquals(47.75, grid.northLatitudeDeg, 1e-9)
+        assertEquals(1000.25f, grid.heightsM[0], 1e-3f)
+        assertEquals(4, readElevationGeotiff(bytes, level = 1).rows)
+        val e =
+            assertThrows(IllegalArgumentException::class.java) {
+                readElevationGeotiff(byteArrayOf(0x49, 0x49, 0x2a, 0))
+            }
+        assertTrue(e.message!!.contains("GeoTIFF"))
+    }
+
+    @Test
+    fun elevationTiles() {
+        val tiles = elevationTiles(vienna, 20_000.0)
+        assertEquals(ElevationTile(48, 16, 0.0), tiles[0])
+        assertTrue(tiles.zipWithNext().all { (a, b) -> a.distanceM <= b.distanceM })
+        assertTrue(tiles.all { it.distanceM < 20_000.0 })
+    }
+
+    @Test
+    fun horizonProfileOverFlatGround() {
+        // A flat grid of 150 m around Vienna, with a step of 1/120 degree.
+        val rows = 61
+        val columns = 91
+        val grid =
+            ElevationGrid(
+                northLatitudeDeg = vienna.latitudeDeg + 0.25,
+                westLongitudeDeg = vienna.longitudeDeg - 0.375,
+                latitudeStepDeg = 1.0 / 120,
+                longitudeStepDeg = 1.0 / 120,
+                rows = rows,
+                columns = columns,
+                heightsM = FloatArray(rows * columns) { 150f },
+            )
+        val profile = horizonProfile(vienna, listOf(grid), HorizonOptions(azimuthStepDeg = 10.0))
+        assertEquals(36, profile.altitudeDeg.size)
+        assertEquals(36, profile.distanceM.size)
+        assertEquals(150.0, profile.observerElevationM, 1e-3)
+        assertTrue(profile.altitudeDeg.all { it > -0.1 && it < 0 })
+        assertEquals(
+            (profile.altitudeDeg[0] + profile.altitudeDeg[1]) / 2,
+            terrainAltitudeDeg(profile, 5.0),
+            1e-9,
+        )
+
+        // No data at the observer.
+        grid.heightsM.fill(Float.NaN)
+        val e =
+            assertThrows(IllegalArgumentException::class.java) {
+                horizonProfile(vienna, listOf(grid))
+            }
+        assertTrue(e.message!!.contains("no data at the observer"))
+    }
+
+    @Test
+    fun terrainEvents() {
+        val flat = HorizonProfile(1.0, DoubleArray(360), DoubleArray(360) { 1000.0 })
+        val events = terrainEvents(vienna, flat, dayStart, dayStart + day)
+        assertEquals(DayKind.NORMAL, events.kind)
+        assertEquals(listOf(true, false), events.crossings.map { it.rising })
+        val sun = sunEvents(vienna, dayStart, dayStart + day)
+        assertEquals(sun.crossings[0].unixUtc, events.crossings[0].unixUtc, 60.0)
+
+        val wall = HorizonProfile(1.0, DoubleArray(360) { 80.0 }, DoubleArray(360) { 1000.0 })
+        val hidden =
+            terrainEvents(
+                vienna,
+                wall,
+                dayStart,
+                dayStart + day,
+                TerrainEventOptions(limbDeg = 0.0),
+            )
+        assertEquals(DayKind.POLAR_NIGHT, hidden.kind)
+        assertTrue(hidden.crossings.isEmpty())
+
+        assertThrows(IllegalArgumentException::class.java) {
+            terrainAltitudeDeg(HorizonProfile(1.0, DoubleArray(0), DoubleArray(0)), 0.0)
+        }
     }
 
     @Test

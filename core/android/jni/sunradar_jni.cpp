@@ -24,6 +24,15 @@
 //                       disturbance_time_s, noise_sigma_ut
 //   MoonOptions    [3]  refraction, pressure_hpa, temperature_c
 //   AzimuthCrossing [3] unix_utc, azimuth_deg, altitude_deg (results, for each crossing)
+//   ElevationGrid  [6]  north_latitude_deg, west_longitude_deg, latitude_step_deg,
+//                       longitude_step_deg, rows, columns; the heights are a separate
+//                       float array (row by row), because a tile has more than a million.
+//   HorizonOptions [6]  azimuth_step_deg, max_distance_m, eye_height_m, use_grid_elevation,
+//                       observer_elevation_m, refraction_coefficient
+//   HorizonProfile [3 + 2 n]  azimuth_step_deg, observer_elevation_m, n, then
+//                       altitude_deg[n], then distance_m[n]
+//   TerrainEventOptions [7]  model, refraction, pressure_hpa, temperature_c, limb_deg,
+//                       search_step_s, tolerance_s
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -32,12 +41,15 @@
 //   Projection [3] valid, x, y
 //   polylines      count, then for each polyline: n, then x, y for each point
 //   TimeMatch  [4] unix_utc, separation_deg, azimuth_deg, altitude_deg
+//   ElevationTile [3] latitude_deg, longitude_deg, distance_m (for each tile)
+//   TerrainEvents  kind, n, then unix_utc, rising for each crossing
 //
 // Booleans are 0 or 1, and enums are their ordinals. std::invalid_argument becomes
 // IllegalArgumentException.
 
 #include <jni.h>
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -471,6 +483,167 @@ SUNRADAR_JNI(moonIlluminatedFraction)(JNIEnv* env, jclass, jdouble unix_utc)->jd
   return guarded<jdouble>(env, 0.0, [&] { return moon_illuminated_fraction(unix_utc); });
 }
 
+namespace {
+
+int to_int(const double value, const char* name) {
+  // NaN fails the last comparison, because NaN is not equal to itself.
+  if (value < 0 || value > 1e9 || std::floor(value) != value) {
+    throw std::invalid_argument(std::string(name) + " is not a valid count");
+  }
+  return static_cast<int>(value);
+}
+
+std::vector<double> pack(const HorizonProfile& p) {
+  std::vector<double> out{p.azimuth_step_deg, p.observer_elevation_m,
+                          static_cast<double>(p.altitude_deg.size())};
+  out.insert(out.end(), p.altitude_deg.begin(), p.altitude_deg.end());
+  out.insert(out.end(), p.distance_m.begin(), p.distance_m.end());
+  return out;
+}
+
+HorizonProfile unpack_profile(const Doubles& a) {
+  if (a.size() < 3) {
+    throw std::invalid_argument("profile is too short");
+  }
+  const auto n = static_cast<std::size_t>(to_int(a[2], "profile size"));
+  if (a.size() != 3 + (2 * n)) {
+    throw std::invalid_argument("profile has the wrong length");
+  }
+  HorizonProfile p{.azimuth_step_deg = a[0],
+                   .altitude_deg = std::vector<double>(n),
+                   .distance_m = std::vector<double>(n),
+                   .observer_elevation_m = a[1]};
+  for (std::size_t i = 0; i < n; ++i) {
+    p.altitude_deg[i] = a[3 + i];
+    p.distance_m[i] = a[3 + n + i];
+  }
+  return p;
+}
+
+HorizonOptions horizon_options(const Doubles& o) {
+  return {.azimuth_step_deg = o[0],
+          .max_distance_m = o[1],
+          .eye_height_m = o[2],
+          .use_grid_elevation = to_bool(o[3]),
+          .observer_elevation_m = o[4],
+          .refraction_coefficient = o[5]};
+}
+
+TerrainEventOptions terrain_event_options(const Doubles& o) {
+  return {.model = to_enum<SolarModel>(o[0], "model"),
+          .refraction = to_bool(o[1]),
+          .atmosphere = {.pressure_hpa = o[2], .temperature_c = o[3]},
+          .limb_deg = o[4],
+          .search_step_s = o[5],
+          .tolerance_s = o[6]};
+}
+
+}  // namespace
+
+// Returns the heights and writes the 6 other values of the grid into `header`.
+SUNRADAR_JNI(readElevationGeotiff)
+(JNIEnv* env, jclass, jbyteArray data, jint level, jdoubleArray header)->jfloatArray {
+  return guarded<jfloatArray>(env, nullptr, [&]() -> jfloatArray {
+    if (data == nullptr || header == nullptr) {
+      throw std::invalid_argument("data is null");
+    }
+    if (env->GetArrayLength(header) != 6) {
+      throw std::invalid_argument("header has the wrong length");
+    }
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(env->GetArrayLength(data)));
+    env->GetByteArrayRegion(data, 0, static_cast<jsize>(bytes.size()),
+                            reinterpret_cast<jbyte*>(bytes.data()));
+    const ElevationGrid grid = read_elevation_geotiff(bytes, level);
+    const std::array<double, 6> h{
+        grid.north_latitude_deg, grid.west_longitude_deg,        grid.latitude_step_deg,
+        grid.longitude_step_deg, static_cast<double>(grid.rows), static_cast<double>(grid.columns)};
+    env->SetDoubleArrayRegion(header, 0, 6, h.data());
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(grid.heights_m.size()));
+    if (result != nullptr) {
+      env->SetFloatArrayRegion(result, 0, static_cast<jsize>(grid.heights_m.size()),
+                               grid.heights_m.data());
+    }
+    return result;
+  });
+}
+
+SUNRADAR_JNI(elevationTiles)
+(JNIEnv* env, jclass, jdoubleArray obs, jdouble max_distance_m)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const auto tiles = elevation_tiles(observer(Doubles(env, obs, 2, "observer")), max_distance_m);
+    std::vector<double> out;
+    out.reserve(3 * tiles.size());
+    for (const ElevationTile& t : tiles) {
+      out.push_back(t.latitude_deg);
+      out.push_back(t.longitude_deg);
+      out.push_back(t.distance_m);
+    }
+    return to_java(env, out);
+  });
+}
+
+SUNRADAR_JNI(horizonProfile)
+(JNIEnv* env, jclass, jdoubleArray obs, jdoubleArray headers, jobjectArray heights,
+ jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles h(env, headers, 0, "headers");
+    if (heights == nullptr) {
+      throw std::invalid_argument("heights is null");
+    }
+    const auto count = static_cast<std::size_t>(env->GetArrayLength(heights));
+    if (h.size() != 6 * count) {
+      throw std::invalid_argument("headers has the wrong length");
+    }
+    std::vector<ElevationGrid> tiles(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      ElevationGrid& g = tiles[i];
+      g.north_latitude_deg = h[6 * i];
+      g.west_longitude_deg = h[(6 * i) + 1];
+      g.latitude_step_deg = h[(6 * i) + 2];
+      g.longitude_step_deg = h[(6 * i) + 3];
+      g.rows = to_int(h[(6 * i) + 4], "rows");
+      g.columns = to_int(h[(6 * i) + 5], "columns");
+      auto* const array =
+          static_cast<jfloatArray>(env->GetObjectArrayElement(heights, static_cast<jsize>(i)));
+      if (array == nullptr) {
+        throw std::invalid_argument("heights_m is null");
+      }
+      g.heights_m.resize(static_cast<std::size_t>(env->GetArrayLength(array)));
+      env->GetFloatArrayRegion(array, 0, static_cast<jsize>(g.heights_m.size()),
+                               g.heights_m.data());
+      env->DeleteLocalRef(array);
+    }
+    return to_java(env, pack(horizon_profile(observer(Doubles(env, obs, 2, "observer")), tiles,
+                                             horizon_options(Doubles(env, opts, 6, "options")))));
+  });
+}
+
+SUNRADAR_JNI(terrainAltitudeDeg)
+(JNIEnv* env, jclass, jdoubleArray profile, jdouble azimuth_deg)->jdouble {
+  return guarded<jdouble>(env, 0.0, [&] {
+    return terrain_altitude_deg(unpack_profile(Doubles(env, profile, 0, "profile")), azimuth_deg);
+  });
+}
+
+SUNRADAR_JNI(terrainEvents)
+(JNIEnv* env, jclass, jdoubleArray obs, jdoubleArray profile, jdouble start, jdouble end,
+ jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const TerrainEvents e =
+        terrain_events(observer(Doubles(env, obs, 2, "observer")),
+                       unpack_profile(Doubles(env, profile, 0, "profile")), start, end,
+                       terrain_event_options(Doubles(env, opts, 7, "options")));
+    std::vector<double> out{static_cast<double>(e.kind), static_cast<double>(e.crossings.size())};
+    for (const Crossing& c : e.crossings) {
+      out.push_back(c.unix_utc);
+      out.push_back(c.rising ? 1 : 0);
+    }
+    return to_java(env, out);
+  });
+}
+
 // The C++ defaults of the option structs, Camera, View, and the heading filter, in the layouts
 // above, so the instrumented tests can check that the Kotlin defaults are the same.
 SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
@@ -482,6 +655,8 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
     const Camera c;
     const View v;
     const HeadingFilterOptions f;
+    const HorizonOptions h;
+    const TerrainEventOptions t;
     return to_java(env, {static_cast<double>(s.model),
                          s.refraction ? 1.0 : 0.0,
                          s.atmosphere.pressure_hpa,
@@ -530,6 +705,19 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          f.bias_drift_ut2_per_s,
                          f.disturbance_sigma_ut,
                          f.disturbance_time_s,
-                         f.noise_sigma_ut});
+                         f.noise_sigma_ut,
+                         h.azimuth_step_deg,
+                         h.max_distance_m,
+                         h.eye_height_m,
+                         h.use_grid_elevation ? 1.0 : 0.0,
+                         h.observer_elevation_m,
+                         h.refraction_coefficient,
+                         static_cast<double>(t.model),
+                         t.refraction ? 1.0 : 0.0,
+                         t.atmosphere.pressure_hpa,
+                         t.atmosphere.temperature_c,
+                         t.limb_deg,
+                         t.search_step_s,
+                         t.tolerance_s});
   });
 }
