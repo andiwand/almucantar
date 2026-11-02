@@ -5,6 +5,8 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The Place panel: search a place or tap it on a map, also offline. The map is in the app
+  (Natural Earth). The app keeps the last place, and the times use the time zone of the place.
 - The terrain horizon: the sky view shows the mountains around the place, and the sun path is
   dimmer where the terrain hides the sun. The status shows when the sun comes over the terrain
   and goes behind it. The app downloads the elevation tiles (AWS Terrain Tiles) once and keeps

@@ -17,14 +17,56 @@ import type { MoonAt } from "./moon";
 import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
 import { Terrain, TileCache, cacheStorageStore, decodePng, localStorageIndex } from "./terrain";
 import type { TerrainState } from "./terrain";
+import { browserTimeZone, fromWallTime, startOfDay, wallTime } from "./zone";
+import {
+  decodeBaseMap,
+  drawBaseMap,
+  fromWorld,
+  nearestPlace,
+  screenToPlace,
+  searchPlaces,
+  timeZoneAt,
+  toWorld,
+} from "./basemap";
+import type { BaseMap, MapView } from "./basemap";
+import baseMapUrl from "../../assets/basemap/basemap.json?url";
 
 const sunradar = await load();
 
 // --- State --------------------------------------------------------------------------------------
 
-const DEFAULT_PLACE: Observer = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 }; // Vienna
-let observer = DEFAULT_PLACE;
-let placeText = "Vienna · no location";
+// The place: the location of the device, a place that the user dropped on the map, or Vienna.
+// The app keeps the last place, so it starts at that place also offline and without a location.
+// The times are in the time zone of the place, because a dropped place can be in another zone.
+interface StoredPlace {
+  observer: Observer;
+  name: string;
+  timeZone: string;
+  manual: boolean;
+}
+const PLACE_KEY = "sunradar-place";
+const DEFAULT_PLACE: StoredPlace = {
+  observer: { latitudeDeg: 48.2082, longitudeDeg: 16.3738 },
+  name: "Vienna · no location",
+  timeZone: "Europe/Vienna",
+  manual: false,
+};
+function loadPlace(): StoredPlace {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null") as StoredPlace | null;
+    if (stored && Number.isFinite(stored.observer?.latitudeDeg)) {
+      new Intl.DateTimeFormat("en-US", { timeZone: stored.timeZone }); // throws if not valid
+      return stored;
+    }
+  } catch {
+    // A damaged or old entry: use the default.
+  }
+  return DEFAULT_PLACE;
+}
+let place = loadPlace();
+let observer = place.observer;
+let placeText = place.name;
+let zone = place.timeZone;
 
 let deviceToEnu: Quaternion | null = null;
 let sensorsActive = false;
@@ -100,25 +142,34 @@ function showMessage(text: string | null) {
 
 // --- Time ---------------------------------------------------------------------------------------
 
-function startOfLocalDay(offsetDays: number): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + offsetDays);
-  return d;
+/** The start of a day in the time zone of the place, in Unix seconds. */
+function startOfLocalDay(offsetDays: number): number {
+  return startOfDay(zone, Date.now(), offsetDays);
 }
 
 function selectedTime(): number {
   if (minuteOfDay === null && dayOffset === 0) return Date.now() / 1000;
-  const now = new Date();
-  const minute = minuteOfDay ?? now.getHours() * 60 + now.getMinutes();
+  const now = wallTime(zone, Date.now());
+  const minute = minuteOfDay ?? now.hour * 60 + now.minute;
   // The wall clock time, not midnight + minutes, because a day with a DST change has 23 or 25 h.
-  const d = startOfLocalDay(dayOffset);
-  d.setHours(Math.floor(minute / 60), minute % 60);
-  return d.getTime() / 1000;
+  return (
+    fromWallTime(
+      zone,
+      now.year,
+      now.month,
+      now.day + dayOffset,
+      Math.floor(minute / 60),
+      minute % 60,
+    ) / 1000
+  );
 }
 
 const hhmm = (unix: number) =>
-  new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  new Date(unix * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: zone,
+  });
 
 // --- The day (calculated once per day and place) --------------------------------------------------
 
@@ -138,9 +189,9 @@ interface Day {
 let day: Day | null = null;
 
 function computeDay(): Day {
-  const start = startOfLocalDay(dayOffset).getTime() / 1000;
-  const end = startOfLocalDay(dayOffset + 1).getTime() / 1000;
-  const key = `${start}:${observer.latitudeDeg}:${observer.longitudeDeg}:${terrainVersion}`;
+  const start = startOfLocalDay(dayOffset);
+  const end = startOfLocalDay(dayOffset + 1);
+  const key = `${start}:${zone}:${observer.latitudeDeg}:${observer.longitudeDeg}:${terrainVersion}`;
   if (day?.key === key) return day;
   const profile = terrainProfile();
   const points = sunradar.sunPath(observer, start, end);
@@ -187,9 +238,9 @@ function computeDay(): Day {
           : "Over the terrain: " +
             t.crossings.map((c) => `${c.rising ? "↑" : "↓"} ${hhmm(c.unixUtc)}`).join(" ");
   }
-  const year = new Date(start * 1000).getFullYear();
-  const guides = [5, 11].flatMap((month) => {
-    const s = new Date(year, month, 21).getTime() / 1000;
+  const year = wallTime(zone, start * 1000).year;
+  const guides = [6, 12].flatMap((month) => {
+    const s = fromWallTime(zone, year, month, 21) / 1000;
     return segments(sunradar.sunPath(observer, s, s + 86400));
   });
   day = {
@@ -203,7 +254,7 @@ function computeDay(): Day {
       .filter((p) => (p.unixUtc - start) % 3600 === 0 && p.position.altitudeDeg > -6)
       .map((p) => ({
         direction: p.position,
-        label: String(new Date(p.unixUtc * 1000).getHours()).padStart(2, "0"),
+        label: String(wallTime(zone, p.unixUtc * 1000).hour).padStart(2, "0"),
       })),
     summary: terrainSummary ? `${summary}<br>${terrainSummary}` : summary,
     guides,
@@ -442,7 +493,7 @@ function scheduleDates(center: Horizontal | null) {
   // The readout does not show the dates while the crosshair is not usable. The state stays, so
   // one unusable frame from sensor noise does not clear the text or start the search again.
   if (!center) return;
-  const start = startOfLocalDay(0).getTime() / 1000;
+  const start = startOfLocalDay(0);
   const key = `${start}:${Math.round(center.azimuthDeg * 2)}:${Math.round(center.altitudeDeg * 2)}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key === datesKey) return;
   datesKey = key;
@@ -459,7 +510,7 @@ function scheduleDates(center: Horizontal | null) {
         dates
           .map(
             (m) =>
-              `${new Date(m.unixUtc * 1000).toLocaleDateString([], { day: "numeric", month: "short" })} ${hhmm(m.unixUtc)}`,
+              `${new Date(m.unixUtc * 1000).toLocaleDateString([], { day: "numeric", month: "short", timeZone: zone })} ${hhmm(m.unixUtc)}`,
           )
           .join(", ")
       : "";
@@ -519,11 +570,12 @@ function frame() {
           : "The sun is in this direction below the horizon") +
         (datesText ? `<div class="dates">${datesText}</div>` : "");
 
-  $("date-label").textContent = startOfLocalDay(dayOffset).toLocaleDateString([], {
+  $("date-label").textContent = new Date(startOfLocalDay(dayOffset) * 1000).toLocaleDateString([], {
     weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: zone,
   });
   $("time-label").textContent =
     minuteOfDay === null ? `${hhmm(Date.now() / 1000)} (now)` : hhmm(time);
@@ -565,20 +617,42 @@ async function startSensors() {
   }
   navigator.geolocation?.getCurrentPosition(
     (position) => {
-      observer = { latitudeDeg: position.coords.latitude, longitudeDeg: position.coords.longitude };
-      placeText = `${observer.latitudeDeg.toFixed(3)}°, ${observer.longitudeDeg.toFixed(3)}° · ±${Math.round(position.coords.accuracy)} m`;
-      // Only the declination changes, so an alignment before the location arrives stays.
-      hasLocation = true;
-      if (terrainOn) terrain.update(observer);
-      const old = declination;
-      declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
-      heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
+      // A place that the user dropped stays, until the user asks for the location in the panel.
+      if (place.manual) return;
+      setPlace(gpsPlace(position));
     },
-    () => showMessage("No location: the app uses Vienna."),
+    () => {
+      if (!place.manual) showMessage(`No location: the app uses the last place (${placeText}).`);
+    },
     { enableHighAccuracy: false, timeout: 20000 },
   );
   resetHeading();
   $("start").classList.add("hidden");
+}
+
+function gpsPlace(position: GeolocationPosition): StoredPlace {
+  const { latitude, longitude, accuracy } = position.coords;
+  return {
+    observer: { latitudeDeg: latitude, longitudeDeg: longitude },
+    name: `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}° · ±${Math.round(accuracy)} m`,
+    timeZone: browserTimeZone(),
+    manual: false,
+  };
+}
+
+/** Changes the place: the day, the terrain, and the declination follow. */
+function setPlace(next: StoredPlace) {
+  place = next;
+  observer = next.observer;
+  placeText = next.name;
+  zone = next.timeZone;
+  localStorage.setItem(PLACE_KEY, JSON.stringify(next));
+  hasLocation = true;
+  if (terrainOn) terrain.update(observer);
+  // Only the declination changes, so an alignment before stays.
+  const old = declination;
+  declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
+  heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
 }
 
 /** The browser heading is magnetic, so the offset is the declination until the user aligns. */
@@ -679,9 +753,9 @@ $<HTMLInputElement>("minute").addEventListener("input", (e) => {
 $("now").addEventListener("click", () => {
   minuteOfDay = null;
   dayOffset = 0;
-  const now = new Date();
+  const now = wallTime(zone, Date.now());
   $<HTMLInputElement>("date-offset").value = "0";
-  $<HTMLInputElement>("minute").value = String(now.getHours() * 60 + now.getMinutes());
+  $<HTMLInputElement>("minute").value = String(now.hour * 60 + now.minute);
 });
 const terrainBox = $<HTMLInputElement>("terrain-on");
 terrainBox.checked = terrainOn;
@@ -701,3 +775,134 @@ if ("serviceWorker" in navigator && location.protocol !== "http:") {
 if (!("DeviceOrientationEvent" in window)) $("start").textContent = "Use location";
 
 requestAnimationFrame(frame);
+
+// --- The place panel: the offline map (Natural Earth) and the search ------------------------------
+
+let baseMap: BaseMap | null = null;
+let mapView: MapView = { lon: observer.longitudeDeg, lat: observer.latitudeDeg, zoom: 5 };
+const mapCanvas = $<HTMLCanvasElement>("place-map");
+const searchInput = $<HTMLInputElement>("place-search");
+const results = $("place-results");
+
+async function loadBaseMap(): Promise<BaseMap | null> {
+  if (!baseMap) {
+    try {
+      baseMap = decodeBaseMap(await (await fetch(baseMapUrl)).json());
+    } catch {
+      showMessage("The map is not available.");
+    }
+  }
+  return baseMap;
+}
+
+function drawMap() {
+  if (!baseMap || mapCanvas.clientWidth === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = mapCanvas.clientWidth;
+  const height = mapCanvas.clientHeight;
+  mapCanvas.width = Math.round(width * dpr);
+  mapCanvas.height = Math.round(height * dpr);
+  const c = mapCanvas.getContext("2d")!;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawBaseMap(c, baseMap, mapView, width, height, observer);
+}
+
+/** Drops the place at `at`, with the name of the nearest place and its time zone. */
+function dropPlace(at: Observer, name?: string) {
+  if (!baseMap) return;
+  const near = nearestPlace(baseMap.places, at);
+  const coordinates = `${at.latitudeDeg.toFixed(3)}°, ${at.longitudeDeg.toFixed(3)}°`;
+  setPlace({
+    observer: at,
+    name: `${name ?? (near ? `near ${near.name}` : coordinates)} · ${coordinates}`,
+    timeZone: timeZoneAt(baseMap.places, at, browserTimeZone()),
+    manual: true,
+  });
+  drawMap();
+}
+
+$("place-button").addEventListener("click", async () => {
+  const panel = $("place-panel");
+  panel.classList.toggle("hidden");
+  if (panel.classList.contains("hidden")) return;
+  mapView = { ...mapView, lon: observer.longitudeDeg, lat: observer.latitudeDeg };
+  if (await loadBaseMap()) drawMap();
+});
+$("place-close").addEventListener("click", () => $("place-panel").classList.add("hidden"));
+$("place-here").addEventListener("click", () => {
+  navigator.geolocation?.getCurrentPosition(
+    (position) => setPlace(gpsPlace(position)),
+    () => showMessage("No location: the place stays."),
+    { enableHighAccuracy: false, timeout: 20000 },
+  );
+  $("place-panel").classList.add("hidden");
+});
+for (const [id, step] of [
+  ["place-zoom-in", 1],
+  ["place-zoom-out", -1],
+] as const) {
+  $(id).addEventListener("click", () => {
+    mapView = { ...mapView, zoom: Math.max(1, Math.min(12, mapView.zoom + step)) };
+    drawMap();
+  });
+}
+searchInput.addEventListener("input", () => {
+  results.replaceChildren();
+  if (!baseMap) return;
+  for (const p of searchPlaces(baseMap.places, searchInput.value)) {
+    const item = document.createElement("button");
+    item.textContent = `${p.name}, ${p.country}`;
+    item.addEventListener("click", () => {
+      mapView = { lon: p.lon, lat: p.lat, zoom: Math.max(mapView.zoom, 9) };
+      dropPlace({ latitudeDeg: p.lat, longitudeDeg: p.lon }, p.name);
+      results.replaceChildren();
+      searchInput.value = "";
+    });
+    results.append(item);
+  }
+});
+
+// Drag to move the map, tap to drop the place, and the wheel to zoom.
+let mapDrag: { x: number; y: number; moved: boolean } | null = null;
+mapCanvas.addEventListener("pointerdown", (e) => {
+  mapDrag = { x: e.clientX, y: e.clientY, moved: false };
+  mapCanvas.setPointerCapture(e.pointerId);
+});
+mapCanvas.addEventListener("pointermove", (e) => {
+  if (!mapDrag) return;
+  const dx = e.clientX - mapDrag.x;
+  const dy = e.clientY - mapDrag.y;
+  if (!mapDrag.moved && Math.hypot(dx, dy) < 5) return;
+  const [x, y] = toWorld(mapView.lon, mapView.lat, mapView.zoom);
+  const [lon, lat] = fromWorld(x - dx, y - dy, mapView.zoom);
+  mapView = { ...mapView, lon, lat };
+  mapDrag = { x: e.clientX, y: e.clientY, moved: true };
+  drawMap();
+});
+mapCanvas.addEventListener("pointerup", (e) => {
+  if (mapDrag && !mapDrag.moved) {
+    const rect = mapCanvas.getBoundingClientRect();
+    dropPlace(
+      screenToPlace(mapView, rect.width, rect.height, e.clientX - rect.left, e.clientY - rect.top),
+    );
+  }
+  mapDrag = null;
+});
+mapCanvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    mapView = {
+      ...mapView,
+      zoom: Math.max(1, Math.min(12, mapView.zoom - Math.sign(e.deltaY) * 0.5)),
+    };
+    drawMap();
+  },
+  { passive: false },
+);
+
+// The last place starts the terrain also before the location arrives.
+if (place !== DEFAULT_PLACE) {
+  hasLocation = true;
+  if (terrainOn) terrain.update(observer);
+}

@@ -40,11 +40,29 @@
           >)
         </p>
       </div>
+      <div id="place-panel" class="panel hidden">
+        <div class="row">
+          <input id="place-search" type="search" placeholder="Search a place" autocomplete="off" />
+          <button id="place-close">Close</button>
+        </div>
+        <div id="place-results"></div>
+        <div class="map-wrap">
+          <canvas id="place-map" aria-label="The map: tap to drop the place"></canvas>
+          <div class="zoom">
+            <button id="place-zoom-in">+</button><button id="place-zoom-out">−</button>
+          </div>
+        </div>
+        <div class="row">
+          <button id="place-here">Use my location</button>
+          <span class="credits">Tap the map to drop the place. Map: Natural Earth</span>
+        </div>
+      </div>
       <div id="readout" class="panel"></div>
       <div id="buttons">
         <button id="start" class="primary">Start sensors</button>
         <button id="camera-button">Camera</button>
         <button id="time-button">Time</button>
+        <button id="place-button">Place</button>
         <button id="align-button">Align with the sun</button>
       </div>
     </div>
