@@ -661,13 +661,13 @@ private fun alignWithBody(
     }
 }
 
+/** The assumed error of a place that the user dropped on the map, in meters. */
+private const val DROPPED_PLACE_ERROR_M = 500.0
+
 /**
  * Calibrates the heading with a landmark in the crosshair. The error of the bearing comes from the
  * location error and from the distance: an error e at a distance d is atan(e / d).
  */
-/** The assumed error of a place that the user dropped on the map, in meters. */
-private const val DROPPED_PLACE_ERROR_M = 500.0
-
 private fun alignWithLandmark(
     tracker: HeadingTracker,
     view: View?,

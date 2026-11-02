@@ -134,7 +134,10 @@ data class DemEntry(
  *   [maxBytes]. The check after [maxAgeMs] is the same for all tiles.
  * - A file that the decoder cannot read is deleted and downloaded again one time.
  *
- * All functions block (file and network access), so call them off the main thread.
+ * All functions block (file and network access), so call them off the main thread. They can run on
+ * several threads at the same time: the lock covers only the entries in memory and the index, not a
+ * download or the read of a tile. Two loads of the same tile at the same time can both download it;
+ * the second one replaces the file and the entry.
  */
 class DemCache(
     private val dir: File,
@@ -152,6 +155,12 @@ class DemCache(
     private val coarseLevel = source.coarseLevel
 
     private val indexFile = File(dir, "index.json")
+
+    /**
+     * The lock of [entries], [kept], and the index file. A download and the read or the write of a
+     * tile run without it, so a slow download does not block the other calls.
+     */
+    private val lock = Any()
     private val entries = mutableMapOf<String, DemEntry>()
     private val kept = mutableListOf<KeptPlace>()
 
@@ -169,33 +178,35 @@ class DemCache(
     }
 
     /** The entry of the tile [name], or null if the tile is not in the cache. */
-    @Synchronized fun entry(name: String): DemEntry? = entries[name]
+    fun entry(name: String): DemEntry? = synchronized(lock) { entries[name] }
 
     /** The size of all files in the cache, in bytes, also the files of the kept places. */
-    @Synchronized fun totalBytes(): Long = entries.values.sumOf { it.size }
+    fun totalBytes(): Long = synchronized(lock) { entries.values.sumOf { it.size } }
 
     /** The size of the files that count toward the limit: all files but the kept tiles. */
-    @Synchronized
-    fun cacheBytes(): Long {
-        val keptTiles = keptTiles()
-        return entries.filterKeys { it !in keptTiles }.values.sumOf { it.size }
-    }
+    fun cacheBytes(): Long =
+        synchronized(lock) {
+            val keptTiles = keptTiles()
+            entries.filterKeys { it !in keptTiles }.values.sumOf { it.size }
+        }
 
     /** The kept places with the state of their tiles, in the order of their creation. */
-    @Synchronized
-    fun keptPlaces(): List<KeptPlaceStatus> = kept.map { place ->
-        // A coarse part is also present if the full file of its tile serves it.
-        val serving =
-            place.tiles.mapNotNull { name ->
-                val tile = tileOfEntry(name)
-                listOf(name, tile).distinct().firstOrNull { present(it) }
+    fun keptPlaces(): List<KeptPlaceStatus> =
+        synchronized(lock) {
+            kept.map { place ->
+                // A coarse part is also present if the full file of its tile serves it.
+                val serving =
+                    place.tiles.mapNotNull { name ->
+                        val tile = tileOfEntry(name)
+                        listOf(name, tile).distinct().firstOrNull { present(it) }
+                    }
+                KeptPlaceStatus(
+                    place,
+                    serving.size,
+                    serving.distinct().sumOf { entries.getValue(it).size },
+                )
             }
-        KeptPlaceStatus(
-            place,
-            serving.size,
-            serving.distinct().sumOf { entries.getValue(it).size },
-        )
-    }
+        }
 
     private fun present(name: String): Boolean =
         entries[name]?.let { it.sea || fileOf(name).isFile } ?: false
@@ -204,20 +215,20 @@ class DemCache(
      * Adds [place] to the kept places, or replaces the kept place with the same id. Its tiles are
      * kept from now on, also before they are downloaded.
      */
-    @Synchronized
     fun addKeptPlace(place: KeptPlace) {
-        val index = kept.indexOfFirst { it.id == place.id }
-        if (index >= 0) kept[index] = place else kept += place
-        writeIndex()
+        synchronized(lock) {
+            val index = kept.indexOfFirst { it.id == place.id }
+            if (index >= 0) kept[index] = place else kept += place
+            writeIndex()
+        }
     }
 
     /**
      * Removes the kept place [id]. Its tiles stay on the disk as normal tiles of the cache, so the
      * next eviction can delete them. A tile of another kept place stays kept.
      */
-    @Synchronized
     fun removeKeptPlace(id: String) {
-        if (kept.removeAll { it.id == id }) writeIndex()
+        synchronized(lock) { if (kept.removeAll { it.id == id }) writeIndex() }
     }
 
     /**
@@ -226,16 +237,20 @@ class DemCache(
      * the cache or whose file is gone, and checks a tile with the server if it is older than the
      * maximum age. It does not change the time of the last use.
      */
-    @Synchronized
     fun fetch(latitudeDeg: Int, longitudeDeg: Int, keep: Set<String> = emptySet()): TileFetch {
         val name = tileName(latitudeDeg, longitudeDeg)
         val url = tileUrl(latitudeDeg, longitudeDeg)
-        var entry = entries[name]
-        if (entry != null && !entry.sea && !fileOf(name).isFile) {
-            // The file is gone, for example by a manual delete.
-            remove(name)
-            entry = null
-        }
+        var entry =
+            synchronized(lock) {
+                val e = entries[name]
+                if (e != null && !e.sea && !fileOf(name).isFile) {
+                    // The file is gone, for example by a manual delete.
+                    remove(name)
+                    null
+                } else {
+                    e
+                }
+            }
         if (entry != null && clock() - entry.checkedMs > maxAgeMs) {
             entry = revalidate(name, url, coarse = false, entry, keep)
         }
@@ -249,7 +264,6 @@ class DemCache(
      * server if it is older than the maximum age. After a download, it deletes old entries that are
      * not in [keep] (names of entries) until the cache is not larger than its limit.
      */
-    @Synchronized
     fun <T : Any> load(
         latitudeDeg: Int,
         longitudeDeg: Int,
@@ -269,7 +283,6 @@ class DemCache(
      * read with [decode]: [decode] must read the overview at [coarseLevel]. It uses the full file
      * if it is in the cache, else the coarse part (downloaded and checked as in [load]).
      */
-    @Synchronized
     fun <T : Any> loadCoarse(
         latitudeDeg: Int,
         longitudeDeg: Int,
@@ -278,7 +291,7 @@ class DemCache(
     ): TileLoad<T> {
         val name = tileName(latitudeDeg, longitudeDeg)
         val url = tileUrl(latitudeDeg, longitudeDeg)
-        if (entries.containsKey(name)) {
+        if (entry(name) != null) {
             val full = loadEntry(name, url, coarse = false, keep, decode)
             // A full file that is gone or bad, offline: the coarse part can still serve.
             if (full !is TileLoad.Missing && full !is TileLoad.Unreadable) return full
@@ -290,11 +303,9 @@ class DemCache(
      * The name of the entry that serves the coarse level of the tile [latitudeDeg], [longitudeDeg]
      * now: the full file if it is in the cache, else the coarse part.
      */
-    @Synchronized
     fun coarseEntryName(latitudeDeg: Int, longitudeDeg: Int): String {
         val name = tileName(latitudeDeg, longitudeDeg)
-        val full = entries[name]
-        return if (full != null && (full.sea || fileOf(name).isFile)) name else coarseName(name)
+        return synchronized(lock) { if (present(name)) name else coarseName(name) }
     }
 
     /** The URL of the tile with the south-west corner [latitudeDeg], [longitudeDeg]. */
@@ -311,7 +322,7 @@ class DemCache(
         keep: Set<String>,
         decode: (ByteArray) -> T,
     ): TileLoad<T> {
-        var entry = entries[name]
+        var entry = entry(name)
         if (entry != null && clock() - entry.checkedMs > maxAgeMs) {
             entry = revalidate(name, url, coarse, entry, keep)
         }
@@ -333,7 +344,7 @@ class DemCache(
                 touch(name)
                 return TileLoad.Data(value)
             }
-            remove(name)
+            synchronized(lock) { remove(name) }
             if (attempt == 0) {
                 current = download(name, url, coarse, keep) ?: return TileLoad.Missing
             }
@@ -345,27 +356,26 @@ class DemCache(
      * Deletes the tiles that were used least recently and are not in [keep], down to the limit. It
      * never deletes a tile of a kept place, and these tiles do not count toward the limit.
      */
-    @Synchronized
     fun evict(keep: Set<String>) {
-        var total = cacheBytes()
-        if (total <= maxBytes) return
-        val keptTiles = keptTiles()
-        val candidates =
-            entries
-                .filter { (name, entry) ->
-                    name !in keep && name !in keptTiles && entry.size > 0
-                }
-                .toList()
-                .sortedBy {
-                    it.second.usedMs
-                }
-        for ((name, entry) in candidates) {
-            if (total <= maxBytes) break
-            fileOf(name).delete()
-            entries.remove(name)
-            total -= entry.size
+        synchronized(lock) {
+            var total = cacheBytes()
+            if (total <= maxBytes) return
+            val keptTiles = keptTiles()
+            val candidates =
+                entries
+                    .filter { (name, entry) ->
+                        name !in keep && name !in keptTiles && entry.size > 0
+                    }
+                    .toList()
+                    .sortedBy { it.second.usedMs }
+            for ((name, entry) in candidates) {
+                if (total <= maxBytes) break
+                fileOf(name).delete()
+                entries.remove(name)
+                total -= entry.size
+            }
+            writeIndex()
         }
-        writeIndex()
     }
 
     /** A conditional request for an old entry. Returns the entry after the check. */
@@ -387,7 +397,16 @@ class DemCache(
                 return entry
             }
         return when (response.code) {
-            HttpURLConnection.HTTP_NOT_MODIFIED -> update(name, entry.copy(checkedMs = clock()))
+            HttpURLConnection.HTTP_NOT_MODIFIED ->
+                synchronized(lock) {
+                    // Another call can have replaced or removed the entry during the request.
+                    val now = entries[name]
+                    if (now != null && now.checkedMs == entry.checkedMs) {
+                        update(name, now.copy(checkedMs = clock()))
+                    } else {
+                        now ?: entry
+                    }
+                }
             HttpURLConnection.HTTP_OK,
             HttpURLConnection.HTTP_NOT_FOUND -> store(name, response, keep)
             // A server error is not an answer about the tile, so the old tile stays.
@@ -433,12 +452,12 @@ class DemCache(
         fun more(end: Long): Boolean {
             val response = http.get(url, null, null, data.size.toLong() until end)
             val body = response.body ?: return false
+            if (first.etag != null && response.etag != first.etag) return false
             if (response.code == HttpURLConnection.HTTP_OK) {
                 data = body
                 return true
             }
-            val sameFile = first.etag == null || response.etag == first.etag
-            if (response.code != HTTP_PARTIAL || !sameFile) return false
+            if (response.code != HTTP_PARTIAL) return false
             if (body.size.toLong() != end - data.size) return false
             data += body
             return true
@@ -457,7 +476,8 @@ class DemCache(
                 data.size.toLong() >= total -> return part(data)
                 needed == 0L -> if (!more(minOf(data.size * 4L, total))) return null
                 needed > total -> return part(data)
-                else -> return if (more(needed)) part(data) else null
+                // The next pass cuts the part, also from a whole file.
+                else -> if (!more(needed)) return null
             }
         }
     }
@@ -467,41 +487,54 @@ class DemCache(
         val now = clock()
         val body = response.body
         if (response.code != HttpURLConnection.HTTP_OK || body == null) {
-            fileOf(name).delete()
-            if (tileOfEntry(name) == name) dropCoarse(name)
-            return update(name, DemEntry(null, null, now, now, 0, sea = true))
+            return synchronized(lock) {
+                fileOf(name).delete()
+                if (tileOfEntry(name) == name) dropCoarse(name)
+                update(name, DemEntry(null, null, now, now, 0, sea = true))
+            }
         }
-        // Write a new file and then rename it, so a crash does not leave a part of a file.
-        val temporary = File(dir, "$name.part")
-        temporary.writeBytes(body)
-        if (!temporary.renameTo(fileOf(name))) {
+        // Write a new file without the lock, and then rename it, so a crash does not leave a part
+        // of a file. Each call has its own temporary file, because two calls can store the same
+        // tile at the same time.
+        val temporary = File.createTempFile("$name.", ".part", dir)
+        try {
+            temporary.writeBytes(body)
+        } catch (e: IOException) {
             temporary.delete()
-            throw IOException("cannot write the tile $name")
+            throw e
         }
-        val entry =
-            update(
-                name,
-                DemEntry(
-                    response.etag,
-                    response.lastModified,
-                    now,
-                    now,
-                    body.size.toLong(),
-                    sea = false,
-                ),
-            )
-        if (tileOfEntry(name) == name) {
-            // The full file serves the coarse level too, so a tile has at most one of the two
-            // files.
-            dropCoarse(name)
+        return synchronized(lock) {
+            if (!temporary.renameTo(fileOf(name))) {
+                temporary.delete()
+                throw IOException("cannot write the tile $name")
+            }
+            val entry =
+                update(
+                    name,
+                    DemEntry(
+                        response.etag,
+                        response.lastModified,
+                        now,
+                        now,
+                        body.size.toLong(),
+                        sea = false,
+                    ),
+                )
+            if (tileOfEntry(name) == name) {
+                // The full file serves the coarse level too, so a tile has at most one of the two
+                // files.
+                dropCoarse(name)
+            }
+            evict(keep + name)
+            entry
         }
-        evict(keep + name)
-        return entry
     }
 
     private fun touch(name: String) {
-        entries[name]?.let { update(name, it.copy(usedMs = clock())) }
+        synchronized(lock) { entries[name]?.let { update(name, it.copy(usedMs = clock())) } }
     }
+
+    // The functions below change the entries or the index, so the caller must hold [lock].
 
     private fun remove(name: String) {
         fileOf(name).delete()
@@ -596,10 +629,16 @@ class DemCache(
             )
         }
         val temporary = File(dir, "index.json.part")
-        temporary.writeText(
-            JSONObject().put("version", 2).put("tiles", tiles).put("kept", places).toString()
-        )
-        if (!temporary.renameTo(indexFile)) temporary.delete()
+        try {
+            temporary.writeText(
+                JSONObject().put("version", 2).put("tiles", tiles).put("kept", places).toString()
+            )
+            if (!temporary.renameTo(indexFile)) temporary.delete()
+        } catch (_: IOException) {
+            // For example a full disk. The entries in memory stay right, and the next write
+            // writes all of them.
+            temporary.delete()
+        }
     }
 
     companion object {

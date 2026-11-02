@@ -3,6 +3,9 @@ package at.stefl.sunradar
 import at.stefl.sunradar.core.ElevationTile
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -489,5 +492,67 @@ class DemCacheTest {
         assertFalse(File(dir, "$alps.l2.part").exists())
         assertFalse(File(dir, "$alps.part").exists())
         assertTrue(File(dir, "$alps.l2.tif").exists())
+    }
+
+    @Test
+    fun aLaterRequestWithoutRangeGivesOnlyThePart() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        // The server answers the first Range request, and sends the whole file after it.
+        var first = true
+        val http = TileHttp { url, etag, lastModified, range ->
+            server.ignoreRange = !first
+            first = false
+            server.get(url, etag, lastModified, range)
+        }
+        val c = DemCache(dir, http, clock = { now }, maxBytes = 1_000_000, source = FakeSource)
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        assertEquals(30_000L, c.entry("$alps.l2")?.size)
+    }
+
+    @Test
+    fun anIndexThatCannotBeWrittenDoesNotThrow() {
+        val c = cache()
+        assertTrue(dir.setWritable(false))
+        try {
+            c.addKeptPlace(keptPlace("a", alps))
+            assertEquals(listOf("a"), c.keptPlaces().map { it.place.id })
+            c.removeKeptPlace("a")
+            assertTrue(c.keptPlaces().isEmpty())
+        } finally {
+            dir.setWritable(true)
+        }
+    }
+
+    @Test
+    fun aSlowDownloadDoesNotBlockTheOtherCalls() {
+        server.files[alps] = "alps".toByteArray()
+        server.files["N47_00_E012_00"] = "hills".toByteArray()
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // The download of the alps waits until the test releases it.
+        val http = TileHttp { url, etag, lastModified, range ->
+            if (url.contains(alps)) {
+                started.countDown()
+                release.await()
+            }
+            server.get(url, etag, lastModified, range)
+        }
+        val c = DemCache(dir, http, clock = { now }, maxBytes = 1_000_000, source = FakeSource)
+        c.addKeptPlace(keptPlace("a", alps))
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val slow = executor.submit<TileLoad<String>> { c.load(47, 11, decode = decode) }
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            // The other calls do not wait for the download of the alps.
+            val list = executor.submit<List<KeptPlaceStatus>> { c.keptPlaces() }
+            assertEquals(0, list.get(5, TimeUnit.SECONDS).single().ready)
+            assertEquals(TileLoad.Data("hills"), c.load(47, 12, decode = decode))
+            release.countDown()
+            assertEquals(TileLoad.Data("alps"), slow.get(5, TimeUnit.SECONDS))
+            assertEquals(1, c.keptPlaces().single().ready)
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+        }
     }
 }

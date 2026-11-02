@@ -24,7 +24,7 @@ import at.stefl.sunradar.core.terrainAltitudeDeg
 import at.stefl.sunradar.core.terrainEvents
 import java.io.File
 import java.time.ZoneId
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -75,8 +75,9 @@ internal object TerrainStore {
 fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> {
     val context = LocalContext.current.applicationContext
     val state = remember { mutableStateOf(TerrainState()) }
-    // The grids in memory, by tile name, with their level. They stay when the place moves.
-    val grids = remember { ConcurrentHashMap<String, Pair<Int, ElevationGrid>>() }
+    // The grids in memory of the last place, by tile name, with their level. The next place takes
+    // the grids of its tiles from them.
+    val grids = remember { AtomicReference<Map<String, Pair<Int, ElevationGrid>>>(emptyMap()) }
     var anchor by remember { mutableStateOf<Observer?>(null) }
     LaunchedEffect(observer) {
         val old = anchor
@@ -87,7 +88,7 @@ fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> 
     LaunchedEffect(anchor, enabled) {
         val place = anchor
         if (!enabled || place == null) {
-            grids.clear()
+            grids.set(emptyMap())
             state.value = TerrainState()
             return@LaunchedEffect
         }
@@ -95,7 +96,9 @@ fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> 
         if (old == null || Geo.distanceM(old, place) > KEEP_PROFILE_DISTANCE_M) {
             state.value = TerrainState()
         }
-        loadTerrain(TerrainStore.cache(context), place, grids, state)
+        // The first call reads the index of the cache from the disk.
+        val cache = withContext(Dispatchers.IO) { TerrainStore.cache(context) }
+        loadTerrain(cache, place, grids, state)
     }
     return state
 }
@@ -105,13 +108,17 @@ fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> 
  * the full files of the near tiles if the terrain matters. The profile is calculated after each new
  * tile. A missing tile (offline) is tried again every minute. The function returns only when it is
  * cancelled.
+ *
+ * The loader has its own map of grids, with the grids of its tiles from [grids]. So a loader of the
+ * place before, which can still finish a download after its cancellation, cannot add a grid to it.
  */
 private suspend fun loadTerrain(
     cache: DemCache,
     place: Observer,
-    grids: ConcurrentHashMap<String, Pair<Int, ElevationGrid>>,
+    grids: AtomicReference<Map<String, Pair<Int, ElevationGrid>>>,
     state: MutableState<TerrainState>,
 ) = coroutineScope {
+    val main = this
     val tiles = withContext(Dispatchers.Default) { elevationTiles(place, TERRAIN_DISTANCE_M) }
     val loader =
         TerrainLoader(
@@ -121,9 +128,9 @@ private suspend fun loadTerrain(
             maxAltitudeDeg = { g, ownTileIsSea, options ->
                 maxAltitudeDeg(calculateProfile(place, g, ownTileIsSea, options))
             },
-            grids = grids,
         )
-    grids.keys.retainAll(loader.names.toSet())
+    loader.grids += grids.get().filterKeys { it in loader.names }
+    grids.set(loader.grids)
 
     // The calculation runs in its own coroutine. The state flow gives it only the newest version,
     // so the tiles that arrive during a calculation cause only one more calculation.
@@ -135,7 +142,7 @@ private suspend fun loadTerrain(
                 withContext(Dispatchers.Default) {
                     calculateProfile(
                         place,
-                        grids.values.map { it.second },
+                        loader.grids.values.map { it.second },
                         loader.ownTileIsSea,
                         loader.options,
                     )
@@ -151,10 +158,14 @@ private suspend fun loadTerrain(
                     onStep = { _, index, count ->
                         // Stop between two tiles when the place changes.
                         ensureActive()
-                        state.value =
-                            state.value.copy(
-                                status = "Terrain: loading elevation data (${index + 1}/$count)"
-                            )
+                        // The state changes on the main thread only, so this change cannot undo
+                        // a new profile.
+                        main.launch {
+                            state.value =
+                                state.value.copy(
+                                    status = "Terrain: loading elevation data (${index + 1}/$count)"
+                                )
+                        }
                     },
                     onChange = { version.value++ },
                 )

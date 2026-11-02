@@ -1,10 +1,12 @@
 package at.stefl.sunradar
 
 import android.content.Context
+import android.util.Log
 import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.elevationTiles
 import java.util.Locale
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -82,27 +84,47 @@ object OfflinePlaces {
     @Synchronized
     fun keep(context: Context, observer: Observer, name: String) {
         if (running) return
-        val cache = TerrainStore.cache(context.applicationContext)
+        val app = context.applicationContext
         _job.value = KeepJob(name, 0, 0)
         scope.launch {
-            val tiles =
-                withContext(Dispatchers.Default) { elevationTiles(observer, TERRAIN_DISTANCE_M) }
-            val loader =
-                TerrainLoader(
-                    cache,
-                    tiles,
-                    read = cache.source::readGrid,
-                    maxAltitudeDeg = { grids, ownTileIsSea, options ->
-                        maxAltitudeDeg(calculateProfile(observer, grids, ownTileIsSea, options))
-                    },
-                    readFull = false,
-                )
-            _job.value =
-                keepTerrain(cache, loader, observer, name) {
-                    _job.value = it
-                    _version.value++
-                }
-            _version.value++
+            try {
+                // The first call reads the index of the cache from the disk, so not on the main
+                // thread.
+                val cache = TerrainStore.cache(app)
+                val tiles =
+                    withContext(Dispatchers.Default) {
+                        elevationTiles(observer, TERRAIN_DISTANCE_M)
+                    }
+                val loader =
+                    TerrainLoader(
+                        cache,
+                        tiles,
+                        read = cache.source::readGrid,
+                        maxAltitudeDeg = { grids, ownTileIsSea, options ->
+                            maxAltitudeDeg(calculateProfile(observer, grids, ownTileIsSea, options))
+                        },
+                        readFull = false,
+                    )
+                _job.value =
+                    keepTerrain(cache, loader, observer, name) {
+                        _job.value = it
+                        _version.value++
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // An error of the process scope crashes the app. The job shows the failure.
+                Log.w("OfflinePlaces", "Keep offline failed", e)
+            } finally {
+                // A failed download must not leave the job running, so "Keep offline" works again.
+                _job.value
+                    ?.takeIf { !it.finished }
+                    ?.let {
+                        _job.value =
+                            it.copy(finished = true, missing = maxOf(1, it.total - it.done))
+                    }
+                _version.value++
+            }
         }
     }
 

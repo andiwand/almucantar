@@ -42,8 +42,9 @@ class BooleanSetting(
 /** The setting "Terrain horizon", on by default. */
 @Composable
 fun rememberTerrainSetting(): BooleanSetting {
-    val preferences = LocalContext.current.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    val context = LocalContext.current
     return remember {
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
         BooleanSetting(mutableStateOf(preferences.getBoolean(KEY_TERRAIN, true))) {
             preferences.edit { putBoolean(KEY_TERRAIN, it) }
         }
