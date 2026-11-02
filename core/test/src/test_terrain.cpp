@@ -430,3 +430,29 @@ TEST_CASE("terrain_events finds the moon behind the terrain", "[terrain]") {
       terrain_events(vienna, constant_profile(0), start, end, {.body = static_cast<Body>(7)}),
       std::invalid_argument);
 }
+
+TEST_CASE("horizon_profile prefers the finer tile where tiles overlap", "[terrain]") {
+  // A fine grid with a ridge at 10 km to the east, on top of a coarse flat grid of the same area.
+  ElevationGrid fine = flat_grid();
+  for (int r = 0; r < fine.rows; ++r) {
+    for (int c = 230; c < 240; ++c) {
+      fine.heights_m[index(fine, r, c)] = 1500;
+    }
+  }
+  ElevationGrid coarse = flat_grid();
+  coarse.latitude_step_deg *= 4;
+  coarse.longitude_step_deg *= 4;
+  coarse.rows = 73;
+  coarse.columns = 109;
+  coarse.heights_m.assign(index(coarse, coarse.rows, 0), 0.0F);
+  const HorizonOptions options{.azimuth_step_deg = 10};
+  const HorizonProfile alone = horizon_profile(kAlps, {fine}, options);
+  for (const auto& tiles :
+       {std::vector<ElevationGrid>{coarse, fine}, std::vector<ElevationGrid>{fine, coarse}}) {
+    const HorizonProfile both = horizon_profile(kAlps, tiles, options);
+    for (std::size_t i = 0; i < alone.altitude_deg.size(); ++i) {
+      REQUIRE(both.altitude_deg[i] == alone.altitude_deg[i]);
+    }
+  }
+  REQUIRE(alone.altitude_deg[9] > 5);  // the ridge in the east
+}

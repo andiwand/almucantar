@@ -103,25 +103,18 @@ std::optional<double> height_at(const ElevationGrid& grid, const double latitude
   return h;
 }
 
-/// Returns the height at a place from the first tile that has data there. The tile `hint` is
-/// tried first, because the next sample of a ray is usually in the same tile.
-std::optional<double> height_in_tiles(const std::vector<ElevationGrid>& tiles,
-                                      const double latitude_deg, const double longitude_deg,
-                                      std::size_t& hint) {
+/// The tiles of a profile, from the smallest cells to the largest.
+using SortedTiles = std::vector<const ElevationGrid*>;
+
+/// Returns the height at a place from the tile with the smallest cells that has data there. Tiles
+/// can overlap, for example a fine tile near the observer on top of a coarse one.
+std::optional<double> height_in_tiles(const SortedTiles& tiles, const double latitude_deg,
+                                      const double longitude_deg) {
   // A margin of 1.5 cells, because the gap between two Web Mercator tiles in a grid with equal
   // steps of latitude (see terrarium_grid()) can be a little larger than one step.
   for (const double margin : {0.0, 1.5}) {
-    if (hint < tiles.size()) {
-      if (const auto h = height_at(tiles[hint], latitude_deg, longitude_deg, margin)) {
-        return h;
-      }
-    }
-    for (std::size_t i = 0; i < tiles.size(); ++i) {
-      if (i == hint) {
-        continue;
-      }
-      if (const auto h = height_at(tiles[i], latitude_deg, longitude_deg, margin)) {
-        hint = i;
+    for (const ElevationGrid* tile : tiles) {
+      if (const auto h = height_at(*tile, latitude_deg, longitude_deg, margin)) {
         return h;
       }
     }
@@ -158,9 +151,8 @@ struct RayResult {
   double distance_m = kNaN;
 };
 
-RayResult trace_ray(const std::vector<ElevationGrid>& tiles, const Observer& observer,
-                    const double azimuth_deg, const double eye_m, const HorizonOptions& options,
-                    const double cell_m) {
+RayResult trace_ray(const SortedTiles& tiles, const Observer& observer, const double azimuth_deg,
+                    const double eye_m, const HorizonOptions& options, const double cell_m) {
   const double phi1 = observer.latitude_deg * kDegToRad;
   const double sin_phi1 = std::sin(phi1);
   const double cos_phi1 = std::cos(phi1);
@@ -173,7 +165,6 @@ RayResult trace_ray(const std::vector<ElevationGrid>& tiles, const Observer& obs
   const double near_step = 0.5 * cell_m;
 
   RayResult result;
-  std::size_t hint = 0;
   double best_tangent = -std::numeric_limits<double>::infinity();
   // The step grows with the distance, so a counter of the steps does not give d.
   double d = near_step;
@@ -189,8 +180,7 @@ RayResult trace_ray(const std::vector<ElevationGrid>& tiles, const Observer& obs
     const double lambda2 =
         (observer.longitude_deg * kDegToRad) +
         std::atan2(sin_theta * sin_delta * cos_phi1, cos_delta - (sin_phi1 * sin_phi2));
-    const std::optional<double> h =
-        height_in_tiles(tiles, phi2 * kRadToDeg, lambda2 * kRadToDeg, hint);
+    const std::optional<double> h = height_in_tiles(tiles, phi2 * kRadToDeg, lambda2 * kRadToDeg);
     if (!h) {
       continue;  // A gap, for example the sea between two coasts.
     }
@@ -358,6 +348,18 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   for (const ElevationGrid& grid : tiles) {
     validate(grid);
   }
+  // The tiles from the smallest cells to the largest, so a fine tile wins where tiles overlap.
+  // The cell size uses the latitude of the observer, which is good enough for an order.
+  const double cos_observer = std::max(std::cos(observer.latitude_deg * kDegToRad), 0.01);
+  SortedTiles sorted;
+  sorted.reserve(tiles.size());
+  for (const ElevationGrid& grid : tiles) {
+    sorted.push_back(&grid);
+  }
+  const auto cell_deg = [cos_observer](const ElevationGrid* g) {
+    return std::min(g->latitude_step_deg, g->longitude_step_deg * cos_observer);
+  };
+  std::ranges::stable_sort(sorted, {}, cell_deg);
   require_positive(options.azimuth_step_deg, "azimuth_step_deg");
   const std::size_t count = azimuth_count(options.azimuth_step_deg);
   require(count > 0, "360 is not a multiple of azimuth_step_deg");
@@ -373,9 +375,8 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   HorizonProfile profile;
   profile.azimuth_step_deg = options.azimuth_step_deg;
   if (options.use_grid_elevation) {
-    std::size_t hint = 0;
     const std::optional<double> ground =
-        height_in_tiles(tiles, observer.latitude_deg, observer.longitude_deg, hint);
+        height_in_tiles(sorted, observer.latitude_deg, observer.longitude_deg);
     if (!ground) {
       throw std::invalid_argument("the tiles have no data at the observer");
     }
@@ -398,8 +399,9 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   profile.altitude_deg.resize(count);
   profile.distance_m.resize(count);
   for (std::size_t i = 0; i < count; ++i) {
-    const RayResult ray = trace_ray(
-        tiles, observer, static_cast<double>(i) * options.azimuth_step_deg, eye_m, options, cell_m);
+    const RayResult ray =
+        trace_ray(sorted, observer, static_cast<double>(i) * options.azimuth_step_deg, eye_m,
+                  options, cell_m);
     profile.altitude_deg[i] = ray.altitude_deg;
     profile.distance_m[i] = ray.distance_m;
   }

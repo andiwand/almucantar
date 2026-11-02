@@ -111,8 +111,10 @@ struct MapTile {
                                            int height, const MapTile& tile);
 
 /// Calculates the terrain horizon of `observer` from the grids in `tiles`. The function follows a
-/// line from the observer for each azimuth, until `max_distance_m`. A point between two tiles
-/// uses the nearest sample at their edges, and a point outside all tiles has no data (for example
+/// line from the observer for each azimuth, until `max_distance_m`. Tiles can overlap: at a point,
+/// the tile with the smallest cells that has data wins, so fine tiles near the observer can lie on
+/// top of coarse tiles for the far terrain. A point between two tiles uses the nearest sample at
+/// their edges, and a point outside all tiles has no data (for example
 /// the sea, which has no tile in Copernicus). Buildings and trees are not in a DEM, so they are not
 /// in the profile. Throws `std::invalid_argument` if an argument is not valid, or if
 /// `use_grid_elevation` is true and the tiles have no data at the observer.
