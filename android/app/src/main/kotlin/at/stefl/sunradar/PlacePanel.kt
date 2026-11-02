@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -320,7 +321,10 @@ private fun PlaceCard(place: Place, deviceZone: ZoneId, offline: Boolean, attrib
             )
             // The readable name of the zone ("Central European Time"), not the IANA ID.
             val zone =
-                (place.zone ?: deviceZone).getDisplayName(TextStyle.FULL, Locale.getDefault())
+                (place.zone ?: deviceZone).getDisplayName(
+                    TextStyle.FULL,
+                    LocalConfiguration.current.locales[0],
+                )
             Text(
                 "%.3f°, %.3f° · %s"
                     .format(
