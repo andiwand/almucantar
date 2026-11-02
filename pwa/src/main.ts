@@ -923,7 +923,8 @@ const keepStatus = $("place-keep-status");
 const keptList = $("place-kept");
 let keeping = false;
 
-const megabytes = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
+// 1 MB is 1024 × 1024 bytes, as in the apps and in MAX_CACHE_BYTES.
+const megabytes = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 function renderKept() {
   keptList.replaceChildren();
