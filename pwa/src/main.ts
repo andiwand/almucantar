@@ -698,7 +698,7 @@ async function toggleCamera() {
   }
   video.style.display = cameraOn ? "block" : "none";
   $("camera-button").textContent = cameraOn ? "Sky" : "Camera";
-  for (const id of ["fov-row", "fov-label"]) $(id).classList.toggle("hidden", !cameraOn);
+  $("fov-row").classList.toggle("hidden", !cameraOn);
 }
 
 // --- Input --------------------------------------------------------------------------------------

@@ -16,17 +16,22 @@
     <div id="message" class="panel hidden"></div>
     <div id="bottom">
       <div id="time-panel" class="panel hidden">
-        <label>Date <input id="date-offset" type="range" min="-183" max="183" value="0" /></label>
-        <span id="date-label"></span>
-        <label>Time <input id="minute" type="range" min="0" max="1439" value="720" /></label>
-        <span id="time-label"></span>
-        <button id="now">Now</button>
-        <label id="fov-row" class="hidden"
-          >Field of view
+        <label class="field">
+          <span class="field-head"><span>Date</span><span id="date-label"></span></span>
+          <input id="date-offset" type="range" min="-183" max="183" value="0" />
+        </label>
+        <label class="field">
+          <span class="field-head"><span>Time</span><span id="time-label"></span></span>
+          <input id="minute" type="range" min="0" max="1439" value="720" />
+        </label>
+        <label id="fov-row" class="field hidden">
+          <span class="field-head"><span>Field of view</span><span id="fov-label"></span></span>
           <input id="fov" type="range" min="40" max="100" value="65" />
         </label>
-        <span id="fov-label" class="hidden"></span>
-        <label class="wide"><input id="terrain-on" type="checkbox" /> Terrain horizon</label>
+        <div class="panel-row">
+          <button id="now">Now</button>
+          <label class="check"><input id="terrain-on" type="checkbox" /> Terrain horizon</label>
+        </div>
         <p class="credits">
           Terrain:
           <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener"
