@@ -540,10 +540,14 @@ function frame(ms: number) {
   const time = startOfDay(shown.day + DAY / 2) + shown.hours * 3600;
   const day = dayAt(time);
   const sun = sunradar.sunPosition(time, observer);
-  // In the south, or in the north on the southern hemisphere. A narrow screen follows the sun.
+  // In the south, or in the north on the southern hemisphere. A narrow screen follows the sun
+  // while it is up, so the sunrise and the sunset of a summer day stay on the screen. Below the
+  // horizon, the view goes back to the south: at night the sun is in the north, and the view would
+  // turn far to one side and swing to the other side at midnight.
   const south = observer.latitudeDeg >= 0 ? 180 : 0;
   const offset = ((((sun.azimuthDeg - south) % 360) + 540) % 360) - 180;
-  const center = innerWidth < 700 ? south + clamp(offset * 0.8, -60, 60) : south;
+  const follow = innerWidth < 700 ? clamp((sun.altitudeDeg + 6) / 10) : 0;
+  const center = south + clamp(offset * 0.8, -60, 60) * follow;
   shown.center += (center - shown.center) * k;
 
   const moon = shown.moon > 0.01 ? sunradar.moonPosition(time, observer) : null;
