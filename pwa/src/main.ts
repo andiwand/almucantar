@@ -661,6 +661,8 @@ function setPlace(next: StoredPlace) {
   const old = declination;
   declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
   heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
+  // The place panel can be open, and "Keep offline" needs a place.
+  renderKept();
 }
 
 /** The browser heading is magnetic, so the offset is the declination until the user aligns. */
@@ -827,7 +829,6 @@ function dropPlace(at: Observer, name?: string) {
     manual: true,
   });
   drawMap();
-  renderKept();
 }
 
 $("place-button").addEventListener("click", async () => {
@@ -897,6 +898,8 @@ mapCanvas.addEventListener("pointerup", (e) => {
   }
   mapDrag = null;
 });
+// Without this, a cancelled touch leaves the drag on, and the mouse then moves the map.
+mapCanvas.addEventListener("pointercancel", () => (mapDrag = null));
 mapCanvas.addEventListener(
   "wheel",
   (e) => {
@@ -975,6 +978,9 @@ keepButton.addEventListener("click", async () => {
     keepStatus.textContent = result.missing
       ? `${result.missing} tiles missing, try again online`
       : `Ready offline: ${result.tiles} tiles, ${megabytes(result.bytes)}`;
+  } catch (e) {
+    // For example, the storage is full.
+    keepStatus.textContent = `Download stopped: ${e instanceof Error ? e.message : String(e)}`;
   } finally {
     keeping = false;
     renderKept();

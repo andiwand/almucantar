@@ -33,6 +33,7 @@ FRAMES = store.ROOT / "screenshots" / "frames"
 # All values are fractions: a position down the image is a fraction of the height, and a size or
 # a position across is a fraction of the width. So one design fits all canvas sizes. The device is
 # in the middle; `screen_width` is its largest width, and `foot` is the ground below it.
+# There is one layout for each device of store.DEVICES.
 LAYOUT = {
     # A Pixel Pro: thin aluminium frame, a nearly circular screen corner, a camera hole, and the
     # keys on the right edge.
@@ -125,14 +126,6 @@ LAYOUT = {
         "dash_off": 0.0075,
         "body_radius": 0.022,
     },
-}
-
-# Which layout a device of store.DEVICES uses.
-DEVICE_LAYOUT = {
-    "phone": "phone",
-    "tablet": "tablet",
-    "iphone": "iphone",
-    "ipad": "ipad",
 }
 
 # The size of the Android store image. iOS keeps the size of the capture.
@@ -478,7 +471,7 @@ def body(canvas, at, radius, colour, glow):
 
 
 def frame(shot, device, screen, locale, order, count):
-    layout = LAYOUT[DEVICE_LAYOUT[device]]
+    layout = LAYOUT[device]
     size = CANVASES.get(device, shot.size)
     width, _ = size
     spec = design()

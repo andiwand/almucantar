@@ -178,7 +178,10 @@ export function screenToPlace(
   return { latitudeDeg: lat, longitudeDeg: lon };
 }
 
-/** Draws the base map into a 2D context of width x height (CSS pixels). */
+/**
+ * Draws the base map into a 2D context of width x height (CSS pixels). Near the date line, and
+ * at a small zoom, the screen shows more than one copy of the world, so each copy is drawn.
+ */
 export function drawBaseMap(
   ctx: CanvasRenderingContext2D,
   map: BaseMap,
@@ -191,10 +194,11 @@ export function drawBaseMap(
   const size = 256 * 2 ** view.zoom;
   const left = cx - width / 2;
   const top = cy - height / 2;
-  // The box of the screen in degrees, for the culling of lines.
-  const [west, north] = fromWorld(left, top, view.zoom);
-  const [east, south] = fromWorld(left + width, top + height, view.zoom);
-  const wraps = width >= size || east < west;
+  const [, north] = fromWorld(0, top, view.zoom);
+  const [, south] = fromWorld(0, top + height, view.zoom);
+  // The copies of the world on the screen: copy k starts at the world x k * size.
+  const copies: number[] = [];
+  for (let k = Math.floor(left / size); k * size < left + width; k++) copies.push(k);
 
   ctx.fillStyle = "#0e2440";
   ctx.fillRect(0, 0, width, height);
@@ -204,17 +208,20 @@ export function drawBaseMap(
     ctx.lineWidth = lineWidth;
     ctx.setLineDash(dash);
     ctx.beginPath();
-    for (const line of lines) {
-      if (
-        !wraps &&
-        (line.east < west || line.west > east || line.north < south || line.south > north)
-      )
-        continue;
-      const p = line.points;
-      for (let i = 0; i < p.length; i += 2) {
-        const [x, y] = toWorld(p[i], p[i + 1], view.zoom);
-        if (i === 0) ctx.moveTo(x - left, y - top);
-        else ctx.lineTo(x - left, y - top);
+    for (const k of copies) {
+      const dx = k * size - left;
+      // The box of the screen in the degrees of this copy, for the culling of lines.
+      const west = (-dx / size) * 360 - 180;
+      const east = ((width - dx) / size) * 360 - 180;
+      for (const line of lines) {
+        if (line.east < west || line.west > east || line.north < south || line.south > north)
+          continue;
+        const p = line.points;
+        for (let i = 0; i < p.length; i += 2) {
+          const [x, y] = toWorld(p[i], p[i + 1], view.zoom);
+          if (i === 0) ctx.moveTo(x + dx, y - top);
+          else ctx.lineTo(x + dx, y - top);
+        }
       }
     }
     ctx.stroke();
@@ -234,24 +241,28 @@ export function drawBaseMap(
   for (const place of map.places) {
     if (place.rank > maxRank) continue;
     const [x, y] = toWorld(place.lon, place.lat, view.zoom);
-    const sx = x - left;
-    const sy = y - top;
-    if (sx < 0 || sy < 0 || sx > width || sy > height) continue;
-    // Skip a label that is too near to one that is already drawn.
-    if (used.some(([ux, uy]) => Math.abs(ux - sx) < 70 && Math.abs(uy - sy) < 16)) continue;
-    used.push([sx, sy]);
-    ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
-    ctx.fillText(place.name, sx + 4, sy - 3);
+    for (const k of copies) {
+      const sx = x + k * size - left;
+      const sy = y - top;
+      if (sx < 0 || sy < 0 || sx > width || sy > height) continue;
+      // Skip a label that is too near to one that is already drawn.
+      if (used.some(([ux, uy]) => Math.abs(ux - sx) < 70 && Math.abs(uy - sy) < 16)) continue;
+      used.push([sx, sy]);
+      ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+      ctx.fillText(place.name, sx + 4, sy - 3);
+    }
   }
 
   if (pin) {
     const [x, y] = toWorld(pin.longitudeDeg, pin.latitudeDeg, view.zoom);
-    ctx.beginPath();
-    ctx.arc(x - left, y - top, 7, 0, 2 * Math.PI);
     ctx.fillStyle = "#ffc83d";
-    ctx.fill();
     ctx.strokeStyle = "black";
     ctx.lineWidth = 1.5;
-    ctx.stroke();
+    for (const k of copies) {
+      ctx.beginPath();
+      ctx.arc(x + k * size - left, y - top, 7, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 }

@@ -206,10 +206,12 @@ jobs:
           name: framed-${{ matrix.platform }}
           path: ${{ matrix.platform }}/fastlane/framed
 
+  # A skipped job before `set` (the other platform) skips the jobs after it, unless the condition
+  # checks the result of `set` itself.
   upload-android:
     name: upload (Google Play)
     needs: set
-    if: inputs.upload && inputs.platform != 'ios'
+    if: ${{ !cancelled() && needs.set.result == 'success' && inputs.upload && inputs.platform != 'ios' }}
     runs-on: ubuntu-24.04
     env:
       SUPPLY_JSON_KEY_DATA: ${{ secrets.SUPPLY_JSON_KEY_DATA }}
@@ -247,7 +249,7 @@ jobs:
   upload-ios:
     name: upload (App Store)
     needs: set
-    if: inputs.upload && inputs.platform != 'android'
+    if: ${{ !cancelled() && needs.set.result == 'success' && inputs.upload && inputs.platform != 'android' }}
     runs-on: macos-15
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

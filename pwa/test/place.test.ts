@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   decodeBaseMap,
+  drawBaseMap,
   fromWorld,
   nearestPlace,
   screenToPlace,
@@ -44,6 +45,15 @@ describe("zone", () => {
     const after = startOfDay("Europe/Vienna", Date.UTC(2026, 9, 25, 12), 1);
     expect((after - before) / 3600).toBe(25);
   });
+
+  test("a day without midnight starts after the gap, west and east of UTC", () => {
+    // Chile changes to summer time on 2026-09-06 at 00:00, so that day starts at 01:00 (UTC-3).
+    const santiago = startOfDay("America/Santiago", Date.UTC(2026, 8, 6, 15), 0) * 1000;
+    expect(santiago).toBe(Date.UTC(2026, 8, 6, 4));
+    expect(wallTime("America/Santiago", santiago)).toMatchObject({ day: 6, hour: 1 });
+    // Vienna changes on 2026-03-29 at 02:00, so 02:30 does not exist and gives 03:30.
+    expect(fromWallTime("Europe/Vienna", 2026, 3, 29, 2, 30)).toBe(Date.UTC(2026, 2, 29, 1, 30));
+  });
 });
 
 describe("base map", () => {
@@ -78,5 +88,28 @@ describe("base map", () => {
     const center = screenToPlace({ lon: 11.39, lat: 47.27, zoom: 6 }, 400, 300, 200, 150);
     expect(center.longitudeDeg).toBeCloseTo(11.39, 9);
     expect(center.latitudeDeg).toBeCloseTo(47.27, 9);
+  });
+
+  test("the map continues across the date line", () => {
+    // A coastline just east of the date line, and a view just west of it.
+    const line = decodeBaseMap({
+      version: 1,
+      scale: 1,
+      attribution: "",
+      layers: { coastline: [[-179.5, -17, 0, 1]] },
+      places: [["Island", -179.5, -16.5, 0, "", ""]],
+    });
+    const points: [number, number][] = [];
+    const record = (x: number, y: number) => void points.push([x, y]);
+    const ctx = new Proxy(
+      { moveTo: record, lineTo: record, fillRect: record, arc: record },
+      { get: (target, key) => target[key as keyof typeof target] ?? (() => {}) },
+    ) as unknown as CanvasRenderingContext2D;
+    const pin = { latitudeDeg: -16.5, longitudeDeg: -179.5 };
+    drawBaseMap(ctx, line, { lon: 179.9, lat: -16.5, zoom: 6 }, 400, 300, pin);
+    const inside = points.filter(([x, y]) => x > 0 && x < 400 && y > 0 && y < 300);
+    // The two points of the line, the place, and the pin; x is right of the middle.
+    expect(inside.length).toBeGreaterThanOrEqual(4);
+    expect(inside.every(([x]) => x > 200)).toBe(true);
   });
 });

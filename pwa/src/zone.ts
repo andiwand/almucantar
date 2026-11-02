@@ -57,7 +57,8 @@ export function offsetMs(zone: string, unixMs: number): number {
 
 /**
  * The Unix time in ms of a wall clock time in a zone. The day can be out of its month range
- * (Date.UTC normalizes it). A time in the gap of a DST change gives the time one hour later.
+ * (Date.UTC normalizes it). A time in the gap of a DST change gives the time after the gap, for
+ * example 00:30 gives 01:30 on a day that starts at 01:00.
  */
 export function fromWallTime(
   zone: string,
@@ -68,10 +69,13 @@ export function fromWallTime(
   minute = 0,
 ): number {
   const local = Date.UTC(year, month - 1, day, hour, minute);
-  // Two steps, because the offset at the guess can differ from the offset at the result.
-  let guess = local - offsetMs(zone, local);
-  guess = local - offsetMs(zone, guess);
-  return guess;
+  // The offset at the guess can differ from the offset at the result, so check the second guess.
+  const first = local - offsetMs(zone, local);
+  const second = local - offsetMs(zone, first);
+  if (second === first || local - offsetMs(zone, second) === second) return second;
+  // No guess is stable, so the time is in a gap. The later guess uses the offset before the
+  // change, which gives the time after the gap.
+  return Math.max(first, second);
 }
 
 /** The start of the day `offsetDays` after the day of `nowMs` in the zone, in Unix seconds. */

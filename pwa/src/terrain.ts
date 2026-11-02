@@ -145,6 +145,8 @@ export interface TileCacheDeps {
 export class TileCache {
   private index: Record<string, TileEntry>;
   private keptPlaces: KeptPlace[];
+  /** The requests that run now, so two users of the same tile download it once. */
+  private pending = new Map<string, Promise<Blob | null>>();
 
   constructor(private readonly deps: TileCacheDeps) {
     this.index = deps.loadIndex();
@@ -193,7 +195,16 @@ export class TileCache {
    * Returns the tile from the cache or the network, or null if neither has it. A cached tile that
    * is older than MAX_AGE_MS is checked again first.
    */
-  async get(url: string): Promise<Blob | null> {
+  get(url: string): Promise<Blob | null> {
+    let request = this.pending.get(url);
+    if (!request) {
+      request = this.load(url).finally(() => this.pending.delete(url));
+      this.pending.set(url, request);
+    }
+    return request;
+  }
+
+  private async load(url: string): Promise<Blob | null> {
     const now = this.deps.now();
     const entry = this.index[url];
     const cached = entry ? await this.deps.store.get(url) : null;
@@ -361,11 +372,19 @@ export class Terrain {
 
   constructor(private readonly deps: TerrainDeps) {}
 
-  /** Starts a calculation if the place moved more than MOVE_THRESHOLD_M since the last one. */
+  /**
+   * Starts a calculation if the place moved more than MOVE_THRESHOLD_M since the last one, or if
+   * the last one failed (for example offline).
+   */
   update(observer: Observer): void {
-    if (this.place && distanceM(this.place, observer) <= MOVE_THRESHOLD_M) return;
+    const near = this.place && distanceM(this.place, observer) <= MOVE_THRESHOLD_M;
+    if (near && this.state.kind !== "failed") return;
     this.place = observer;
-    void this.load(observer, ++this.generation);
+    const generation = ++this.generation;
+    this.load(observer, generation).catch((e: unknown) => {
+      // For example, the storage is full or not available.
+      if (generation === this.generation) this.fail(e);
+    });
   }
 
   /** Stops the terrain, for example when the user switches it off. */
@@ -378,6 +397,10 @@ export class Terrain {
   private set(state: TerrainState) {
     this.state = state;
     this.deps.onChange(state);
+  }
+
+  private fail(e: unknown) {
+    this.set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
   }
 
   private async load(observer: Observer, generation: number) {
@@ -394,7 +417,7 @@ export class Terrain {
       profile = sunradar.horizonProfile(observer, coarse.grids, options);
     } catch (e) {
       // For example, no tile has data at the place itself.
-      this.set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
+      this.fail(e);
       return;
     }
     const highest = Math.max(...Array.from(profile.altitudeDeg).filter((a) => !Number.isNaN(a)));

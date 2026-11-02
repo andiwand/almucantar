@@ -685,8 +685,8 @@ zones. A dropped place gets the time zone of the nearest place that has one.
 
 **Status:** done in the PWA, on Android, and on iOS: the Place panel (search and tap on the
 map, without a network), the last place, and the times in the time zone of the place. A dropped
-place and the last place also get the terrain horizon. Open: a "download this region" action for
-the terrain tiles of a trip.
+place and the last place also get the terrain horizon. "Keep offline" in the Place panel keeps the
+terrain tiles of a place for a trip.
 
 ### 13.4 Planets
 
@@ -770,8 +770,13 @@ horizon or the link to the photo planner. It comes after the photo planner.
 
 - The terrain horizon stays in sunradar, but it is a second feature. It matters in the mountains
   (in Innsbruck it moves the sunrise in winter by more than one hour). In a city, buildings hide
-  the sun, the DEM has no buildings, and the camera shows the real obstruction. The download is
-  about 40–50 MB for each place in the native apps. **Open:** load the terrain only where it
-  matters (where the profile is higher than about 1°), or use the overviews of the tiles only.
+  the sun, and the camera shows the real obstruction. Copernicus and Terrarium are surface models:
+  their heights include buildings and forests, smeared over cells of about 90 m, which gives a
+  false wall around the observer in a city (5.6° in the centre of Vienna). **Done:** the profile of
+  a surface model ignores the terrain nearer than 2 km (`HorizonOptions.min_distance_m`; Vienna:
+  2.3°, the Kahlenberg), and an `ElevationSource` in each app says if a source is a surface model,
+  so a bare-earth source can use all terrain later. **Done:** the apps
+  load the detailed terrain only where it matters (where the coarse profile is higher than 1°), so
+  a flat place needs about 3 MB in the native apps, not 44 MB.
 - The planets and the Milky Way do not come to sunradar. They are for the photo planner and the
   sky map.

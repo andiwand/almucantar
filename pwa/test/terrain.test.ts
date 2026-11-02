@@ -307,3 +307,85 @@ describe("the threshold of the terrain", () => {
     expect(t.fetch).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("errors and races", () => {
+  const coarse: MapTile[] = [{ zoom: 8, x: 1, y: 2, distanceM: 0 }];
+  const flat = { azimuthStepDeg: 90, altitudeDeg: [0, 0.5, 0, 0] } as unknown as HorizonProfile;
+  const grid = async () => ({ rgba: new Uint8ClampedArray(16), width: 2, height: 2 });
+
+  function subject(cache: TileCache, decode: TerrainDeps["decode"] = grid) {
+    const states: TerrainState[] = [];
+    const terrain = new Terrain({
+      sunradar: {
+        mapTiles: () => coarse,
+        terrariumGrid: () => ({}) as ElevationGrid,
+        horizonProfile: () => flat,
+      } as unknown as TerrainDeps["sunradar"],
+      cache,
+      decode,
+      onChange: (s) => states.push(s),
+    });
+    return { terrain, states };
+  }
+
+  test("an error of the storage gives the failed state, not a load that never ends", async () => {
+    const cache = new TileCache({
+      store: {
+        get: async () => null,
+        put: async () => {
+          throw new DOMException("full", "QuotaExceededError");
+        },
+        delete: async () => {},
+      },
+      loadIndex: () => ({}),
+      saveIndex: () => {},
+      fetch: async () => png(10),
+      now: () => 0,
+    });
+    const { terrain, states } = subject(cache);
+    terrain.update({ latitudeDeg: 47, longitudeDeg: 11 });
+    await vi.waitFor(() => expect(states.at(-1)?.kind).toBe("failed"));
+  });
+
+  test("a failed place loads again at the next update, also without a move", async () => {
+    let online = false;
+    const t = setup(() => {
+      if (!online) throw new TypeError("offline");
+      return png(10);
+    });
+    const { terrain, states } = subject(t.cache);
+    terrain.update({ latitudeDeg: 47, longitudeDeg: 11 });
+    await vi.waitFor(() => expect(states.at(-1)?.kind).toBe("failed"));
+    online = true;
+    terrain.update({ latitudeDeg: 47, longitudeDeg: 11 });
+    await vi.waitFor(() => expect(states.at(-1)?.kind).toBe("ready"));
+  });
+
+  test("two requests for the same tile at the same time download it once", async () => {
+    const t = setup(() => png(10));
+    const [a, b] = await Promise.all([t.cache.get("a"), t.cache.get("a")]);
+    expect(a?.size).toBe(10);
+    expect(b?.size).toBe(10);
+    expect(t.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("an older place that finishes after a newer one does not replace it", async () => {
+    const t = setup(() => png(10));
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    const { terrain, states } = subject(t.cache, async () => {
+      if (++calls === 1) await slow; // the tile of the first place
+      return grid();
+    });
+    terrain.update({ latitudeDeg: 47, longitudeDeg: 11 });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    terrain.update({ latitudeDeg: 48, longitudeDeg: 11 });
+    await vi.waitFor(() => expect(states.at(-1)?.kind).toBe("ready"));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const last = states.at(-1);
+    expect(last?.kind === "ready" && last.observer.latitudeDeg).toBe(48);
+    expect(states.filter((s) => s.kind === "ready")).toHaveLength(1);
+  });
+});
