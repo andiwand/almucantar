@@ -398,6 +398,13 @@ val read_elevation_geotiff_js(const val& data, int level) {
   });
 }
 
+unsigned elevation_geotiff_prefix_size_js(const val& header, int level) {
+  return guarded([&] {
+    return elevation_geotiff_prefix_size(
+        emscripten::convertJSArrayToNumberVector<std::uint8_t>(header), level);
+  });
+}
+
 val elevation_tiles_js(const Observer& o, double max_distance_m) {
   return guarded([&] {
     val result = val::array();
@@ -597,6 +604,7 @@ EMSCRIPTEN_BINDINGS(sunradar) {
   function("moonPosition", &moon_position_js);
   function("moonIlluminatedFraction", &moon_illuminated_fraction_js);
   function("readElevationGeotiff", &read_elevation_geotiff_js);
+  function("elevationGeotiffPrefixSize", &elevation_geotiff_prefix_size_js);
   function("elevationTiles", &elevation_tiles_js);
   function("mapTiles", &map_tiles_js);
   function("terrariumGrid", &terrarium_grid_js);

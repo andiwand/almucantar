@@ -227,6 +227,11 @@ ElevationGrid read_elevation_geotiff(const std::vector<std::uint8_t>& data, cons
   return internal::read_geotiff(data, level);
 }
 
+std::uint32_t elevation_geotiff_prefix_size(const std::vector<std::uint8_t>& header,
+                                            const int level) {
+  return internal::geotiff_prefix_size(header, level);
+}
+
 std::vector<ElevationTile> elevation_tiles(const Observer& observer, const double max_distance_m) {
   internal::validate(observer);
   require_positive(max_distance_m, "max_distance_m");

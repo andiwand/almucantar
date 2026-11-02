@@ -528,6 +528,19 @@ sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* f, sr_q
   });
 }
 
+sr_status sr_elevation_geotiff_prefix_size(const uint8_t* header, size_t size, int level,
+                                           uint32_t* out) {
+  return guarded([&] {
+    require_out(out);
+    if (header == nullptr && size > 0) {
+      throw std::invalid_argument("header is null");
+    }
+    const std::vector<std::uint8_t> bytes =
+        size > 0 ? std::vector<std::uint8_t>(header, header + size) : std::vector<std::uint8_t>{};
+    *out = elevation_geotiff_prefix_size(bytes, level);
+  });
+}
+
 sr_status sr_read_elevation_geotiff(const uint8_t* data, size_t size, int level,
                                     sr_elevation_grid* out) {
   return guarded([&] {

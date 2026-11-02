@@ -117,3 +117,41 @@ TEST_CASE("read_elevation_geotiff refuses files that are not valid", "[geotiff]"
     }
   }
 }
+
+TEST_CASE("elevation_geotiff_prefix_size gives the bytes that a level needs", "[geotiff]") {
+  for (const std::string name :
+       {"float_tiles_deflate_p3.tif", "int16_strips_deflate_p2_be.tif", "float_strips_none.tif"}) {
+    const std::vector<std::uint8_t> data = read_file(name);
+    for (const int level : {0, 1}) {
+      if (name != "float_tiles_deflate_p3.tif" && level == 1) {
+        continue;  // only this file has an overview
+      }
+      INFO(name << " level " << level);
+      const std::uint32_t size = elevation_geotiff_prefix_size(data, level);
+      REQUIRE(size > 0);
+      REQUIRE(size <= data.size());
+      // The prefix reads the level exactly as the whole file.
+      const std::vector<std::uint8_t> prefix(data.begin(), data.begin() + size);
+      const ElevationGrid from_prefix = read_elevation_geotiff(prefix, level);
+      const ElevationGrid from_file = read_elevation_geotiff(data, level);
+      REQUIRE(from_prefix.rows == from_file.rows);
+      for (std::size_t i = 0; i < from_file.heights_m.size(); ++i) {
+        const auto a = static_cast<double>(from_prefix.heights_m[i]);
+        const auto b = static_cast<double>(from_file.heights_m[i]);
+        REQUIRE(((std::isnan(a) && std::isnan(b)) || a == b));
+      }
+      // One byte less is not enough, and a header of that size cannot give the answer.
+      const std::vector<std::uint8_t> shorter(data.begin(), data.begin() + size - 1);
+      REQUIRE_THROWS_AS(read_elevation_geotiff(shorter, level), std::invalid_argument);
+      // The answer does not change with more bytes than the prefix.
+      REQUIRE(elevation_geotiff_prefix_size(prefix, level) == size);
+    }
+  }
+  // A header that is too short to tell gives 0, also with fewer than 8 bytes.
+  const std::vector<std::uint8_t> data = read_file("float_tiles_deflate_p3.tif");
+  REQUIRE(elevation_geotiff_prefix_size({data.begin(), data.begin() + 4}, 0) == 0);
+  REQUIRE(elevation_geotiff_prefix_size({data.begin(), data.begin() + 16}, 0) == 0);
+  REQUIRE_THROWS_AS(elevation_geotiff_prefix_size({'X', 'X', 42, 0, 8, 0, 0, 0}, 0),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(elevation_geotiff_prefix_size(data, 5), std::invalid_argument);
+}

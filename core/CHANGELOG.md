@@ -24,6 +24,10 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   allow CORS. The WASM package, the AAR, and the Swift package have all terrain functions.
 - `terrain_events()` also finds the moon behind the terrain: `TerrainEventOptions.body` is
   `Body::sun` (the default) or `Body::moon`, in all bindings.
+- `elevation_geotiff_prefix_size()` gives the bytes from the start of a GeoTIFF that a level needs.
+  So an app can download only the directories and an overview of a Cloud Optimized GeoTIFF with an
+  HTTP Range request: about 300 KB of a Copernicus GLO-90 tile of 2–5 MB for level 2. In all
+  bindings.
 - The planets and the Milky Way: `planet_position()` and `planet_magnitude()` for Mercury to
   Neptune (within 0.006° of JPL Horizons), and `galactic_position()` and `galactic_plane()` for
   the galactic center and the center line of the Milky Way. In C++ and Python only.

@@ -55,6 +55,13 @@ enum class SampleType : std::uint8_t { float32, int16, uint16 };
   throw std::invalid_argument("the GeoTIFF " + message);
 }
 
+/// A read outside the data: the file is cut, or it is not valid. geotiff_prefix_size() uses it to
+/// tell a header that is too short from a file that is not valid.
+class OutsideFile : public std::invalid_argument {
+ public:
+  OutsideFile() : std::invalid_argument("the GeoTIFF points outside the file") {}
+};
+
 /// Reads the numbers of the file in its byte order, with a check of each range.
 class Reader {
  public:
@@ -79,12 +86,15 @@ class Reader {
   }
 
   [[nodiscard]] bool little() const { return little_; }
+  /// The end of the furthest range that the reader read, in bytes from the start.
+  [[nodiscard]] std::uint64_t reached() const { return reached_; }
   [[nodiscard]] std::size_t size() const { return data_.size(); }
   [[nodiscard]] const std::uint8_t* at(const std::uint64_t offset,
                                        const std::uint64_t length) const {
     if (offset > data_.size() || length > data_.size() - offset) {
-      fail("points outside the file");
+      throw OutsideFile();
     }
+    reached_ = std::max(reached_, offset + length);
     return data_.data() + offset;
   }
 
@@ -113,6 +123,7 @@ class Reader {
  private:
   const std::vector<std::uint8_t>& data_;
   bool little_ = true;
+  mutable std::uint64_t reached_ = 0;
 };
 
 /// One entry of an image file directory (IFD).
@@ -430,12 +441,20 @@ std::vector<float> decode_chunk(const Reader& reader, const Image& image, const 
 
 }  // namespace
 
-ElevationGrid read_geotiff(const std::vector<std::uint8_t>& data, const int level) {
+namespace {
+
+/// The metadata of one level of a file: everything except the data of the tiles or strips.
+struct Parsed {
+  Georeference geo;
+  Image full;
+  Image image;
+  double missing = 0;
+};
+
+Parsed parse(const Reader& reader, const int level) {
   if (level < 0) {
     throw std::invalid_argument("level is negative");
   }
-  const Reader reader(data);
-
   // Find the full image and its overviews in the chain of IFDs. Skip the masks.
   std::vector<Directory> images;
   std::set<std::uint32_t> seen;
@@ -458,12 +477,39 @@ ElevationGrid read_geotiff(const std::vector<std::uint8_t>& data, const int leve
   if (images.size() <= wanted) {
     throw std::invalid_argument("level is greater than the number of overviews");
   }
+  Image full = image_layout(reader, images.front());
+  Image image = level == 0 ? full : image_layout(reader, images[wanted]);
+  return {.geo = georeference(reader, images.front()),
+          .full = std::move(full),
+          .image = std::move(image),
+          .missing = no_data(reader, images.front())};
+}
 
-  const Georeference geo = georeference(reader, images.front());
-  const Directory& directory = images[static_cast<std::size_t>(level)];
-  const Image full = image_layout(reader, images.front());
-  const Image image = level == 0 ? full : image_layout(reader, directory);
-  const double missing = no_data(reader, images.front());
+}  // namespace
+
+std::uint32_t geotiff_prefix_size(const std::vector<std::uint8_t>& header, const int level) {
+  if (header.size() < 8) {
+    return 0;
+  }
+  try {
+    const Reader reader(header);
+    const Parsed parsed = parse(reader, level);
+    std::uint64_t end = reader.reached();
+    for (std::size_t i = 0; i < parsed.image.offsets.size(); ++i) {
+      end = std::max(end, parsed.image.offsets[i] + parsed.image.byte_counts[i]);
+    }
+    if (end > std::numeric_limits<std::uint32_t>::max()) {
+      fail("is larger than 4 GB");
+    }
+    return static_cast<std::uint32_t>(end);
+  } catch (const OutsideFile&) {
+    return 0;  // The header is too short to tell.
+  }
+}
+
+ElevationGrid read_geotiff(const std::vector<std::uint8_t>& data, const int level) {
+  const Reader reader(data);
+  const auto [geo, full, image, missing] = parse(reader, level);
 
   // An overview covers the same area with fewer, larger pixels.
   const double scale_x =

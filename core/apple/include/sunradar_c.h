@@ -243,6 +243,11 @@ sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* filter,
 sr_status sr_read_elevation_geotiff(const uint8_t* data, size_t size, int level,
                                     sr_elevation_grid* out);
 void sr_free_elevation_grid(sr_elevation_grid* grid);
+/* The number of bytes from the start of a GeoTIFF that sr_read_elevation_geotiff() needs for a
+   level, from the first part of the file (for an HTTP Range request). *out is 0 if the header is
+   too short to tell. */
+sr_status sr_elevation_geotiff_prefix_size(const uint8_t* header, size_t size, int level,
+                                           uint32_t* out);
 sr_status sr_elevation_tiles(sr_observer observer, double max_distance_m, sr_elevation_tile** out,
                              size_t* count);
 /* The grids are only read. On success, free *out with sr_free_horizon_profile(). */

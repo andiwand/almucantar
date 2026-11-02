@@ -101,3 +101,15 @@ def test_terrain_events_of_the_moon():
     rise = next(c for c in events.crossings if c.rising)
     seen = sunradar.moon_position(rise.unix_utc + 2, VIENNA)
     assert seen.altitude_deg + 0.2667 > 0
+
+
+def test_elevation_geotiff_prefix_size():
+    path = (
+        pathlib.Path(__file__).parents[2]
+        / "test/data/geotiff/float_tiles_deflate_p3.tif"
+    )
+    data = path.read_bytes()
+    size = sunradar.elevation_geotiff_prefix_size(data, 1)
+    assert 0 < size <= len(data)
+    assert sunradar.read_elevation_geotiff(data[:size], 1).rows == 4
+    assert sunradar.elevation_geotiff_prefix_size(data[:16], 0) == 0

@@ -542,6 +542,19 @@ TerrainEventOptions terrain_event_options(const Doubles& o) {
 
 }  // namespace
 
+SUNRADAR_JNI(elevationGeotiffPrefixSize)
+(JNIEnv* env, jclass, jbyteArray header, jint level)->jlong {
+  return guarded<jlong>(env, 0, [&]() -> jlong {
+    if (header == nullptr) {
+      throw std::invalid_argument("header is null");
+    }
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(env->GetArrayLength(header)));
+    env->GetByteArrayRegion(header, 0, static_cast<jsize>(bytes.size()),
+                            reinterpret_cast<jbyte*>(bytes.data()));
+    return static_cast<jlong>(elevation_geotiff_prefix_size(bytes, level));
+  });
+}
+
 // Returns the heights and writes the 6 other values of the grid into `header`.
 SUNRADAR_JNI(readElevationGeotiff)
 (JNIEnv* env, jclass, jbyteArray data, jint level, jdoubleArray header)->jfloatArray {

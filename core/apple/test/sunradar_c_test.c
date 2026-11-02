@@ -84,6 +84,12 @@ int main(void) {
     CHECK(sr_read_elevation_geotiff(bytes, size, 1, &grid) == SR_OK && grid.rows == 4);
     sr_free_elevation_grid(&grid);
     CHECK(sr_read_elevation_geotiff(bytes, 4, 0, &grid) == SR_INVALID_ARGUMENT);
+    uint32_t prefix = 0;
+    CHECK(sr_elevation_geotiff_prefix_size(bytes, size, 1, &prefix) == SR_OK);
+    CHECK(prefix > 0 && prefix <= size);
+    CHECK(sr_read_elevation_geotiff(bytes, prefix, 1, &grid) == SR_OK && grid.rows == 4);
+    sr_free_elevation_grid(&grid);
+    CHECK(sr_elevation_geotiff_prefix_size(bytes, 16, 0, &prefix) == SR_OK && prefix == 0);
   }
 
   sr_elevation_tile* tiles = NULL;

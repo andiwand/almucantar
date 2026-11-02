@@ -52,6 +52,7 @@ export async function load(moduleOptions = {}) {
     moonPosition: (unixUtc, observer, options) => m.moonPosition(unixUtc, observer, merge(d.moonOptions, options)),
     moonIlluminatedFraction: (unixUtc) => m.moonIlluminatedFraction(unixUtc),
     readElevationGeotiff: (data, level = 0) => m.readElevationGeotiff(data, level),
+    elevationGeotiffPrefixSize: (header, level) => m.elevationGeotiffPrefixSize(header, level),
     elevationTiles: (observer, maxDistanceM) => m.elevationTiles(observer, maxDistanceM),
     mapTiles: (observer, maxDistanceM, zoom) => m.mapTiles(observer, maxDistanceM, zoom),
     terrariumGrid: (rgba, width, height, tile) => m.terrariumGrid(rgba, width, height, tile),

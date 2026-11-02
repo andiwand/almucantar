@@ -242,6 +242,23 @@ private func checkCovariance(_ filter: HeadingFilter) throws {
 
 // MARK: - The terrain horizon
 
+/// Returns the number of bytes from the start of a GeoTIFF file that `readElevationGeotiff` needs
+/// for `level`, from the first part of the file in `header` (for an HTTP Range request). For a
+/// Copernicus GLO-90 tile, 16 KB of header are enough, and level 2 needs about 300 KB. Returns 0
+/// if `header` is too short to tell.
+public func elevationGeotiffPrefixSize(_ header: Data, level: Int) throws -> Int {
+    guard let level = Int32(exactly: level) else {
+        throw SunradarError(kind: .invalidArgument, message: "level is not a valid value")
+    }
+    var out: UInt32 = 0
+    try header.withUnsafeBytes { bytes in
+        try check(
+            sr_elevation_geotiff_prefix_size(
+                bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, level, &out))
+    }
+    return Int(out)
+}
+
 /// Reads one image of a GeoTIFF of heights, for example a tile of Copernicus GLO-90. `level` 0 is
 /// the full image, and 1, 2, ... are the overviews (each has half the size of the one before).
 /// The grid keeps the heights of the C API, so the only copy is the one out of C++.

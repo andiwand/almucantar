@@ -15,4 +15,7 @@ namespace sunradar::internal {
 /// not supported.
 [[nodiscard]] ElevationGrid read_geotiff(const std::vector<std::uint8_t>& data, int level);
 
+/// Implements `sunradar::elevation_geotiff_prefix_size()`.
+[[nodiscard]] std::uint32_t geotiff_prefix_size(const std::vector<std::uint8_t>& header, int level);
+
 }  // namespace sunradar::internal

@@ -138,6 +138,8 @@ internal object SunradarNative {
     @JvmStatic
     external fun readElevationGeotiff(data: ByteArray, level: Int, header: DoubleArray): FloatArray
 
+    @JvmStatic external fun elevationGeotiffPrefixSize(header: ByteArray, level: Int): Long
+
     @JvmStatic external fun elevationTiles(observer: DoubleArray, maxDistanceM: Double): DoubleArray
 
     @JvmStatic

@@ -229,6 +229,10 @@ class SunradarTest {
         assertEquals(47.75, grid.northLatitudeDeg, 1e-9)
         assertEquals(1000.25f, grid.heightsM[0], 1e-3f)
         assertEquals(4, readElevationGeotiff(bytes, level = 1).rows)
+        val prefix = elevationGeotiffPrefixSize(bytes, 1)
+        assertTrue(prefix > 0 && prefix <= bytes.size)
+        assertEquals(4, readElevationGeotiff(bytes.copyOf(prefix.toInt()), level = 1).rows)
+        assertEquals(0L, elevationGeotiffPrefixSize(bytes.copyOf(16), 0))
         val e =
             assertThrows(IllegalArgumentException::class.java) {
                 readElevationGeotiff(byteArrayOf(0x49, 0x49, 0x2a, 0))

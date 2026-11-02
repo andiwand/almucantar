@@ -159,6 +159,11 @@ final class SunradarTests: XCTestCase {
             XCTAssertEqual((error as? SunradarError)?.kind, .invalidArgument)
         }
         XCTAssertThrowsError(try readElevationGeotiff(Data()))
+
+        let prefix = try elevationGeotiffPrefixSize(data, level: 1)
+        XCTAssertTrue(prefix > 0 && prefix <= data.count)
+        XCTAssertEqual(try readElevationGeotiff(data.prefix(prefix), level: 1).rows, 4)
+        XCTAssertEqual(try elevationGeotiffPrefixSize(data.prefix(16), level: 0), 0)
     }
 
     func testElevationTiles() throws {

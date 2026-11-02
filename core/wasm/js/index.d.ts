@@ -114,6 +114,11 @@ export interface Sunradar {
   moonIlluminatedFraction(unixUtc: number): number;
   /** Reads a GeoTIFF of heights, for example a Copernicus tile. level 1, 2, ... are the overviews. */
   readElevationGeotiff(data: Uint8Array, level?: number): ElevationGrid & { heightsM: Float32Array };
+  /**
+   * The bytes from the start of a GeoTIFF that readElevationGeotiff() needs for a level, from the
+   * first part of the file (for an HTTP Range request). 0 if the header is too short to tell.
+   */
+  elevationGeotiffPrefixSize(header: Uint8Array, level: number): number;
   /** The tiles of 1° that a horizon profile with maxDistanceM needs, the nearest first. */
   elevationTiles(observer: Observer, maxDistanceM: number): ElevationTile[];
   /** The Web Mercator tiles of zoom (0 to 12) that a horizon profile with maxDistanceM needs, the nearest first. */

@@ -524,6 +524,16 @@ void bind_terrain(py::module_& m) {
         return read_elevation_geotiff(std::vector<std::uint8_t>(view.begin(), view.end()), level);
       },
       "data"_a, "level"_a = 0, "Reads a GeoTIFF of heights, for example a Copernicus tile.");
+  m.def(
+      "elevation_geotiff_prefix_size",
+      [](const py::bytes& header, const int level) {
+        const std::string_view view(header);
+        return elevation_geotiff_prefix_size(std::vector<std::uint8_t>(view.begin(), view.end()),
+                                             level);
+      },
+      "header"_a, "level"_a,
+      "Returns the bytes from the start of a GeoTIFF that a level needs, or 0 if the header is "
+      "too short.");
   py::class_<ElevationTile>(m, "ElevationTile",
                             "A tile of 1° by 1°, named by its south-west corner.")
       .def(py::init([](const int latitude_deg, const int longitude_deg, const double distance_m) {

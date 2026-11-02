@@ -61,6 +61,15 @@ struct HorizonProfile {
 [[nodiscard]] ElevationGrid read_elevation_geotiff(const std::vector<std::uint8_t>& data,
                                                    int level = 0);
 
+/// Returns the number of bytes from the start of a GeoTIFF file that `read_elevation_geotiff()`
+/// needs for `level`, from the first part of the file in `header`. A Cloud Optimized GeoTIFF has
+/// its directories and its smallest overviews first, so an app can download only this part with
+/// an HTTP Range request. For a Copernicus GLO-90 tile, 16 KB of header are enough, and level 2
+/// needs about 300 KB of the 2–5 MB of the file. Returns 0 if `header` is too short to tell; then
+/// give a longer header. Throws `std::invalid_argument` if the file is not valid or not supported.
+[[nodiscard]] std::uint32_t elevation_geotiff_prefix_size(const std::vector<std::uint8_t>& header,
+                                                          int level);
+
 /// A tile of 1° by 1° of a global DEM, named by its south-west corner. Copernicus names the tile
 /// with `latitude_deg` 47 and `longitude_deg` 11 `N47_00_E011_00`; it covers 47° to 48° north and
 /// 11° to 12° east.

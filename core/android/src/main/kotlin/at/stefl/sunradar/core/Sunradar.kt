@@ -244,6 +244,15 @@ fun readElevationGeotiff(data: ByteArray, level: Int = 0): ElevationGrid {
 }
 
 /**
+ * Returns the number of bytes from the start of a GeoTIFF file that [readElevationGeotiff] needs
+ * for [level], from the first part of the file in [header] (for an HTTP Range request). For a
+ * Copernicus GLO-90 tile, 16 KB of header are enough, and level 2 needs about 300 KB. Returns 0 if
+ * [header] is too short to tell. Throws IllegalArgumentException if the file is not valid.
+ */
+fun elevationGeotiffPrefixSize(header: ByteArray, level: Int): Long =
+    SunradarNative.elevationGeotiffPrefixSize(header, level)
+
+/**
  * Returns the tiles of 1° by 1° that a horizon profile with [maxDistanceM] needs: all tiles that
  * have a point nearer than [maxDistanceM] to the observer, the nearest first.
  */

@@ -148,6 +148,11 @@ test("terrain: GeoTIFF, tiles, profile, and events", async () => {
   near(grid.heightsM[0], 1000.25, 1e-6);
   near(grid.northLatitudeDeg, 47.75, 1e-12);
   assert.equal(sunradar.readElevationGeotiff(new Uint8Array(await readFile(file)), 1).rows, 4);
+  const bytes = new Uint8Array(await readFile(file));
+  const prefix = sunradar.elevationGeotiffPrefixSize(bytes, 1);
+  assert.ok(prefix > 0 && prefix <= bytes.length);
+  assert.equal(sunradar.readElevationGeotiff(bytes.slice(0, prefix), 1).rows, 4);
+  assert.equal(sunradar.elevationGeotiffPrefixSize(bytes.slice(0, 16), 0), 0);
   assert.throws(() => sunradar.readElevationGeotiff(new Uint8Array([1, 2, 3])), RangeError);
 
   const tiles = sunradar.elevationTiles(vienna, 20000);
