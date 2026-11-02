@@ -5,6 +5,11 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The terrain horizon downloads much less data where the terrain does not matter. First the app
+  downloads only the first part of each tile (about 300 KB, with samples about 370 m apart) and
+  shows this coarse terrain at once. Only if the terrain reaches 1° above the horizon somewhere, it
+  downloads the full data of the tiles nearer than 25 km. A flat place needs about 3 MB in place of
+  about 44 MB, Vienna about 12 MB, and Innsbruck about 7 MB. "Keep offline" keeps the same data.
 - "Keep offline" in the place panel downloads the elevation data of the place (100 km around it),
   so you can prepare a trip. The panel shows the progress ("Downloading 3/9") and the result
   ("Ready offline: 9 tiles, 44 MB"). The download continues when you close the panel. The list of

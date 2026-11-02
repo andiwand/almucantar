@@ -1,7 +1,6 @@
 package at.stefl.sunradar
 
 import java.io.File
-import java.io.IOException
 import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -15,29 +14,17 @@ class DemCacheTest {
     private var now = 1_000_000L
     private val day = 24L * 3600 * 1000
 
-    /** A server with a file for each tile in [files], and 404 for the others (the sea). */
-    private inner class FakeServer : TileHttp {
-        val files = mutableMapOf<String, ByteArray>()
-        val etags = mutableMapOf<String, String>()
-        var online = true
-        val requests = mutableListOf<Pair<String, String?>>()
-
-        override fun get(url: String, etag: String?, lastModified: String?): HttpResponse {
-            val name = url.substringAfterLast("/").removePrefix("Copernicus_DSM_COG_30_")
-            val tile = name.removeSuffix("_DEM.tif")
-            requests += tile to etag
-            if (!online) throw IOException("offline")
-            val body = files[tile] ?: return HttpResponse(404)
-            val tag = etags[tile] ?: "\"${body.contentHashCode()}\""
-            if (etag == tag) return HttpResponse(304, etag = tag)
-            return HttpResponse(200, body, tag, "Mon, 09 May 2022 13:03:36 GMT")
-        }
-    }
-
-    private val server = FakeServer()
+    private val server = FakeTileServer()
 
     private fun cache(maxBytes: Long = 1000) =
-        DemCache(dir, server, clock = { now }, maxBytes = maxBytes, maxAgeMs = 180 * day)
+        DemCache(
+            dir,
+            server,
+            clock = { now },
+            maxBytes = maxBytes,
+            maxAgeMs = 180 * day,
+            prefixSize = ::fakePrefixSize,
+        )
 
     /** The decoder of the tests: the text of the file. "bad" is a file that cannot be read. */
     private val decode = { bytes: ByteArray ->
@@ -139,7 +126,7 @@ class DemCacheTest {
         now += 2 * day
         assertEquals(TileLoad.Data("alps"), c.load(47, 11, decode = decode))
         assertEquals(2, server.requests.size)
-        assertTrue(server.requests[1].second != null)
+        assertTrue(server.requests[1].etag != null)
         assertEquals(now, c.entry("N47_00_E011_00")!!.checkedMs)
         assertTrue(c.entry("N47_00_E011_00")!!.checkedMs > downloaded)
 
@@ -316,7 +303,169 @@ class DemCacheTest {
         now += 181 * day
         assertEquals(TileFetch.READY, c.fetch(47, 11))
         assertEquals(2, server.requests.size)
-        assertTrue(server.requests[1].second != null)
+        assertTrue(server.requests[1].etag != null)
         assertEquals(now, c.entry("N47_00_E011_00")!!.checkedMs)
+    }
+
+    private val alps = "N47_00_E011_00"
+
+    private fun coarse(c: DemCache, lat: Int = 47, lon: Int = 11) =
+        c.loadCoarse(lat, lon) { readFakeTile(it, COARSE_LEVEL) }
+
+    @Test
+    fun theCoarsePartComesInTwoSteps() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        // First 16 KB, then the rest of the part.
+        assertEquals(listOf(0L..16_383L, 16_384L..29_999L), server.rangesOf(alps))
+        assertEquals(30_000L, c.entry("$alps.l2")?.size)
+        assertEquals(30_000L, File(dir, "$alps.l2.tif").length())
+        assertNull(c.entry(alps))
+        assertEquals("$alps.l2", c.coarseEntryName(47, 11))
+        // The part is in the cache, also for a new cache.
+        assertEquals(TileLoad.Data("alps/L2"), coarse(cache(maxBytes = 1_000_000)))
+        assertEquals(2, server.requests.size)
+    }
+
+    @Test
+    fun aShortPartNeedsOneRequest() {
+        server.files[alps] = fakeTile("alps", prefix = 10_000, total = 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        assertEquals(listOf(0L..16_383L), server.rangesOf(alps))
+        assertEquals(10_000L, c.entry("$alps.l2")?.size)
+    }
+
+    @Test
+    fun aHeaderThatIsTooShortGetsALongerHeader() {
+        // The size of the part is after 20 000 bytes, so the first 16 KB cannot tell it.
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000, pad = 20_000)
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        assertEquals(listOf(0L..16_383L, 16_384L..65_535L), server.rangesOf(alps))
+        assertEquals(30_000L, c.entry("$alps.l2")?.size)
+    }
+
+    @Test
+    fun theCoarsePartOfASeaTileIsNotFound() {
+        val c = cache()
+        assertEquals(TileLoad.Sea, coarse(c, 40, -30))
+        assertTrue(c.entry("N40_00_W030_00.l2")!!.sea)
+        assertEquals(TileLoad.Sea, coarse(c, 40, -30))
+        assertEquals(1, server.requests.size)
+    }
+
+    @Test
+    fun aServerWithoutRangeSendsTheWholeFile() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        server.ignoreRange = true
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        assertEquals(1, server.requests.size)
+        // The cache keeps only the part.
+        assertEquals(30_000L, c.entry("$alps.l2")?.size)
+    }
+
+    @Test
+    fun partsOfTwoDifferentFilesFail() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        server.nextEtags += listOf("\"a\"", "\"b\"")
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Missing, coarse(c))
+        assertNull(c.entry("$alps.l2"))
+        // The next try gets two parts of the same file.
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+    }
+
+    @Test
+    fun theFullFileReplacesTheCoarsePart() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        c.addKeptPlace(keptPlace("a", "$alps.l2"))
+        coarse(c)
+        assertEquals(30_000L, c.keptPlaces().single().bytes)
+        assertEquals(TileLoad.Data("alps/L0"), c.load(47, 11) { readFakeTile(it, 0) })
+        assertNull(c.entry("$alps.l2"))
+        assertFalse(File(dir, "$alps.l2.tif").exists())
+        // The full file serves the kept coarse part, and the eviction does not delete it.
+        val status = c.keptPlaces().single()
+        assertEquals(1, status.ready)
+        assertEquals(100_000L, status.bytes)
+        assertEquals(0L, c.cacheBytes())
+        server.files["N47_00_E012_00"] = fakeTile("x", prefix = 30_000, total = 100_000)
+        cache(maxBytes = 1_000).load(47, 12) { readFakeTile(it, 0) }
+        assertTrue(cache().entry(alps) != null)
+    }
+
+    @Test
+    fun aFullFileServesTheCoarseLevel() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L0"), c.load(47, 11) { readFakeTile(it, 0) })
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        // No Range request: the full file serves the coarse level.
+        assertEquals(listOf<LongRange?>(null), server.rangesOf(alps))
+        assertNull(c.entry("$alps.l2"))
+        assertEquals(alps, c.coarseEntryName(47, 11))
+    }
+
+    @Test
+    fun oldCoarsePartsAreCheckedWithTheServer() {
+        server.files[alps] = fakeTile("alps", prefix = 30_000, total = 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        coarse(c)
+        now += 179 * day
+        coarse(c)
+        assertEquals(2, server.requests.size)
+
+        // Older than 180 days: a conditional Range request, and 304 keeps the file.
+        now += 2 * day
+        assertEquals(TileLoad.Data("alps/L2"), coarse(c))
+        assertEquals(3, server.requests.size)
+        val check = server.requests[2]
+        assertTrue(check.etag != null)
+        assertEquals(0L..16_383L, check.range)
+        assertEquals(now, c.entry("$alps.l2")!!.checkedMs)
+
+        // A new version on the server: 206 replaces the part.
+        now += 181 * day
+        server.files[alps] = fakeTile("alps2", prefix = 20_000, total = 90_000)
+        assertEquals(TileLoad.Data("alps2/L2"), coarse(c))
+        assertEquals(20_000L, c.entry("$alps.l2")?.size)
+        assertEquals(5, server.requests.size)
+
+        // Offline: the old part stays.
+        now += 181 * day
+        server.online = false
+        assertEquals(TileLoad.Data("alps2/L2"), coarse(c))
+    }
+
+    @Test
+    fun coarsePartsAreEvictedAsOtherFiles() {
+        for (lon in 0 until 4) {
+            server.files[DemCache.tileName(47, lon)] = fakeTile("t$lon", 300, 1_000)
+        }
+        val c = cache(maxBytes = 1_000)
+        for (lon in 0 until 4) {
+            now += 1000
+            coarse(c, 47, lon)
+        }
+        // Four parts of 300 bytes: the oldest one goes.
+        assertNull(c.entry("N47_00_E000_00.l2"))
+        assertEquals(900L, c.cacheBytes())
+        assertFalse(File(dir, "N47_00_E000_00.l2.tif").exists())
+    }
+
+    @Test
+    fun aPartOfAFileFromACrashIsDeleted() {
+        server.files[alps] = fakeTile("alps", prefix = 300, total = 1_000)
+        coarse(cache())
+        File(dir, "$alps.l2.part").writeText("half")
+        File(dir, "$alps.part").writeText("half")
+        cache()
+        assertFalse(File(dir, "$alps.l2.part").exists())
+        assertFalse(File(dir, "$alps.part").exists())
+        assertTrue(File(dir, "$alps.l2.tif").exists())
     }
 }

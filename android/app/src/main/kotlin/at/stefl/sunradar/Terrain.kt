@@ -24,21 +24,18 @@ import at.stefl.sunradar.core.sunPosition
 import at.stefl.sunradar.core.terrainAltitudeDeg
 import at.stefl.sunradar.core.terrainEvents
 import java.io.File
-import java.io.IOException
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The terrain that the profile uses: the tiles nearer than this distance. */
 internal const val TERRAIN_DISTANCE_M = 100_000.0
-
-/** A tile nearer than this uses the full resolution, a tile farther away the first overview. */
-private const val FULL_RESOLUTION_DISTANCE_M = 25_000.0
 
 /** The profile is calculated again when the place moves more than this distance. */
 private const val MOVE_DISTANCE_M = 500.0
@@ -67,9 +64,10 @@ internal object TerrainStore {
 
 /**
  * The terrain horizon of [observer], from the tiles of Copernicus GLO-90. The download, the read of
- * the tiles, and the calculation run in the background. The profile is calculated again when the
- * place moves more than 500 m, and when a new tile arrives. A null [observer] or a false [enabled]
- * gives no profile and no download.
+ * the tiles, and the calculation run in the background. A coarse check comes first, and the full
+ * files only where the terrain matters (see [TerrainLoader]). The profile is calculated again when
+ * the place moves more than 500 m, and when a new tile arrives. A null [observer] or a false
+ * [enabled] gives no profile and no download.
  */
 @Composable
 fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> {
@@ -101,8 +99,9 @@ fun rememberTerrain(observer: Observer?, enabled: Boolean): State<TerrainState> 
 }
 
 /**
- * Loads the tiles of [place], the nearest first, and calculates the profile after each new tile. A
- * missing tile (offline) is tried again every minute. The function returns only when it is
+ * Loads the terrain of [place] with a [TerrainLoader]: first the coarse level of all tiles, then
+ * the full files of the near tiles if the terrain matters. The profile is calculated after each new
+ * tile. A missing tile (offline) is tried again every minute. The function returns only when it is
  * cancelled.
  */
 private suspend fun loadTerrain(
@@ -112,62 +111,47 @@ private suspend fun loadTerrain(
     state: MutableState<TerrainState>,
 ) = coroutineScope {
     val tiles = withContext(Dispatchers.Default) { elevationTiles(place, TERRAIN_DISTANCE_M) }
-    val names = tiles.map { DemCache.tileName(it.latitudeDeg, it.longitudeDeg) }
-    val needed = names.toSet()
-    grids.keys.retainAll(needed)
-    val sea = ConcurrentHashMap.newKeySet<String>()
-    val unreadable = mutableSetOf<String>()
+    val loader =
+        TerrainLoader(
+            cache,
+            tiles,
+            read = { bytes, level -> readElevationGeotiff(bytes, level) },
+            maxAltitudeDeg = { g, ownTileIsSea ->
+                maxAltitudeDeg(calculateProfile(place, g, ownTileIsSea))
+            },
+            grids = grids,
+        )
+    grids.keys.retainAll(loader.names.toSet())
 
     // The calculation runs in its own coroutine. The state flow gives it only the newest version,
     // so the tiles that arrive during a calculation cause only one more calculation.
     val version = MutableStateFlow(0)
     launch {
         version.collect {
-            val own = names.firstOrNull() ?: return@collect
-            if (!grids.containsKey(own) && own !in sea) return@collect
+            if (!loader.hasOwnTile) return@collect
             val profile =
                 withContext(Dispatchers.Default) {
-                    calculateProfile(place, grids.values.map { it.second }, own in sea)
+                    calculateProfile(place, grids.values.map { it.second }, loader.ownTileIsSea)
                 }
             state.value = state.value.copy(observer = place, profile = profile)
         }
     }
 
     while (true) {
-        var missing = 0
-        for ((i, tile) in tiles.withIndex()) {
-            val name = names[i]
-            val level = if (tile.distanceM < FULL_RESOLUTION_DISTANCE_M) 0 else 1
-            if (grids[name]?.first == level || name in sea || name in unreadable) continue
-            state.value =
-                state.value.copy(
-                    status = "Terrain: loading elevation data (${i + 1}/${tiles.size})"
+        val missing =
+            withContext(Dispatchers.IO) {
+                loader.loadOnce(
+                    onStep = { _, index, count ->
+                        // Stop between two tiles when the place changes.
+                        ensureActive()
+                        state.value =
+                            state.value.copy(
+                                status = "Terrain: loading elevation data (${index + 1}/$count)"
+                            )
+                    },
+                    onChange = { version.value++ },
                 )
-            val result =
-                try {
-                    withContext(Dispatchers.IO) {
-                        cache.load(tile.latitudeDeg, tile.longitudeDeg, needed) {
-                            readElevationGeotiff(it, level)
-                        }
-                    }
-                } catch (_: IOException) {
-                    // The cache cannot write the tile, for example because the disk is full.
-                    // Try again later, as for a network error.
-                    TileLoad.Missing
-                }
-            when (result) {
-                is TileLoad.Data -> {
-                    grids[name] = level to result.value
-                    version.value++
-                }
-                TileLoad.Sea -> {
-                    sea += name
-                    version.value++
-                }
-                TileLoad.Missing -> missing++
-                TileLoad.Unreadable -> unreadable += name
             }
-        }
         if (missing == 0) {
             state.value = state.value.copy(status = null)
             break
@@ -184,7 +168,7 @@ private suspend fun loadTerrain(
  * The profile with the default options. If the tiles have no data at the observer (the sea, or a
  * coast), the observer is at 0 m.
  */
-private fun calculateProfile(
+internal fun calculateProfile(
     place: Observer,
     grids: List<ElevationGrid>,
     ownTileIsSea: Boolean,

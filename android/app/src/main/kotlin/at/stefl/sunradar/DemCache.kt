@@ -1,5 +1,6 @@
 package at.stefl.sunradar
 
+import at.stefl.sunradar.core.elevationGeotiffPrefixSize
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -10,22 +11,28 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** A response of the tile server. [body] is set only for the code 200. */
+/**
+ * A response of the tile server. [body] is set only for the codes 200 and 206. [totalSize] is the
+ * size of the whole file: from Content-Range for 206, from Content-Length for 200.
+ */
 class HttpResponse(
     val code: Int,
     val body: ByteArray? = null,
     val etag: String? = null,
     val lastModified: String? = null,
+    val totalSize: Long? = null,
 )
 
 /** The HTTP layer of [DemCache], so the JVM tests can replace it. */
 fun interface TileHttp {
     /**
      * Sends a GET request. If [etag] or [lastModified] is not null, the request is conditional
-     * (If-None-Match, If-Modified-Since). Throws [IOException] if the network fails.
+     * (If-None-Match, If-Modified-Since). If [range] is not null, the request asks only for these
+     * bytes (Range), and the server answers 206 (or 200 with the whole file). Throws [IOException]
+     * if the network fails.
      */
     @Throws(IOException::class)
-    fun get(url: String, etag: String?, lastModified: String?): HttpResponse
+    fun get(url: String, etag: String?, lastModified: String?, range: LongRange?): HttpResponse
 }
 
 /** The result of [DemCache.load]. */
@@ -55,7 +62,8 @@ enum class TileFetch {
 
 /**
  * A place that the user keeps offline ("Keep offline"). The cache never evicts its [tiles] (names
- * of [DemCache.tileName]), and their size does not count toward the limit of the cache.
+ * of entries: [DemCache.tileName] for a full file, [DemCache.coarseName] for a coarse part), and
+ * their size does not count toward the limit of the cache.
  */
 data class KeptPlace(
     val id: String,
@@ -68,17 +76,26 @@ data class KeptPlace(
 /** A kept place with the state of its tiles on the disk. */
 data class KeptPlaceStatus(
     val place: KeptPlace,
-    /** The number of tiles that are on the disk or in the sea. */
+    /** The number of entries that are on the disk or in the sea. */
     val ready: Int,
     /** The size of the files of the tiles on the disk, in bytes. */
     val bytes: Long,
 ) {
-    /** The number of tiles that are not on the disk. */
+    /** The number of entries that are not on the disk. */
     val missing: Int
         get() = place.tiles.size - ready
 }
 
-/** The record of one tile in the index of the cache. */
+/**
+ * The number of tiles of the place. [KeptPlace.tiles] are names of entries of the cache, and a tile
+ * can have two entries (its coarse part and its full file).
+ */
+val KeptPlace.tileCount: Int
+    get() = tiles.map { DemCache.tileOfEntry(it) }.distinct().size
+
+/**
+ * The record of one entry in the index of the cache: the full file or the coarse part of a tile.
+ */
 data class DemEntry(
     val etag: String?,
     val lastModified: String?,
@@ -93,17 +110,27 @@ data class DemEntry(
 )
 
 /**
- * A persistent cache of the elevation tiles of Copernicus GLO-90: one file per tile, and an index
- * (`index.json`) with the ETag, the Last-Modified value, the time of the last check, the time of
- * the last use, the size, and a flag for a sea tile.
- * - A tile or a sea flag that is older than [maxAgeMs] gets a conditional request. 304 updates the
- *   time of the check, 200 replaces the file. A network error keeps the old tile, so the cache
- *   works offline.
+ * A persistent cache of the elevation tiles of Copernicus GLO-90, and an index (`index.json`) with
+ * the ETag, the Last-Modified value, the time of the last check, the time of the last use, the
+ * size, and a flag for a sea tile. A tile can have two entries, each with its own file:
+ * - The full file (`N47_00_E011_00.tif`, 2–5 MB), from [load] and [fetch].
+ * - The coarse part (`N47_00_E011_00.l2.tif`, about 300 KB), from [loadCoarse]: the first bytes of
+ *   the file, which have the directories and the overview at [coarseLevel]. The cache downloads 16
+ *   KB with a Range request, gets the size of the part from [prefixSize], and downloads the rest of
+ *   the part. All parts must have the ETag of the first answer. If the server ignores the Range and
+ *   sends the whole file, the cache keeps only the part. A full file in the cache also serves the
+ *   coarse level, so [loadCoarse] uses it and downloads no part, and the cache deletes the coarse
+ *   part of a tile when it stores the full file.
+ *
+ * The rules are the same for the two kinds of entry:
+ * - An entry or a sea flag that is older than [maxAgeMs] gets a conditional request (with Range for
+ *   a coarse part). 304 updates the time of the check, 200 or 206 replaces the file. A network
+ *   error keeps the old file, so the cache works offline.
  * - When the files are larger than [maxBytes] in total, [load] deletes the tiles that were used
  *   least recently, but not the tiles in its argument `keep`.
- * - The index also has the kept places ([KeptPlace]). The cache never deletes a tile of a kept
- *   place, and these tiles do not count toward [maxBytes]. The check after [maxAgeMs] is the same
- *   for all tiles.
+ * - The index also has the kept places ([KeptPlace]). The cache never deletes an entry of a tile of
+ *   a kept place (the coarse part or the full file), and these tiles do not count toward
+ *   [maxBytes]. The check after [maxAgeMs] is the same for all tiles.
  * - A file that the decoder cannot read is deleted and downloaded again one time.
  *
  * All functions block (file and network access), so call them off the main thread.
@@ -114,6 +141,13 @@ class DemCache(
     private val clock: () -> Long = System::currentTimeMillis,
     private val maxBytes: Long = 400L * 1024 * 1024,
     private val maxAgeMs: Long = 180L * 24 * 3600 * 1000,
+    /** The overview level of the coarse parts. */
+    private val coarseLevel: Int = COARSE_LEVEL,
+    /**
+     * The number of bytes from the start of a file that the coarse level needs, from the first
+     * bytes of the file; 0 if they are too short to tell (see `elevationGeotiffPrefixSize`).
+     */
+    private val prefixSize: (header: ByteArray, level: Int) -> Long = ::elevationGeotiffPrefixSize,
 ) {
     private val indexFile = File(dir, "index.json")
     private val entries = mutableMapOf<String, DemEntry>()
@@ -122,10 +156,12 @@ class DemCache(
     init {
         dir.mkdirs()
         readIndex()
-        // A file without an entry (for example after a crash during a write) is deleted, and an
-        // entry without its file is removed.
+        // A file without an entry (for example a part of a file after a crash during a write) is
+        // deleted, and an entry without its file is removed.
         dir.listFiles()?.forEach { file ->
-            if (file != indexFile && entries[file.nameWithoutExtension]?.sea != false) file.delete()
+            val name = file.name.removeSuffix(".tif")
+            val known = file.name.endsWith(".tif") && entries[name]?.sea == false
+            if (file != indexFile && !known) file.delete()
         }
         entries.entries.removeAll { (name, entry) -> !entry.sea && !fileOf(name).isFile }
     }
@@ -146,12 +182,21 @@ class DemCache(
     /** The kept places with the state of their tiles, in the order of their creation. */
     @Synchronized
     fun keptPlaces(): List<KeptPlaceStatus> = kept.map { place ->
-        val present =
+        // A coarse part is also present if the full file of its tile serves it.
+        val serving =
             place.tiles.mapNotNull { name ->
-                entries[name]?.takeIf { it.sea || fileOf(name).isFile }
+                val tile = tileOfEntry(name)
+                listOf(name, tile).distinct().firstOrNull { present(it) }
             }
-        KeptPlaceStatus(place, present.size, present.sumOf { it.size })
+        KeptPlaceStatus(
+            place,
+            serving.size,
+            serving.distinct().sumOf { entries.getValue(it).size },
+        )
     }
+
+    private fun present(name: String): Boolean =
+        entries[name]?.let { it.sea || fileOf(name).isFile } ?: false
 
     /**
      * Adds [place] to the kept places, or replaces the kept place with the same id. Its tiles are
@@ -174,10 +219,10 @@ class DemCache(
     }
 
     /**
-     * Makes sure that the file of the tile with the south-west corner [latitudeDeg], [longitudeDeg]
-     * is on the disk, without a read of the file. It downloads a tile that is not in the cache or
-     * whose file is gone, and checks a tile with the server if it is older than the maximum age. It
-     * does not change the time of the last use.
+     * Makes sure that the full file of the tile with the south-west corner [latitudeDeg],
+     * [longitudeDeg] is on the disk, without a read of the file. It downloads a tile that is not in
+     * the cache or whose file is gone, and checks a tile with the server if it is older than the
+     * maximum age. It does not change the time of the last use.
      */
     @Synchronized
     fun fetch(latitudeDeg: Int, longitudeDeg: Int, keep: Set<String> = emptySet()): TileFetch {
@@ -190,17 +235,17 @@ class DemCache(
             entry = null
         }
         if (entry != null && clock() - entry.checkedMs > maxAgeMs) {
-            entry = revalidate(name, url, entry, keep)
+            entry = revalidate(name, url, coarse = false, entry, keep)
         }
-        val current = entry ?: download(name, url, keep) ?: return TileFetch.MISSING
+        val current = entry ?: download(name, url, coarse = false, keep) ?: return TileFetch.MISSING
         return if (current.sea) TileFetch.SEA else TileFetch.READY
     }
 
     /**
-     * Gives the tile with the south-west corner [latitudeDeg], [longitudeDeg], read with [decode].
-     * It downloads the tile if it is not in the cache, and checks it with the server if it is older
-     * than the maximum age. After a download, it deletes old tiles that are not in [keep] (names of
-     * [tileName]) until the cache is not larger than its limit.
+     * Gives the tile with the south-west corner [latitudeDeg], [longitudeDeg], read with [decode]
+     * from the full file. It downloads the file if it is not in the cache, and checks it with the
+     * server if it is older than the maximum age. After a download, it deletes old entries that are
+     * not in [keep] (names of entries) until the cache is not larger than its limit.
      */
     @Synchronized
     fun <T : Any> load(
@@ -208,14 +253,64 @@ class DemCache(
         longitudeDeg: Int,
         keep: Set<String> = emptySet(),
         decode: (ByteArray) -> T,
+    ): TileLoad<T> =
+        loadEntry(
+            tileName(latitudeDeg, longitudeDeg),
+            tileUrl(latitudeDeg, longitudeDeg),
+            coarse = false,
+            keep,
+            decode,
+        )
+
+    /**
+     * Gives the tile with the south-west corner [latitudeDeg], [longitudeDeg] for the coarse level,
+     * read with [decode]: [decode] must read the overview at [coarseLevel]. It uses the full file
+     * if it is in the cache, else the coarse part (downloaded and checked as in [load]).
+     */
+    @Synchronized
+    fun <T : Any> loadCoarse(
+        latitudeDeg: Int,
+        longitudeDeg: Int,
+        keep: Set<String> = emptySet(),
+        decode: (ByteArray) -> T,
     ): TileLoad<T> {
         val name = tileName(latitudeDeg, longitudeDeg)
         val url = tileUrl(latitudeDeg, longitudeDeg)
+        if (entries.containsKey(name)) {
+            val full = loadEntry(name, url, coarse = false, keep, decode)
+            // A full file that is gone or bad, offline: the coarse part can still serve.
+            if (full !is TileLoad.Missing && full !is TileLoad.Unreadable) return full
+        }
+        return loadEntry(coarseName(name), url, coarse = true, keep, decode)
+    }
+
+    /**
+     * The name of the entry that serves the coarse level of the tile [latitudeDeg], [longitudeDeg]
+     * now: the full file if it is in the cache, else the coarse part.
+     */
+    @Synchronized
+    fun coarseEntryName(latitudeDeg: Int, longitudeDeg: Int): String {
+        val name = tileName(latitudeDeg, longitudeDeg)
+        val full = entries[name]
+        return if (full != null && (full.sea || fileOf(name).isFile)) name else coarseName(name)
+    }
+
+    /** The name of the entry of the coarse part of the tile [name] (a name of [tileName]). */
+    fun coarseName(name: String): String = "$name.l$coarseLevel"
+
+    private fun <T : Any> loadEntry(
+        name: String,
+        url: String,
+        coarse: Boolean,
+        keep: Set<String>,
+        decode: (ByteArray) -> T,
+    ): TileLoad<T> {
         var entry = entries[name]
         if (entry != null && clock() - entry.checkedMs > maxAgeMs) {
-            entry = revalidate(name, url, entry, keep)
+            entry = revalidate(name, url, coarse, entry, keep)
         }
-        var current: DemEntry = entry ?: download(name, url, keep) ?: return TileLoad.Missing
+        var current: DemEntry =
+            entry ?: download(name, url, coarse, keep) ?: return TileLoad.Missing
         for (attempt in 0 until 2) {
             if (current.sea) {
                 touch(name)
@@ -233,7 +328,9 @@ class DemCache(
                 return TileLoad.Data(value)
             }
             remove(name)
-            if (attempt == 0) current = download(name, url, keep) ?: return TileLoad.Missing
+            if (attempt == 0) {
+                current = download(name, url, coarse, keep) ?: return TileLoad.Missing
+            }
         }
         return TileLoad.Unreadable
     }
@@ -269,12 +366,17 @@ class DemCache(
     private fun revalidate(
         name: String,
         url: String,
+        coarse: Boolean,
         entry: DemEntry,
         keep: Set<String>,
     ): DemEntry {
         val response =
             try {
-                http.get(url, entry.etag, entry.lastModified)
+                if (coarse) {
+                    downloadPrefix(url, entry.etag, entry.lastModified) ?: return entry
+                } else {
+                    http.get(url, entry.etag, entry.lastModified, null)
+                }
             } catch (_: IOException) {
                 return entry
             }
@@ -287,11 +389,12 @@ class DemCache(
         }
     }
 
-    /** Downloads a tile that is not in the cache. Returns null if the download fails. */
-    private fun download(name: String, url: String, keep: Set<String>): DemEntry? {
+    /** Downloads an entry that is not in the cache. Returns null if the download fails. */
+    private fun download(name: String, url: String, coarse: Boolean, keep: Set<String>): DemEntry? {
         val response =
             try {
-                http.get(url, null, null)
+                if (coarse) downloadPrefix(url, null, null) ?: return null
+                else http.get(url, null, null, null)
             } catch (_: IOException) {
                 return null
             }
@@ -302,12 +405,64 @@ class DemCache(
         }
     }
 
-    /** Stores a response with the code 200 (a file) or 404 (the sea). */
+    /**
+     * Downloads the coarse part of a file: first [HEADER_BYTES] bytes, then more if [prefixSize]
+     * cannot tell the size from them, then the rest of the part. Returns a response with the code
+     * 200 and the part (or the whole file, if the server ignores the Range), or the answer of the
+     * server to the first request if it is not 206 (for example 304 or 404). Returns null if a
+     * later request fails, or if the file changes between two requests. Throws [IOException] if the
+     * network fails.
+     */
+    private fun downloadPrefix(url: String, etag: String?, lastModified: String?): HttpResponse? {
+        val first = http.get(url, etag, lastModified, 0L until HEADER_BYTES)
+        // A server without Range sends the whole file (200). The cache keeps only the part.
+        val whole = first.code == HttpURLConnection.HTTP_OK
+        if (first.code != HTTP_PARTIAL && !whole) return first
+        var data = first.body ?: return null
+        val total = (if (whole) data.size.toLong() else first.totalSize) ?: return null
+        fun part(bytes: ByteArray) = HttpResponse(200, bytes, first.etag, first.lastModified, total)
+        // Asks for the bytes after data, up to end (exclusive). Returns false if this fails or if
+        // the ETag is not the ETag of the first answer (the parts are then from two different
+        // files). Replaces data with the whole file if the server sends it.
+        fun more(end: Long): Boolean {
+            val response = http.get(url, null, null, data.size.toLong() until end)
+            val body = response.body ?: return false
+            if (response.code == HttpURLConnection.HTTP_OK) {
+                data = body
+                return true
+            }
+            val sameFile = first.etag == null || response.etag == first.etag
+            if (response.code != HTTP_PARTIAL || !sameFile) return false
+            if (body.size.toLong() != end - data.size) return false
+            data += body
+            return true
+        }
+        while (true) {
+            val needed =
+                try {
+                    prefixSize(data, coarseLevel)
+                } catch (_: IllegalArgumentException) {
+                    // Not a file that the core can read: keep it, so the read fails and the cache
+                    // tries one new download.
+                    return part(data)
+                }
+            when {
+                needed in 1..data.size -> return part(data.copyOf(needed.toInt()))
+                data.size.toLong() >= total -> return part(data)
+                needed == 0L -> if (!more(minOf(data.size * 4L, total))) return null
+                needed > total -> return part(data)
+                else -> return if (more(needed)) part(data) else null
+            }
+        }
+    }
+
+    /** Stores a response with the code 200 (a file or a coarse part) or 404 (the sea). */
     private fun store(name: String, response: HttpResponse, keep: Set<String>): DemEntry {
         val now = clock()
         val body = response.body
         if (response.code != HttpURLConnection.HTTP_OK || body == null) {
             fileOf(name).delete()
+            if (tileOfEntry(name) == name) dropCoarse(name)
             return update(name, DemEntry(null, null, now, now, 0, sea = true))
         }
         // Write a new file and then rename it, so a crash does not leave a part of a file.
@@ -329,6 +484,11 @@ class DemCache(
                     sea = false,
                 ),
             )
+        if (tileOfEntry(name) == name) {
+            // The full file serves the coarse level too, so a tile has at most one of the two
+            // files.
+            dropCoarse(name)
+        }
         evict(keep + name)
         return entry
     }
@@ -351,7 +511,17 @@ class DemCache(
 
     private fun fileOf(name: String) = File(dir, "$name.tif")
 
-    private fun keptTiles(): Set<String> = kept.flatMapTo(mutableSetOf()) { it.tiles }
+    /** Deletes the coarse part of the tile [name], if it is in the cache. */
+    private fun dropCoarse(name: String) {
+        val coarse = coarseName(name)
+        if (entries.containsKey(coarse)) remove(coarse)
+    }
+
+    /** The entries of the kept places: both entries of each kept tile. */
+    private fun keptTiles(): Set<String> =
+        kept.flatMapTo(mutableSetOf()) { place ->
+            place.tiles.flatMap { listOf(tileOfEntry(it), coarseName(tileOfEntry(it))) }
+        }
 
     private fun readIndex() {
         if (!indexFile.isFile) return
@@ -427,6 +597,14 @@ class DemCache(
     }
 
     companion object {
+        /** The first request for a coarse part asks for this number of bytes. */
+        const val HEADER_BYTES = 16L * 1024
+
+        private const val HTTP_PARTIAL = 206
+
+        /** The name of the tile of an entry: `N47_00_E011_00` for `N47_00_E011_00.l2`. */
+        fun tileOfEntry(name: String): String = name.substringBefore('.')
+
         /** The name of a tile in Copernicus, for example `N47_00_E011_00`. */
         fun tileName(latitudeDeg: Int, longitudeDeg: Int): String =
             String.format(
@@ -451,7 +629,14 @@ object UrlTileHttp : TileHttp {
     /** A tile has 2 to 5 MB. A larger response is not a tile. */
     private const val MAX_BYTES = 64 * 1024 * 1024
 
-    override fun get(url: String, etag: String?, lastModified: String?): HttpResponse {
+    private const val HTTP_PARTIAL = 206
+
+    override fun get(
+        url: String,
+        etag: String?,
+        lastModified: String?,
+        range: LongRange?,
+    ): HttpResponse {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.setRequestProperty("User-Agent", "Sunradar (Android; at.stefl.sunradar)")
@@ -459,19 +644,32 @@ object UrlTileHttp : TileHttp {
             connection.readTimeout = 30_000
             etag?.let { connection.setRequestProperty("If-None-Match", it) }
             lastModified?.let { connection.setRequestProperty("If-Modified-Since", it) }
+            range?.let { connection.setRequestProperty("Range", "bytes=${it.first}-${it.last}") }
             val code = connection.responseCode
             val body =
-                if (code == HttpURLConnection.HTTP_OK) {
+                if (code == HttpURLConnection.HTTP_OK || code == HTTP_PARTIAL) {
                     if (connection.contentLengthLong > MAX_BYTES) throw IOException("too large")
                     connection.inputStream.use { readAtMost(it, MAX_BYTES) }
                 } else {
                     null
+                }
+            val total =
+                when (code) {
+                    HTTP_PARTIAL ->
+                        connection
+                            .getHeaderField("Content-Range")
+                            ?.substringAfterLast('/')
+                            ?.trim()
+                            ?.toLongOrNull()
+                    HttpURLConnection.HTTP_OK -> body?.size?.toLong()
+                    else -> null
                 }
             return HttpResponse(
                 code,
                 body,
                 connection.getHeaderField("ETag"),
                 connection.getHeaderField("Last-Modified"),
+                total,
             )
         } finally {
             connection.disconnect()

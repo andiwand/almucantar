@@ -3,7 +3,7 @@ package at.stefl.sunradar
 import android.content.Context
 import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.elevationTiles
-import java.io.IOException
+import at.stefl.sunradar.core.readElevationGeotiff
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -17,15 +17,21 @@ import kotlinx.coroutines.withContext
 /** The state of the last "Keep offline" download. */
 data class KeepJob(
     val name: String,
-    /** The number of tiles that are done (on the disk, in the sea, or failed). */
+    /**
+     * The number of downloads that are done (on the disk, in the sea, or failed): first the coarse
+     * part of each tile, then the full files of the near tiles if the terrain matters.
+     */
     val done: Int,
+    /** The number of downloads, known so far. */
     val total: Int,
-    /** True when all tiles are done. */
+    /** True when all downloads are done. */
     val finished: Boolean = false,
     /** The number of tiles that failed. */
     val missing: Int = 0,
     /** The size of the files of the place, in bytes, when the download is finished. */
     val bytes: Long = 0,
+    /** The number of tiles of the place. */
+    val tiles: Int = total,
 ) {
     /** For example "Downloading 3/9", "Ready offline: 9 tiles, 44 MB". */
     val text: String
@@ -34,7 +40,7 @@ data class KeepJob(
                 !finished -> "Downloading $done/$total"
                 missing > 0 ->
                     "$missing ${if (missing == 1) "tile" else "tiles"} missing, try again online"
-                else -> "Ready offline: ${tileCount(total)}, ${megabytes(bytes)}"
+                else -> "Ready offline: ${tileCount(tiles)}, ${megabytes(bytes)}"
             }
 }
 
@@ -70,8 +76,9 @@ object OfflinePlaces {
         TerrainStore.cache(context.applicationContext).keptPlaces()
 
     /**
-     * Keeps the terrain tiles of [observer] offline: the tiles of the terrain horizon within 100
-     * km. A kept place at the same coordinates gets its tiles again (for example after a failure).
+     * Keeps the terrain of [observer] offline: the same data that the terrain horizon uses (see
+     * [keepTerrain]). A kept place at the same coordinates gets its tiles again (for example after
+     * a failure).
      */
     @Synchronized
     fun keep(context: Context, observer: Observer, name: String) {
@@ -81,37 +88,21 @@ object OfflinePlaces {
         scope.launch {
             val tiles =
                 withContext(Dispatchers.Default) { elevationTiles(observer, TERRAIN_DISTANCE_M) }
-            val names = tiles.map { DemCache.tileName(it.latitudeDeg, it.longitudeDeg) }
-            val id =
-                cache
-                    .keptPlaces()
-                    .firstOrNull {
-                        it.place.latitudeDeg == observer.latitudeDeg &&
-                            it.place.longitudeDeg == observer.longitudeDeg
-                    }
-                    ?.place
-                    ?.id ?: UUID.randomUUID().toString()
-            // Add the place first, so the eviction cannot delete its first tiles during the
-            // download of the others.
-            cache.addKeptPlace(
-                KeptPlace(id, name, observer.latitudeDeg, observer.longitudeDeg, names)
-            )
-            _version.value++
-            var missing = 0
-            for ((i, tile) in tiles.withIndex()) {
-                _job.value = KeepJob(name, i, tiles.size)
-                val result =
-                    try {
-                        cache.fetch(tile.latitudeDeg, tile.longitudeDeg)
-                    } catch (_: IOException) {
-                        // The cache cannot write the tile, for example because the disk is full.
-                        TileFetch.MISSING
-                    }
-                if (result == TileFetch.MISSING) missing++
-                _version.value++
-            }
-            val bytes = cache.keptPlaces().firstOrNull { it.place.id == id }?.bytes ?: 0
-            _job.value = KeepJob(name, tiles.size, tiles.size, true, missing, bytes)
+            val loader =
+                TerrainLoader(
+                    cache,
+                    tiles,
+                    read = { bytes, level -> readElevationGeotiff(bytes, level) },
+                    maxAltitudeDeg = { grids, ownTileIsSea ->
+                        maxAltitudeDeg(calculateProfile(observer, grids, ownTileIsSea))
+                    },
+                    readFull = false,
+                )
+            _job.value =
+                keepTerrain(cache, loader, observer, name) {
+                    _job.value = it
+                    _version.value++
+                }
             _version.value++
         }
     }
@@ -123,4 +114,50 @@ object OfflinePlaces {
             _version.value++
         }
     }
+}
+
+/**
+ * Keeps the terrain of [observer] offline with [loader] (without readFull): the coarse part of all
+ * tiles, and the full files of the near tiles if the coarse profile reaches
+ * [FULL_TERRAIN_MIN_ALTITUDE_DEG]. The kept place lists the entries that serve the place, so the
+ * cache never evicts them. [onProgress] gets the state during the download. Returns the state at
+ * the end. Blocks, so call it off the main thread.
+ */
+internal fun <G : Any> keepTerrain(
+    cache: DemCache,
+    loader: TerrainLoader<G>,
+    observer: Observer,
+    name: String,
+    onProgress: (KeepJob) -> Unit,
+): KeepJob {
+    val tiles = loader.tiles.size
+    val id =
+        cache
+            .keptPlaces()
+            .firstOrNull {
+                it.place.latitudeDeg == observer.latitudeDeg &&
+                    it.place.longitudeDeg == observer.longitudeDeg
+            }
+            ?.place
+            ?.id ?: UUID.randomUUID().toString()
+    fun keptPlace(entries: List<String>) =
+        KeptPlace(id, name, observer.latitudeDeg, observer.longitudeDeg, entries)
+    // Add the place first, so the eviction cannot delete its first files during the download of
+    // the others.
+    cache.addKeptPlace(keptPlace(loader.names.map { cache.coarseName(it) }))
+    onProgress(KeepJob(name, 0, tiles, tiles = tiles))
+    val missing =
+        loader.loadOnce(
+            onStep = { step, index, count ->
+                val job =
+                    if (step == 1) KeepJob(name, index, count, tiles = tiles)
+                    else KeepJob(name, tiles + index, tiles + count, tiles = tiles)
+                onProgress(job)
+            },
+            onChange = {},
+        )
+    cache.addKeptPlace(keptPlace(loader.entries()))
+    val bytes = cache.keptPlaces().firstOrNull { it.place.id == id }?.bytes ?: 0
+    val done = tiles + if (loader.full == true) loader.nearTiles.size else 0
+    return KeepJob(name, done, done, true, missing, bytes, tiles)
 }

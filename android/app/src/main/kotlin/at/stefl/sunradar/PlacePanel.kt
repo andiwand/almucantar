@@ -273,7 +273,7 @@ private fun OfflineSection(place: Place) {
                             )
                             val missing = if (k.missing > 0) " · ${k.missing} missing" else ""
                             Text(
-                                "${tileCount(k.place.tiles.size)}, ${megabytes(k.bytes)}$missing",
+                                "${tileCount(k.place.tileCount)}, ${megabytes(k.bytes)}$missing",
                                 color = Color.White.copy(alpha = 0.7f),
                                 fontSize = 12.sp,
                             )
