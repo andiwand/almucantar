@@ -1,0 +1,129 @@
+# The store screenshots of the Android app (see screenshots/README.md at the root).
+#
+#   bundle exec fastlane screenshots                                   the phone set
+#   SUNRADAR_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
+#   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing       the images to Google Play
+#
+# The capture needs one emulator with API 35 or later. ANDROID_SERIAL selects it if there are more
+# devices.
+
+require "fileutils"
+require "tmpdir"
+
+default_platform(:android)
+
+PACKAGE_NAME = "at.stefl.sunradar".freeze
+
+# Absolute paths, because a lane and an action can have different working directories.
+ANDROID = File.expand_path("..", __dir__).freeze
+ROOT = File.expand_path("..", ANDROID).freeze
+SCREENSHOT_DIR = File.join(ANDROID, "fastlane", "screenshots").freeze
+FRAMED_DIR = File.join(ANDROID, "fastlane", "framed").freeze
+PYTHON = File.join(ROOT, ".venv", "bin", "python").freeze
+FRAME = File.join(ROOT, "scripts", "screenshots", "frame.py").freeze
+STORE = File.join(ROOT, "scripts", "screenshots", "store.py").freeze
+
+SCREENSHOT_DEVICES = %w[phone tablet].freeze
+
+# Gradle copies the additionalTestOutputDir of the test to here before it uninstalls the app. The
+# directory between is the name of the emulator, so the lane globs it.
+ADDITIONAL_OUTPUT = File.join(
+  ANDROID, "app", "build", "outputs", "connected_android_test_additional_output",
+  "debugAndroidTest", "connected"
+).freeze
+
+# The Python of the venv of the repository, or python3 if there is no venv (CI installs Pillow).
+def python
+  File.executable?(PYTHON) ? PYTHON : "python3"
+end
+
+def screenshot_device
+  given = ENV["SUNRADAR_SCREENSHOT_DEVICE"].to_s.strip.downcase
+  return SCREENSHOT_DEVICES.first if given.empty?
+
+  UI.user_error!("SUNRADAR_SCREENSHOT_DEVICE must be one of #{SCREENSHOT_DEVICES.join(', ')}") unless SCREENSHOT_DEVICES.include?(given)
+  given
+end
+
+def screenshot_languages
+  given = ENV["SUNRADAR_SCREENSHOT_LANGUAGES"].to_s.split(",").map(&:strip).reject(&:empty?)
+  return given unless given.empty?
+
+  sh(python, STORE, "--platform", "android", "--languages", log: false).strip.split(",")
+end
+
+# A run for some locales only cannot give a complete set, so the lane does not check it.
+def screenshots_narrowed?
+  !ENV["SUNRADAR_SCREENSHOT_LANGUAGES"].to_s.strip.empty?
+end
+
+platform :android do
+  desc "Capture the store screenshots on the emulator and frame them"
+  lane :screenshots do
+    device = screenshot_device
+    languages = screenshot_languages
+    FileUtils.rm_rf(ADDITIONAL_OUTPUT)
+
+    gradle(
+      project_dir: ANDROID,
+      task: ":app:connectedDebugAndroidTest",
+      properties: {
+        "android.testInstrumentationRunnerArguments.class" => "at.stefl.sunradar.ScreenshotTests",
+        "android.testInstrumentationRunnerArguments.device" => device,
+        # A plus, not a comma: AGP cuts an instrumentation argument at the first comma.
+        "android.testInstrumentationRunnerArguments.locales" => languages.join("+")
+      }
+    )
+
+    taken = Dir.glob(File.join(ADDITIONAL_OUTPUT, "*", "screenshots", "*", "*.png"))
+    UI.user_error!("the test wrote no screenshots to #{ADDITIONAL_OUTPUT}") if taken.empty?
+
+    # The pictures of this device go into the folder of each locale, and the pictures of the other
+    # device stay, so the two runs of the phone and the tablet give one set.
+    languages.each do |locale|
+      Dir.glob(File.join(SCREENSHOT_DIR, locale, "#{device}-*.png")).each { |old| FileUtils.rm_f(old) }
+    end
+    taken.each do |path|
+      locale = File.basename(File.dirname(path))
+      target = File.join(SCREENSHOT_DIR, locale)
+      FileUtils.mkdir_p(target)
+      FileUtils.cp(path, File.join(target, File.basename(path)))
+    end
+    missing = languages.reject { |locale| taken.any? { |path| File.basename(File.dirname(path)) == locale } }
+    UI.user_error!("no screenshots for #{missing.join(', ')}") unless missing.empty?
+    UI.success("captured #{taken.length} #{device} screenshots in #{SCREENSHOT_DIR}")
+
+    sh(python, FRAME, "--platform", "android", "--captured", SCREENSHOT_DIR, "--framed", FRAMED_DIR)
+    # The set is complete only with the pictures of both devices, which are two runs (CI gives each
+    # device its own runner). So the lane checks the set when both devices have pictures.
+    if screenshots_narrowed?
+      UI.message("some locales only: the lane does not check the set")
+    elsif SCREENSHOT_DEVICES.all? { |kind| Dir.glob(File.join(FRAMED_DIR, "*", "#{kind}-*.png")).any? }
+      sh(python, STORE, "--platform", "android", "--screenshots", FRAMED_DIR)
+    else
+      UI.message("the set is complete only with #{SCREENSHOT_DEVICES.join(' and ')}: run the other device too")
+    end
+  end
+
+  desc "Upload the framed screenshots to Google Play (images only, no app and no text)"
+  lane :upload_listing do
+    UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
+
+    Dir.mktmpdir("sunradar-listing") do |staged|
+      sh(python, STORE, "--platform", "android", "--screenshots", FRAMED_DIR, "--stage", staged)
+      upload_to_play_store(
+        package_name: PACKAGE_NAME,
+        json_key_data: ENV["SUPPLY_JSON_KEY_DATA"],
+        metadata_path: staged,
+        skip_upload_apk: true,
+        skip_upload_aab: true,
+        skip_upload_metadata: true,
+        skip_upload_changelogs: true,
+        skip_upload_images: false,
+        skip_upload_screenshots: false,
+        # Upload only the images that changed (supply compares the SHA-256 with Google Play).
+        sync_image_upload: true
+      )
+    end
+  end
+end

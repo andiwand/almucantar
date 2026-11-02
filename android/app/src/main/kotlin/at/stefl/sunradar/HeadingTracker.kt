@@ -126,6 +126,12 @@ class HeadingTracker {
         }
     }
 
+    /** Sets a fixed orientation and heading, for the demo mode of the store screenshots. */
+    internal fun fix(q: Quaternion, fixed: HeadingEstimate) {
+        deviceToFrame = q
+        estimate = fixed
+    }
+
     /** Combines a measurement with the filter, for example from a sun tap. */
     fun apply(measurement: HeadingMeasurement) {
         val start = filter ?: headingFilterStart(Vector3(), UNKNOWN_BIAS_SIGMA_UT)
@@ -155,13 +161,17 @@ class HeadingTracker {
 
 /**
  * Creates a [HeadingTracker] and connects it to the sensors while the activity is started, so the
- * sensors stop in the background.
+ * sensors stop in the background. With a [scene] (the demo mode of the store screenshots), the
+ * tracker has the fixed orientation and heading of the scene and no sensors.
  */
 @Composable
-fun rememberHeadingTracker(): HeadingTracker {
+fun rememberHeadingTracker(scene: ScreenshotScene? = null): HeadingTracker {
     val context = LocalContext.current
-    val tracker = remember { HeadingTracker() }
-    LifecycleStartEffect(context) {
+    val tracker = remember {
+        HeadingTracker().apply { scene?.let { fix(it.deviceToEnu, it.estimate) } }
+    }
+    LifecycleStartEffect(context, scene) {
+        if (scene != null) return@LifecycleStartEffect onStopOrDispose {}
         val manager = context.getSystemService(SensorManager::class.java)
         val game = manager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
         val rotation = game ?: manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)

@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -121,15 +122,20 @@ enum class AlignTarget {
  * camera image, and the user can align the heading with the sun, the moon, or a landmark.
  */
 @Composable
-fun SkyScreen(locationGranted: Boolean) {
-    val tracker = rememberHeadingTracker()
-    val zone = rememberTimeZone()
-    val place by rememberPlace(locationGranted, zone)
+fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
+    // The demo mode of the store screenshots fixes the view, the heading, the place, and the time.
+    val tracker = rememberHeadingTracker(scene)
+    val deviceZone = rememberTimeZone()
+    val zone = scene?.zone ?: deviceZone
+    val devicePlace by rememberPlace(locationGranted && scene == null, zone)
+    val place = scene?.place ?: devicePlace
     SideEffect { tracker.observer = place.observer }
 
-    var now by remember { mutableDoubleStateOf(System.currentTimeMillis() / 1000.0) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    var now by remember {
+        mutableDoubleStateOf(scene?.unixUtc ?: (System.currentTimeMillis() / 1000.0))
+    }
+    LaunchedEffect(scene) {
+        while (scene == null) {
             delay(1000)
             now = System.currentTimeMillis() / 1000.0
         }
@@ -137,8 +143,8 @@ fun SkyScreen(locationGranted: Boolean) {
 
     // The selected date and time. minuteOfDay null means the live time.
     var dayOffset by remember { mutableIntStateOf(0) }
-    var minuteOfDay by remember { mutableStateOf<Int?>(null) }
-    var showTime by remember { mutableStateOf(false) }
+    var minuteOfDay by remember { mutableStateOf(scene?.minuteOfDay) }
+    var showTime by remember { mutableStateOf(scene?.showTime ?: false) }
     val nowLocal = Instant.ofEpochSecond(now.toLong()).atZone(zone)
     val today = nowLocal.toLocalDate()
     val date = today.plusDays(dayOffset.toLong())
@@ -170,7 +176,7 @@ fun SkyScreen(locationGranted: Boolean) {
     var cameraOn by remember { mutableStateOf(false) }
     var viewCamera by remember { mutableStateOf<ViewCamera?>(null) }
     var aligning by remember { mutableStateOf<AlignTarget?>(null) }
-    var alignMenu by remember { mutableStateOf(false) }
+    var alignMenu by remember { mutableStateOf(scene?.alignMenu ?: false) }
     var pickingLandmark by remember { mutableStateOf(false) }
     var landmark by remember { mutableStateOf<Observer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -230,10 +236,16 @@ fun SkyScreen(locationGranted: Boolean) {
         if (q == null || size.width == 0) {
             null
         } else {
-            val fov = if (size.width < size.height) FOV_PORTRAIT_DEG else FOV_LANDSCAPE_DEG
+            val fov =
+                scene?.fovDeg
+                    ?: if (size.width < size.height) FOV_PORTRAIT_DEG else FOV_LANDSCAPE_DEG
             View(
                 deviceToEnu = q,
-                screenRotation = ScreenRotation.entries[displayRotation],
+                // The scene of the demo mode is a device held upright in portrait, also on a tablet
+                // whose natural orientation is landscape.
+                screenRotation =
+                    if (scene != null) ScreenRotation.ROTATION_0
+                    else ScreenRotation.entries[displayRotation],
                 headingOffsetDeg = tracker.estimate.offsetDeg,
                 camera =
                     viewCamera?.camera?.takeIf { cameraOn }
@@ -248,7 +260,8 @@ fun SkyScreen(locationGranted: Boolean) {
     val sun = remember(time, day.observer) { sunPosition(time, day.observer) }
     val moon =
         remember(time, day.observer) {
-            moonPosition(time, day.observer).takeIf { moonIlluminatedFraction(time) >= 0.02 }
+            val fraction = moonIlluminatedFraction(time)
+            if (fraction >= 0.02) MoonAt(moonPosition(time, day.observer), fraction) else null
         }
     val center = view?.let { unproject(it, ScreenPoint(it.camera.width / 2, it.camera.height / 2)) }
     val crosshairUsable = center != null && abs(center.altitudeDeg) <= MAX_CROSSHAIR_ALTITUDE_DEG
@@ -353,6 +366,10 @@ fun SkyScreen(locationGranted: Boolean) {
         }
 
         Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
+            if (scene != null && view != null) {
+                // The drawn sky of the demo mode, in place of the camera image.
+                DemoSky(Modifier.fillMaxSize(), view, sun)
+            }
             if (cameraOn) {
                 CameraPreview(
                     Modifier.fillMaxSize(),
@@ -422,7 +439,7 @@ fun SkyScreen(locationGranted: Boolean) {
                 Readout(center, crosshairUsable, crossing, crosshairDates, zone)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = toggleCamera) {
-                        Text(if (cameraOn) "Sky" else "Camera")
+                        Text(if (cameraOn || scene != null) "Sky" else "Camera")
                     }
                     FilledTonalButton(onClick = { showTime = !showTime }) {
                         Text(if (dayOffset == 0 && minuteOfDay == null) "Time" else "Time ●")
@@ -709,7 +726,7 @@ private fun DrawScope.drawSky(
     day: SkyDay,
     guides: List<DirectionLine>,
     sun: Horizontal,
-    moon: Horizontal?,
+    moon: MoonAt?,
     center: Horizontal,
     crossing: AzimuthCrossing?,
     landmark: Horizontal?,
@@ -786,11 +803,11 @@ private fun DrawScope.drawSky(
         }
     }
 
-    // The moon.
-    moon?.let { direction ->
-        screenPoint(view, direction)?.let {
-            drawCircle(SkyColors.moon, radius = 11 * px, center = it)
-            drawUprightText("moon", it, upAt(view, direction, it), 16 * px, small)
+    // The moon with its phase. The faint disc shows the dark part.
+    moon?.let { m ->
+        screenPoint(view, m.direction)?.let {
+            drawMoon(view, m, sun, it, 11 * px)
+            drawUprightText("moon", it, upAt(view, m.direction, it), 16 * px, small)
         }
     }
 
@@ -852,3 +869,28 @@ private fun cameraText(camera: ViewCamera?): String =
         CalibrationSource.INTRINSICS -> "Camera: lens calibration"
         CalibrationSource.FOCAL_LENGTH -> "Camera: focal length only (less accurate)"
     }
+
+/**
+ * Draws the moon at [at] with the lit part toward the sun. The direction of the sun on the screen
+ * comes from a point 1° from the moon toward the sun, see [MoonPhase.towardSun].
+ */
+private fun DrawScope.drawMoon(
+    view: View,
+    moon: MoonAt,
+    sun: Horizontal,
+    at: Offset,
+    radius: Float,
+) {
+    val toSun = screenPoint(view, MoonPhase.towardSun(moon.direction, sun))?.minus(at)
+    val length = toSun?.getDistance() ?: 0f
+    val u = if (toSun != null && length > 1e-3f) toSun / length else Offset(0f, -1f)
+    val v = Offset(-u.y, u.x)
+    drawCircle(SkyColors.moon.copy(alpha = 0.22f), radius = radius, center = at)
+    val path = Path()
+    MoonPhase.litOutline(moon.fraction).forEachIndexed { i, (x, y) ->
+        val p = at + (u * x.toFloat() + v * y.toFloat()) * radius
+        if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+    }
+    path.close()
+    drawPath(path, SkyColors.moon)
+}

@@ -22,7 +22,13 @@ API of the AAR.
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
 | `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |
 | `.../CameraCalibration.kt` | Converts the Camera2 calibration and `PreviewView.getSensorToViewTransform()` to a `Camera` in view pixels. Pure Kotlin, tested in `app/src/test/`. |
+| `.../MoonPhase.kt` | The lit part of the moon: the direction toward the sun and the outline of the phase. Tested in `app/src/test/`. |
+| `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
+| `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `website/src/sky.ts`. |
+| `app/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sunradar.screenshot`. The release build has a no-op version in `app/src/release/`. |
 | `app/src/test/` | JVM unit tests. |
+| `app/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
+| `fastlane/` | The lanes `screenshots` and `upload_listing`. |
 
 ## Build and test
 
@@ -41,3 +47,21 @@ with Conan, unless `SUNRADAR_ABIS` is empty.
   unless the user asks for it.
 - Kotlin is formatted with ktfmt in the kotlinlang style (`./gradlew :app:spotlessApply`).
 - A change that a user notices gets an entry in `CHANGELOG.md`.
+
+## Screenshots
+
+The store screenshots come from `ScreenshotTests` in the demo mode (see `screenshots/README.md` at
+the root). Run them on an emulator with API 35 or later:
+
+```sh
+ANDROID_SERIAL=emulator-5554 bundle exec fastlane screenshots
+ANDROID_SERIAL=emulator-5554 SUNRADAR_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
+```
+
+- The demo mode exists only in the debug build. It uses no sensors, no location, and no camera,
+  and it draws the sky (`DemoSky`) in place of the camera image. Do not put screenshot code in the
+  release behavior: a scene is null in a release build.
+- The demo mode uses the screen rotation 0, because its view is a device held upright in
+  portrait, also on a tablet whose natural orientation is landscape.
+- The test enters the demo mode of the status bar again before each screen, because a slow
+  emulator can restart the system UI, which ends the demo mode.

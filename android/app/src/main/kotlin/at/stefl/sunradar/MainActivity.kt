@@ -22,6 +22,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // The user holds the phone up and watches the sky, so the screen stays on.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // The demo mode of the store screenshots, only in a debug build.
+        val scene = ScreenshotMode.scene(intent)
 
         setContent {
             var granted by remember {
@@ -37,11 +39,11 @@ class MainActivity : ComponentActivity() {
                     granted = it
                 }
             LaunchedEffect(Unit) {
-                if (!granted) {
+                if (!granted && scene == null) {
                     launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
                 }
             }
-            SkyScreen(locationGranted = granted)
+            SkyScreen(locationGranted = granted, scene = scene)
         }
     }
 }

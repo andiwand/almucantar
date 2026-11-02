@@ -5,6 +5,7 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The moon shows its phase. The lit part faces the sun.
 - The sun path, hour labels, and crosshair dates refresh when the device time zone changes.
 - Alignment near the zenith or nadir shows a message instead of closing the app.
 - The landmark map keeps polar locations within its bounds.
