@@ -113,3 +113,13 @@ def test_elevation_geotiff_prefix_size():
     assert 0 < size <= len(data)
     assert sunradar.read_elevation_geotiff(data[:size], 1).rows == 4
     assert sunradar.elevation_geotiff_prefix_size(data[:16], 0) == 0
+
+
+def test_min_distance_m():
+    options = sunradar.HorizonOptions(min_distance_m=2000)
+    assert options.min_distance_m == 2000
+    assert sunradar.HorizonOptions().min_distance_m == 0
+    with pytest.raises(ValueError, match="min_distance_m"):
+        sunradar.horizon_profile(
+            VIENNA, [flat_grid()], sunradar.HorizonOptions(min_distance_m=-1)
+        )

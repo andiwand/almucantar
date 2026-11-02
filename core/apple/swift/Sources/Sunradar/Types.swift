@@ -442,11 +442,15 @@ public struct HorizonOptions: Sendable {
     public var observerElevationM: Double
     /// The coefficient of the terrestrial refraction; 0 gives no refraction.
     public var refractionCoefficient: Double
+    /// The terrain nearer than this is not used: 0 for a bare-earth model, about 2 km for a surface
+    /// model with buildings (Copernicus), so a city does not give a false wall.
+    public var minDistanceM: Double
     public init(
         azimuthStepDeg: Double = HorizonOptions.c.azimuth_step_deg, maxDistanceM: Double = HorizonOptions.c.max_distance_m,
         eyeHeightM: Double = HorizonOptions.c.eye_height_m, useGridElevation: Bool = HorizonOptions.c.use_grid_elevation,
         observerElevationM: Double = HorizonOptions.c.observer_elevation_m,
-        refractionCoefficient: Double = HorizonOptions.c.refraction_coefficient
+        refractionCoefficient: Double = HorizonOptions.c.refraction_coefficient,
+        minDistanceM: Double = HorizonOptions.c.min_distance_m
     ) {
         self.azimuthStepDeg = azimuthStepDeg
         self.maxDistanceM = maxDistanceM
@@ -454,6 +458,7 @@ public struct HorizonOptions: Sendable {
         self.useGridElevation = useGridElevation
         self.observerElevationM = observerElevationM
         self.refractionCoefficient = refractionCoefficient
+        self.minDistanceM = minDistanceM
     }
     @usableFromInline static let c = sr_default_horizon_options()
 }
@@ -608,7 +613,7 @@ extension HorizonOptions {
         sr_horizon_options(
             azimuth_step_deg: azimuthStepDeg, max_distance_m: maxDistanceM, eye_height_m: eyeHeightM,
             use_grid_elevation: useGridElevation, observer_elevation_m: observerElevationM,
-            refraction_coefficient: refractionCoefficient)
+            refraction_coefficient: refractionCoefficient, min_distance_m: minDistanceM)
     }
 }
 

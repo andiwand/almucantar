@@ -171,7 +171,8 @@ HorizonOptions to_cpp(const sr_horizon_options& o) {
           .eye_height_m = o.eye_height_m,
           .use_grid_elevation = o.use_grid_elevation,
           .observer_elevation_m = o.observer_elevation_m,
-          .refraction_coefficient = o.refraction_coefficient};
+          .refraction_coefficient = o.refraction_coefficient,
+          .min_distance_m = o.min_distance_m};
 }
 
 TerrainEventOptions to_cpp(const sr_terrain_event_options& o) {
@@ -263,8 +264,8 @@ sr_heading_filter_options sr_default_heading_filter_options(void) {
 }
 sr_horizon_options sr_default_horizon_options(void) {
   const HorizonOptions d;
-  return {d.azimuth_step_deg,   d.max_distance_m,       d.eye_height_m,
-          d.use_grid_elevation, d.observer_elevation_m, d.refraction_coefficient};
+  return {d.azimuth_step_deg,     d.max_distance_m,         d.eye_height_m,  d.use_grid_elevation,
+          d.observer_elevation_m, d.refraction_coefficient, d.min_distance_m};
 }
 sr_terrain_event_options sr_default_terrain_event_options(void) {
   const TerrainEventOptions d;

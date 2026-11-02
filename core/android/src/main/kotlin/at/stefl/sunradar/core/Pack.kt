@@ -137,6 +137,7 @@ internal fun HorizonOptions.pack() =
         useGridElevation.pack(),
         observerElevationM,
         refractionCoefficient,
+        minDistanceM,
     )
 
 internal fun HorizonProfile.pack(): DoubleArray {

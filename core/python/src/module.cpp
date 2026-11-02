@@ -481,25 +481,30 @@ void bind_terrain(py::module_& m) {
   py::class_<HorizonOptions>(m, "HorizonOptions")
       .def(py::init([](const double azimuth_step_deg, const double max_distance_m,
                        const double eye_height_m, const bool use_grid_elevation,
-                       const double observer_elevation_m, const double refraction_coefficient) {
+                       const double observer_elevation_m, const double refraction_coefficient,
+                       const double min_distance_m) {
              return HorizonOptions{.azimuth_step_deg = azimuth_step_deg,
                                    .max_distance_m = max_distance_m,
                                    .eye_height_m = eye_height_m,
                                    .use_grid_elevation = use_grid_elevation,
                                    .observer_elevation_m = observer_elevation_m,
-                                   .refraction_coefficient = refraction_coefficient};
+                                   .refraction_coefficient = refraction_coefficient,
+                                   .min_distance_m = min_distance_m};
            }),
            "azimuth_step_deg"_a = horizon.azimuth_step_deg,
            "max_distance_m"_a = horizon.max_distance_m, "eye_height_m"_a = horizon.eye_height_m,
            "use_grid_elevation"_a = horizon.use_grid_elevation,
            "observer_elevation_m"_a = horizon.observer_elevation_m,
-           "refraction_coefficient"_a = horizon.refraction_coefficient)
+           "refraction_coefficient"_a = horizon.refraction_coefficient,
+           "min_distance_m"_a = horizon.min_distance_m)
       .def_readwrite("azimuth_step_deg", &HorizonOptions::azimuth_step_deg)
       .def_readwrite("max_distance_m", &HorizonOptions::max_distance_m)
       .def_readwrite("eye_height_m", &HorizonOptions::eye_height_m)
       .def_readwrite("use_grid_elevation", &HorizonOptions::use_grid_elevation)
       .def_readwrite("observer_elevation_m", &HorizonOptions::observer_elevation_m)
-      .def_readwrite("refraction_coefficient", &HorizonOptions::refraction_coefficient);
+      .def_readwrite("refraction_coefficient", &HorizonOptions::refraction_coefficient)
+      .def_readwrite("min_distance_m", &HorizonOptions::min_distance_m,
+                     "the terrain nearer than this is not used (for a surface model)");
 
   py::class_<HorizonProfile>(m, "HorizonProfile",
                              "The altitude of the terrain horizon for each azimuth.")

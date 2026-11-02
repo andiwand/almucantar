@@ -42,6 +42,8 @@ export interface MapTile { zoom: number; x: number; y: number; distanceM: number
 export interface HorizonOptions {
   azimuthStepDeg: number; maxDistanceM: number; eyeHeightM: number; useGridElevation: boolean;
   observerElevationM: number; refractionCoefficient: number;
+  /** The terrain nearer than this is not used: 0 for a bare-earth model, about 2 km for a surface model with buildings. */
+  minDistanceM: number;
 }
 /** The terrain horizon: the entry i is for the azimuth i * azimuthStepDeg. NaN without data. */
 export interface HorizonProfile {

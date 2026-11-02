@@ -146,6 +146,7 @@ typedef struct sr_horizon_options {
   double azimuth_step_deg, max_distance_m, eye_height_m;
   bool use_grid_elevation;
   double observer_elevation_m, refraction_coefficient;
+  double min_distance_m; /* the terrain nearer than this is not used */
 } sr_horizon_options;
 /* The altitude and the distance have count values each. The result of
    sr_calculate_horizon_profile() owns them: free them with sr_free_horizon_profile(). An input only

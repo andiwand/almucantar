@@ -28,6 +28,12 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   So an app can download only the directories and an overview of a Cloud Optimized GeoTIFF with an
   HTTP Range request: about 300 KB of a Copernicus GLO-90 tile of 2–5 MB for level 2. In all
   bindings.
+- `HorizonOptions.min_distance_m` ignores the terrain nearer than this distance. A surface model
+  such as Copernicus has buildings and forests in its heights, so a city gives a false wall of
+  several degrees around the observer; a clearance of about 2 km removes it. The default 0 uses
+  all terrain. In all bindings.
+- `horizon_profile()` does not depend on the order of the tiles, and where tiles overlap, the tile
+  with the smaller cells wins.
 - The planets and the Milky Way: `planet_position()` and `planet_magnitude()` for Mercury to
   Neptune (within 0.006° of JPL Horizons), and `galactic_position()` and `galactic_plane()` for
   the galactic center and the center line of the Milky Way. In C++ and Python only.

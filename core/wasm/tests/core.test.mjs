@@ -171,6 +171,10 @@ test("terrain: GeoTIFF, tiles, profile, and events", async () => {
   for (const a of profile.altitudeDeg) assert.ok(a < 0 && a > -0.1);
   near(sunradar.terrainAltitudeDeg(profile, 5), (profile.altitudeDeg[0] + profile.altitudeDeg[1]) / 2, 1e-12);
   assert.throws(() => sunradar.horizonProfile(vienna, []), RangeError);
+  assert.equal(sunradar.defaults.horizonOptions.minDistanceM, 0);
+  assert.throws(() => sunradar.horizonProfile(vienna, [flat], { minDistanceM: -1 }), RangeError);
+  const cleared = sunradar.horizonProfile(vienna, [flat], { azimuthStepDeg: 10, minDistanceM: 2000 });
+  assert.equal(cleared.altitudeDeg.length, 36);
 
   const events = sunradar.terrainEvents(vienna, profile, dayStart, dayStart + day);
   assert.equal(events.kind, DayKind.normal);

@@ -552,7 +552,8 @@ EMSCRIPTEN_BINDINGS(sunradar) {
       .field("eyeHeightM", &HorizonOptions::eye_height_m)
       .field("useGridElevation", &HorizonOptions::use_grid_elevation)
       .field("observerElevationM", &HorizonOptions::observer_elevation_m)
-      .field("refractionCoefficient", &HorizonOptions::refraction_coefficient);
+      .field("refractionCoefficient", &HorizonOptions::refraction_coefficient)
+      .field("minDistanceM", &HorizonOptions::min_distance_m);
   value_object<TerrainEventOptionsJs>("TerrainEventOptions")
       .field("body", &TerrainEventOptionsJs::body)
       .field("model", &TerrainEventOptionsJs::model)

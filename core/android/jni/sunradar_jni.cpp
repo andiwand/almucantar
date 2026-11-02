@@ -27,8 +27,8 @@
 //   ElevationGrid  [6]  north_latitude_deg, west_longitude_deg, latitude_step_deg,
 //                       longitude_step_deg, rows, columns; the heights are a separate
 //                       float array (row by row), because a tile has more than a million.
-//   HorizonOptions [6]  azimuth_step_deg, max_distance_m, eye_height_m, use_grid_elevation,
-//                       observer_elevation_m, refraction_coefficient
+//   HorizonOptions [7]  azimuth_step_deg, max_distance_m, eye_height_m, use_grid_elevation,
+//                       observer_elevation_m, refraction_coefficient, min_distance_m
 //   HorizonProfile [3 + 2 n]  azimuth_step_deg, observer_elevation_m, n, then
 //                       altitude_deg[n], then distance_m[n]
 //   TerrainEventOptions [8]  model, refraction, pressure_hpa, temperature_c, limb_deg,
@@ -526,7 +526,8 @@ HorizonOptions horizon_options(const Doubles& o) {
           .eye_height_m = o[2],
           .use_grid_elevation = to_bool(o[3]),
           .observer_elevation_m = o[4],
-          .refraction_coefficient = o[5]};
+          .refraction_coefficient = o[5],
+          .min_distance_m = o[6]};
 }
 
 TerrainEventOptions terrain_event_options(const Doubles& o) {
@@ -630,7 +631,7 @@ SUNRADAR_JNI(horizonProfile)
       env->DeleteLocalRef(array);
     }
     return to_java(env, pack(horizon_profile(observer(Doubles(env, obs, 2, "observer")), tiles,
-                                             horizon_options(Doubles(env, opts, 6, "options")))));
+                                             horizon_options(Doubles(env, opts, 7, "options")))));
   });
 }
 
@@ -727,6 +728,7 @@ SUNRADAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          h.use_grid_elevation ? 1.0 : 0.0,
                          h.observer_elevation_m,
                          h.refraction_coefficient,
+                         h.min_distance_m,
                          static_cast<double>(t.model),
                          t.refraction ? 1.0 : 0.0,
                          t.atmosphere.pressure_hpa,

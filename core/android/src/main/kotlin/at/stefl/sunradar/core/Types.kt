@@ -248,6 +248,11 @@ data class HorizonOptions(
     val observerElevationM: Double = 0.0,
     /** The coefficient of the terrestrial refraction. 0.13 is the standard value. */
     val refractionCoefficient: Double = 0.13,
+    /**
+     * The terrain nearer than this is not used: 0 for a bare-earth model, about 2 km for a surface
+     * model with buildings (Copernicus), so a city does not give a false wall.
+     */
+    val minDistanceM: Double = 0.0,
 )
 
 /**

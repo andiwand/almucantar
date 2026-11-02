@@ -229,6 +229,8 @@ final class SunradarTests: XCTestCase {
         XCTAssertEqual(HorizonOptions().c.azimuth_step_deg, sr_default_horizon_options().azimuth_step_deg)
         XCTAssertEqual(HorizonOptions().c.max_distance_m, sr_default_horizon_options().max_distance_m)
         XCTAssertEqual(HorizonOptions().c.refraction_coefficient, sr_default_horizon_options().refraction_coefficient)
+        XCTAssertEqual(HorizonOptions().minDistanceM, 0)
+        XCTAssertEqual(HorizonOptions(minDistanceM: 2000).c.min_distance_m, 2000)
         XCTAssertEqual(TerrainEventOptions().c.limb_deg, sr_default_terrain_event_options().limb_deg)
         XCTAssertEqual(TerrainEventOptions().body, .sun)
         XCTAssertEqual(TerrainEventOptions().c.atmosphere.pressure_hpa, sr_default_terrain_event_options().atmosphere.pressure_hpa)

@@ -168,7 +168,7 @@ RayResult trace_ray(const SortedTiles& tiles, const Observer& observer, const do
   RayResult result;
   double best_tangent = -std::numeric_limits<double>::infinity();
   // The step grows with the distance, so a counter of the steps does not give d.
-  double d = near_step;
+  double d = std::max(near_step, options.min_distance_m);
   while (d <= options.max_distance_m) {
     const double here = d;
     d += std::max(near_step, d * beam);
@@ -370,6 +370,9 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   require(count <= std::size_t{36'000}, "azimuth_step_deg is less than 0.01");
   require_positive(options.max_distance_m, "max_distance_m");
   require(options.max_distance_m <= kMaxDistanceM, "max_distance_m is greater than 500 km");
+  require_finite(options.min_distance_m, "min_distance_m");
+  require(options.min_distance_m >= 0 && options.min_distance_m < options.max_distance_m,
+          "min_distance_m is not in the range [0, max_distance_m)");
   require_finite(options.eye_height_m, "eye_height_m");
   require_finite(options.observer_elevation_m, "observer_elevation_m");
   require_finite(options.refraction_coefficient, "refraction_coefficient");

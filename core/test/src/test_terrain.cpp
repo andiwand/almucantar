@@ -458,3 +458,37 @@ TEST_CASE("horizon_profile prefers the finer tile where tiles overlap", "[terrai
   }
   REQUIRE(alone.altitude_deg[9] > 5);  // the ridge in the east
 }
+
+TEST_CASE("horizon_profile ignores the terrain nearer than min_distance_m", "[terrain]") {
+  // A wall of 30 m at 300 m to the east (a smeared city block), and a ridge at 10 km.
+  ElevationGrid grid = flat_grid();
+  const double meters_per_degree_east = kEarthRadiusM * kDegToRad * std::cos(47 * kDegToRad);
+  for (int r = 0; r < grid.rows; ++r) {
+    for (int c = 0; c < grid.columns; ++c) {
+      const double east_m =
+          (grid.west_longitude_deg + (c * grid.longitude_step_deg) - kAlps.longitude_deg) *
+          meters_per_degree_east;
+      if (east_m > 300 && east_m < 1000) {
+        grid.heights_m[index(grid, r, c)] = 30;
+      }
+      if (east_m > 10'000 && east_m < 11'000) {
+        grid.heights_m[index(grid, r, c)] = 300;
+      }
+    }
+  }
+  // A step of 1°: the ray takes samples at about half the width of the beam, so a wide step
+  // would jump over the ridge.
+  const HorizonProfile all = horizon_profile(kAlps, {grid}, {.azimuth_step_deg = 1});
+  const HorizonProfile cleared =
+      horizon_profile(kAlps, {grid}, {.azimuth_step_deg = 1, .min_distance_m = 2000});
+  // With all terrain, the near wall is the horizon in the east (2.6°, far above the ridge).
+  REQUIRE(all.altitude_deg[90] > 2);
+  REQUIRE(all.distance_m[90] < 1500);
+  // With the clearance, the ridge at 10 km is the horizon (about 1.6°).
+  REQUIRE_THAT(cleared.altitude_deg[90], WithinAbs(expected_altitude_deg(300 - 1.6, 10'000), 0.2));
+  REQUIRE(cleared.distance_m[90] >= 10'000);
+  REQUIRE_THROWS_AS(
+      horizon_profile(kAlps, {grid}, {.max_distance_m = 1000, .min_distance_m = 1000}),
+      std::invalid_argument);
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {grid}, {.min_distance_m = -1}), std::invalid_argument);
+}

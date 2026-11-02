@@ -38,6 +38,11 @@ struct HorizonOptions {
   /// The coefficient of the terrestrial refraction: the curvature of the line of sight divided
   /// by the curvature of the Earth. 0.13 is the standard value; 0 gives no refraction.
   double refraction_coefficient = 0.13;
+  /// The terrain nearer than this distance is not used. A surface model (for example Copernicus,
+  /// which has buildings and forests in its heights) needs it: in a city, the buildings, smeared
+  /// over cells of 90 m, give a false wall of several degrees around the observer. Real mountains
+  /// are usually farther away. 0 uses all terrain, which is right for a bare-earth model.
+  double min_distance_m = 0;
 };
 
 /// The altitude of the terrain horizon for each azimuth. The entry `i` is for the azimuth
