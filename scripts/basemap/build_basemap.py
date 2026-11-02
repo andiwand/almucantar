@@ -16,8 +16,10 @@ The format (version 1), for the readers in the apps:
 - "layers": an object with the line layers "coastline", "borders", "lakes" (closed rings), and
   "rivers". Each layer is a list of lines. A line is a flat list [lon0, lat0, dlon1, dlat1, ...]:
   the first point is absolute, and each next point is the difference to the point before.
-- "places": a list of [name, lon, lat, rank, country], with lon and lat as integers as above. A
-  smaller rank is a larger place (0 to 10, the "scalerank" of Natural Earth).
+- "places": a list of [name, lon, lat, rank, country, time zone], with lon and lat as integers
+  as above. A smaller rank is a larger place (0 to 10, the "scalerank" of Natural Earth). The
+  time zone is an IANA name, or "" if Natural Earth has none (about 1 place in 6). An app takes
+  the time zone of a dropped place from the nearest place that has one.
 - "attribution": the text that the app shows.
 """
 
@@ -45,7 +47,7 @@ LAYERS = {
         lambda p: (p.get("scalerank") or 0) <= 6,
     ),
 }
-PLACES = "ne_10m_populated_places_simple"
+PLACES = "ne_10m_populated_places"
 
 
 def fetch(name, cache):
@@ -141,11 +143,12 @@ def main():
         lon, lat = feature["geometry"]["coordinates"][:2]
         places.append(
             [
-                p["name"],
+                p["NAME"],
                 round(lon * SCALE),
                 round(lat * SCALE),
-                int(p.get("scalerank") or 0),
-                p.get("adm0name") or "",
+                int(p.get("SCALERANK") or 0),
+                p.get("ADM0NAME") or "",
+                p.get("TIMEZONE") or "",
             ]
         )
     places.sort(key=lambda x: (x[3], x[0]))
