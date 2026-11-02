@@ -10,6 +10,8 @@ private final class FakeHTTP: HTTPClient, @unchecked Sendable {
     private let lock = NSLock()
     private var answers: [HTTPResponse?] = []
     private(set) var requests: [(url: URL, headers: [String: String])] = []
+    /// The time of each answer, so two requests can run at the same time.
+    var delayNs: UInt64 = 0
 
     /// A nil answer is a network error.
     func enqueue(_ answer: HTTPResponse?) { lock.withLock { answers.append(answer) } }
@@ -21,6 +23,7 @@ private final class FakeHTTP: HTTPClient, @unchecked Sendable {
             requests.append((url, headers))
             return answers.isEmpty ? nil : answers.removeFirst()
         }
+        if delayNs > 0 { try await Task.sleep(nanoseconds: delayNs) }
         guard let answer else { throw URLError(.notConnectedToInternet) }
         return answer
     }
@@ -139,6 +142,29 @@ final class DemCacheTests: XCTestCase {
         XCTAssertEqual(grid.heightsM[0], replaced.heightsM[0])
         let etag = await cache.index["N47_00_E011_00"]?.etag
         XCTAssertEqual(etag, "\"b\"")
+    }
+
+    /// Two requests for the same tile at the same time give one download: the second request waits
+    /// for the first one and gets its result.
+    func testTwoRequestsForOneTileShareTheDownload() async throws {
+        let cache = try makeCache()
+        http.delayNs = 100_000_000
+        http.enqueue(ok(try geotiff("float_tiles_deflate_p3.tif")))
+        async let first = cache.tile(innsbruck, level: 0, keep: [])
+        async let second = cache.tile(innsbruck, level: 0, keep: [])
+        let results = await [first, second]
+        XCTAssertTrue(results.allSatisfy(isGrid))
+        XCTAssertEqual(http.requestCount, 1)
+    }
+
+    /// A 304 for a request without conditions has no file to keep: the tile is unavailable, and the
+    /// cache does not ask again in a loop.
+    func testA304WithoutAnEntryIsUnavailable() async throws {
+        let cache = try makeCache()
+        for _ in 0..<3 { http.enqueue(HTTPResponse(status: 304, body: Data())) }
+        let result = await cache.tile(innsbruck, level: 0, keep: [])
+        guard case .unavailable = result else { return XCTFail("not unavailable: \(result)") }
+        XCTAssertEqual(http.requestCount, 1)
     }
 
     func testANetworkErrorKeepsTheOldTile() async throws {
@@ -360,6 +386,10 @@ final class TerrainHorizonTests: XCTestCase {
         let lines = TerrainHorizon.lines(profile)
         XCTAssertEqual(lines.map { $0.map(\.azimuthDeg) }, [[0, 90], [270, 360]])
         XCTAssertEqual(lines[1].map(\.altitudeDeg), [4, 1])
+        // A single point between two gaps is no line, also in the middle of the profile.
+        let single = HorizonProfile(
+            azimuthStepDeg: 90, altitudeDeg: [1, .nan, 3, .nan], distanceM: [1000, .nan, 1000, .nan])
+        XCTAssertTrue(TerrainHorizon.lines(single).isEmpty)
     }
 }
 

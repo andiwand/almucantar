@@ -12,6 +12,8 @@ struct PlacePanel: SwiftUI.View {
     @State private var map: BaseMap?
     @State private var failed = false
     @State private var query = ""
+    /// The result of the search. It changes only with the query, not with each frame of a drag.
+    @State private var results: [BaseMap.Place] = []
     @State private var viewport: MapViewport
     @State private var dragStart: MapViewport?
     @State private var zoomStart: Double?
@@ -35,7 +37,6 @@ struct PlacePanel: SwiftUI.View {
                     .padding(.bottom, 8)
                 ZStack(alignment: .top) {
                     mapView
-                    let results = map?.search(query) ?? []
                     if !results.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(results.enumerated()), id: \.offset) { _, place in
@@ -94,10 +95,12 @@ struct PlacePanel: SwiftUI.View {
         .task {
             do {
                 map = try await BaseMapStore.shared.load()
+                search()
             } catch {
                 failed = true
             }
         }
+        .onChange(of: query) { search() }
     }
 
     /// The kept places: the name, the tiles that the cache has, the size, and "Remove".
@@ -202,6 +205,8 @@ struct PlacePanel: SwiftUI.View {
             }
             .onEnded { _ in zoomStart = nil }
     }
+
+    private func search() { results = map?.search(query) ?? [] }
 
     private func choose(_ place: BaseMap.Place) {
         query = ""

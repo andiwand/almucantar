@@ -102,6 +102,12 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   of two tiles. Without a fixed order, the same grids can give a slightly different profile.
 - `TerrainHorizon` and `KeptPlaces` use the same actor, `DemCache.shared`, because both write the
   index. Do not make a second `DemCache` for the same directory.
+- `TerrainHorizon` tries the missing tiles of the place again every 60 s (`retryInterval`), the same
+  as Android. A new place or the setting off stops it. A move of more than 5 km (`keepProfileM`)
+  removes the old profile at once. If the tile at the observer is the sea, or the core has no data at
+  the observer, the profile is at sea level (`useGridElevation` false, `observerElevationM` 0).
+- `DemCache` downloads an entry only once at the same time: a second request waits for the running
+  download (`pending`) and gets its result.
 - `terrainAltitudeDeg()` converts the whole profile for each call. Call it when the profile or the
   day changes (`TerrainDayCache`), not for each frame.
 

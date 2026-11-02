@@ -116,8 +116,9 @@ final class KeptPlaces: ObservableObject {
             await fetch(tiles, full: false)
             // Step 2: the full files of the near tiles, if the terrain is high. The check uses the
             // same options as the terrain, so it downloads the same tiles.
+            let ownTileIsSea = tiles.contains { $0.distanceM == 0 && sea.contains(DemCache.name($0)) }
             let profile = await TerrainHorizon.calculateProfile(
-                observer: observer, grids: grids, options: source.horizonOptions)
+                observer: observer, grids: grids, ownTileIsSea: ownTileIsSea, options: source.horizonOptions)
             if TerrainHorizon.needsFullResolution(profile) {
                 let near = tiles.filter { source.isNear($0) && !sea.contains(DemCache.name($0)) }
                 total += near.count

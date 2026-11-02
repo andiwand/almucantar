@@ -129,6 +129,9 @@ actor DemCache {
     private(set) var index: [String: Entry]
     /// The places that the user keeps offline, in the order of the "Keep offline" action.
     private(set) var kept: [KeptPlace]
+    /// The running downloads, by the name of the entry. The terrain and "Keep offline" can ask for
+    /// the same entry at the same time: the second request waits for the first download.
+    private var pending: [String: Task<DownloadResult, Never>] = [:]
 
     init(
         directory: URL, http: HTTPClient, source: any ElevationSource = DemCache.defaultSource,
@@ -186,9 +189,6 @@ actor DemCache {
     nonisolated func prefixName(_ tile: ElevationTile) -> String { prefixName(Self.name(tile)) }
 
     nonisolated func prefixName(_ name: String) -> String { "\(name).l\(coarseLevel)" }
-
-    /// The URL of a tile at the source.
-    nonisolated func url(_ tile: ElevationTile) -> URL { source.url(tile) }
 
     /// True if the cache has the full file of the tile or the sea, so it does not need the network.
     func contains(_ tile: ElevationTile) -> Bool { has(Self.name(tile)) }
@@ -309,7 +309,11 @@ actor DemCache {
                 if retried { return .unavailable }
                 retried = true
             }
-            if await download(tile, kind: kind, conditions: [:], keep: keep) == .failed { return .unavailable }
+            // A 304 without conditions stores no entry, so only a file or the sea can continue.
+            switch await download(tile, kind: kind, conditions: [:], keep: keep) {
+            case .file, .sea: continue
+            case .notModified, .failed: return .unavailable
+            }
         }
     }
 
@@ -318,17 +322,30 @@ actor DemCache {
     private enum DownloadResult { case file, sea, notModified, failed }
 
     /// Downloads an entry and stores it. With `conditions` (If-None-Match, If-Modified-Since),
-    /// the server can answer 304.
+    /// the server can answer 304. If a download of the entry runs, it waits for that download and
+    /// gives its result.
     private func download(
+        _ tile: ElevationTile, kind: Kind, conditions: [String: String], keep: Set<String>
+    ) async -> DownloadResult {
+        let name = entryName(tile, kind)
+        if let running = pending[name] { return await running.value }
+        let task = Task { await transfer(tile, kind: kind, conditions: conditions, keep: keep) }
+        pending[name] = task
+        let result = await task.value
+        pending[name] = nil
+        return result
+    }
+
+    private func transfer(
         _ tile: ElevationTile, kind: Kind, conditions: [String: String], keep: Set<String>
     ) async -> DownloadResult {
         switch kind {
         case .full:
-            guard let response = try? await http.get(url(tile), headers: conditions) else { return .failed }
+            guard let response = try? await http.get(source.url(tile), headers: conditions) else { return .failed }
             if response.status == 304 { return .notModified }
             return store(tile, kind: .full, response: response, keep: keep)
         case .prefix:
-            let response = await downloadPrefix(url(tile), conditions: conditions)
+            let response = await downloadPrefix(source.url(tile), conditions: conditions)
             if response.status == 304 { return .notModified }
             return store(tile, kind: .prefix, response: response, keep: keep)
         }

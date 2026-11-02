@@ -202,6 +202,76 @@ final class TerrainLoadTests: XCTestCase {
         XCTAssertNil(terrain.profile)
     }
 
+    /// A place far from the old one does not show the profile of the old place, also if it gets no
+    /// profile of its own (offline). A small move keeps the old profile until the new one is ready.
+    func testAFarPlaceDoesNotShowTheOldProfile() async throws {
+        serveTiles(mountains: true)
+        let terrain = TerrainHorizon(cache: try makeCache())
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertTrue(terrain.profile != nil)
+        server.online = false
+        terrain.update(observer: Observer(latitudeDeg: 47.5, longitudeDeg: 11.52), enabled: true)
+        XCTAssertTrue(terrain.profile != nil)
+        await terrain.waitForLoad()
+        terrain.update(observer: Observer(latitudeDeg: 40.5, longitudeDeg: -3.5), enabled: true)
+        XCTAssertTrue(terrain.profile == nil)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .missing)
+        XCTAssertTrue(terrain.profile == nil)
+        XCTAssertTrue(terrain.lines.isEmpty)
+    }
+
+    /// The tile of the place is the sea (404): the profile is calculated at sea level, and the
+    /// mountains in the north show. "Keep offline" uses the same rule.
+    func testAPlaceAtSeaGetsAProfileAtSeaLevel() async throws {
+        for tile in tiles where tile.distanceM > 0 {
+            let high = tile.latitudeDeg == 48 && tile.longitudeDeg == 11
+            server.put(tile, TestGeotiff.tile(tile, heightM: high ? 3000 : 0))
+        }
+        let cache = try makeCache()
+        let terrain = TerrainHorizon(cache: cache)
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .ready)
+        XCTAssertGreaterThan(maxAltitude(terrain.profile), TerrainHorizon.fullTerrainMinDeg)
+        let kept = KeptPlaces(cache: cache)
+        kept.keep(name: "Sea", observer: here)
+        await kept.waitForDownload()
+        guard case .ready(let count, _) = kept.state else { return XCTFail("not ready: \(kept.state)") }
+        XCTAssertEqual(count, tiles.count)
+    }
+
+    /// Waits until the status is `status`, at most 5 s.
+    private func wait(for status: TerrainHorizon.Status, _ terrain: TerrainHorizon) async throws {
+        for _ in 0..<250 where terrain.status != status { try await Task.sleep(nanoseconds: 20_000_000) }
+    }
+
+    /// Offline, the terrain tries the missing tiles again after `retryInterval`, until they are
+    /// ready. The terrain off stops the retry.
+    func testTheMissingTilesLoadAgainLater() async throws {
+        serveTiles(mountains: false)
+        server.online = false
+        let terrain = TerrainHorizon(cache: try makeCache(), retryInterval: 0.05)
+        terrain.update(observer: here, enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .missing)
+        server.online = true
+        try await wait(for: .ready, terrain)
+        XCTAssertEqual(terrain.status, .ready)
+        XCTAssertTrue(terrain.profile != nil)
+
+        server.online = false
+        terrain.update(observer: Observer(latitudeDeg: 40.5, longitudeDeg: -3.5), enabled: true)
+        await terrain.waitForLoad()
+        XCTAssertEqual(terrain.status, .missing)
+        terrain.update(observer: here, enabled: false)
+        server.clearRequests()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertTrue(server.requests.isEmpty)
+        XCTAssertEqual(terrain.status, .off)
+    }
+
     func testKeepOfflineAtAFlatPlaceKeepsOnlyThePrefixes() async throws {
         serveTiles(mountains: false)
         let cache = try makeCache()

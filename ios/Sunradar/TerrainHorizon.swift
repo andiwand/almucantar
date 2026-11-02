@@ -3,7 +3,8 @@ import Sunradar
 
 /// The terrain horizon of the current place: it loads the DEM tiles from the DemCache and
 /// calculates the horizon profile off the main thread. The profile is calculated again when the
-/// place moves more than `moveM`. Until the profile is ready, the app shows the 0° horizon.
+/// place moves more than `moveM`. Until the first profile of a place is ready, the app shows the
+/// 0° horizon, or the old profile after a move of less than `keepProfileM`.
 ///
 /// The terrain loads in two steps (PLAN.md 14.3), so a flat place downloads only about 3 MB:
 ///
@@ -42,34 +43,48 @@ final class TerrainHorizon: ObservableObject {
     nonisolated static let maxDistanceM = 100_000.0
     /// A smaller move of the place does not change the profile.
     static let moveM = 500.0
+    /// The old profile stays until the new one is ready, if the place moved less than this. A
+    /// farther place shows the 0° horizon until its own profile is ready. Android uses the same
+    /// distance.
+    static let keepProfileM = 5_000.0
     /// The number of downloads at the same time.
     nonisolated static let parallelDownloads = 3
+    /// The time between two tries to load the missing tiles of the place, in seconds. Android
+    /// uses the same time.
+    let retryInterval: TimeInterval
 
     private let cache: DemCache?
     private var observer: Observer?
+    /// The place of `profile`.
+    private var profileObserver: Observer?
     private var job: Task<Void, Never>?
+    /// The next try to load the missing tiles of the current place.
+    private var retry: Task<Void, Never>?
     /// The grids in memory, by the name of the tile, with their level.
     private var grids: [String: (level: Int, distanceM: Double, grid: ElevationGrid)] = [:]
 
-    init(cache: DemCache? = DemCache.shared) {
+    init(cache: DemCache? = DemCache.shared, retryInterval: TimeInterval = 60) {
         self.cache = cache
+        self.retryInterval = retryInterval
     }
 
     /// Starts the work for a new place, if the place moved more than `moveM`. If `enabled` is
     /// false, it stops the work and removes the profile.
     func update(observer: Observer, enabled: Bool) {
         guard enabled else {
+            retry?.cancel()
             job?.cancel()
             job = nil
             self.observer = nil
             grids = [:]
-            profile = nil
-            lines = []
+            clearProfile()
             status = .off
             return
         }
         if let current = self.observer, Geo.distanceM(from: current, to: observer) <= Self.moveM { return }
         self.observer = observer
+        if let shown = profileObserver, Geo.distanceM(from: shown, to: observer) > Self.keepProfileM { clearProfile() }
+        retry?.cancel()
         job?.cancel()
         job = Task { await load(observer) }
     }
@@ -84,12 +99,17 @@ final class TerrainHorizon: ObservableObject {
     }
 
     /// Calculates the profile off the main thread, with the options of the source
-    /// (`ElevationSource.horizonOptions`). Nil without the tile at the observer (the distance 0),
-    /// because the profile needs the ground there.
+    /// (`ElevationSource.horizonOptions`). The profile needs the ground at the observer, so it is
+    /// nil without the tile at the observer (the distance 0). If that tile is the sea, or if the
+    /// core has no data at the observer (a coast), the observer is at sea level, as on Android.
     nonisolated static func calculateProfile(
-        observer: Observer, grids: [(distanceM: Double, grid: ElevationGrid)], options: HorizonOptions
+        observer: Observer, grids: [(distanceM: Double, grid: ElevationGrid)], ownTileIsSea: Bool,
+        options: HorizonOptions
     ) async -> HorizonProfile? {
-        guard grids.contains(where: { $0.distanceM == 0 }) else { return nil }
+        guard ownTileIsSea || grids.contains(where: { $0.distanceM == 0 }) else { return nil }
+        var atSeaLevel = options
+        atSeaLevel.useGridElevation = false
+        atSeaLevel.observerElevationM = 0
         // The core takes the first tile with data at a place, so the order of tiles with the same
         // cells changes the profile a little at the edges. A fixed order gives the same profile
         // for the same grids.
@@ -97,7 +117,10 @@ final class TerrainHorizon: ObservableObject {
             ($0.northLatitudeDeg, $0.westLongitudeDeg) < ($1.northLatitudeDeg, $1.westLongitudeDeg)
         }
         return await Task.detached(priority: .userInitiated) {
-            try? horizonProfile(observer: observer, tiles: tiles, options: options)
+            if !ownTileIsSea, let profile = try? horizonProfile(observer: observer, tiles: tiles, options: options) {
+                return profile
+            }
+            return try? horizonProfile(observer: observer, tiles: tiles, options: atSeaLevel)
         }.value
     }
 
@@ -121,7 +144,8 @@ final class TerrainHorizon: ObservableObject {
         if Task.isCancelled { return }
         var missing = first.missing
         let sea = first.sea
-        let coarseProfile = await publishProfile(observer, options: source.horizonOptions)
+        let ownTileIsSea = tiles.contains { $0.distanceM == 0 && sea.contains(DemCache.name($0)) }
+        let coarseProfile = await publishProfile(observer, ownTileIsSea: ownTileIsSea, options: source.horizonOptions)
         if Task.isCancelled { return }
 
         // Step 2: the near tiles at full resolution, if the terrain is high.
@@ -134,11 +158,22 @@ final class TerrainHorizon: ObservableObject {
                 let second = await fetch(near, full: true, keep: names, cache: cache)
                 if Task.isCancelled { return }
                 missing = missing || second.missing
-                _ = await publishProfile(observer, options: source.horizonOptions)
+                _ = await publishProfile(observer, ownTileIsSea: ownTileIsSea, options: source.horizonOptions)
                 if Task.isCancelled { return }
             }
         }
         status = missing ? .missing : .ready
+        if missing { scheduleRetry(observer) }
+    }
+
+    /// Loads the place again after `retryInterval`, for the tiles that failed. A new place or the
+    /// setting off cancels it.
+    private func scheduleRetry(_ observer: Observer) {
+        retry = Task { [weak self, retryInterval] in
+            try? await Task.sleep(nanoseconds: UInt64(retryInterval * 1_000_000_000))
+            guard let self, !Task.isCancelled, self.observer == observer else { return }
+            self.job = Task { await self.load(observer) }
+        }
     }
 
     /// Loads tiles from the cache, `parallelDownloads` at the same time, and keeps their grids.
@@ -149,6 +184,8 @@ final class TerrainHorizon: ObservableObject {
         let level = full ? cache.source.fullLevel : cache.coarseLevel
         var remaining = 0
         for tile in tiles where await !(full ? cache.contains(tile) : cache.containsCoarse(tile)) { remaining += 1 }
+        // A newer place can start during the count. Its status stays.
+        if Task.isCancelled { return (false, []) }
         status = remaining > 0 ? .loading(remaining: remaining) : .ready
         var missing = false
         var sea = Set<String>()
@@ -187,20 +224,31 @@ final class TerrainHorizon: ObservableObject {
     }
 
     /// Calculates the profile from the grids in memory and shows it. Returns the profile.
-    private func publishProfile(_ observer: Observer, options: HorizonOptions) async -> HorizonProfile? {
+    private func publishProfile(_ observer: Observer, ownTileIsSea: Bool, options: HorizonOptions) async -> HorizonProfile? {
         let input = grids.values.map { (distanceM: $0.distanceM, grid: $0.grid) }
-        guard let result = await Self.calculateProfile(observer: observer, grids: input, options: options) else {
+        guard
+            let result = await Self.calculateProfile(
+                observer: observer, grids: input, ownTileIsSea: ownTileIsSea, options: options)
+        else {
             return nil
         }
         if self.observer == observer && !Task.isCancelled {
             profile = result
+            profileObserver = observer
             lines = Self.lines(result)
             revision += 1
         }
         return result
     }
 
-    /// The parts of the profile with data, as lines from azimuth 0 to 360.
+    private func clearProfile() {
+        profile = nil
+        profileObserver = nil
+        lines = []
+    }
+
+    /// The parts of the profile with data, as lines from azimuth 0 to 360. A part needs at least two
+    /// points.
     nonisolated static func lines(_ profile: HorizonProfile) -> [[Horizontal]] {
         let count = profile.altitudeDeg.count
         var result: [[Horizontal]] = []
@@ -209,8 +257,8 @@ final class TerrainHorizon: ObservableObject {
             let altitude = profile.altitudeDeg[i % count]
             if altitude.isFinite {
                 current.append(Horizontal(azimuthDeg: Double(i) * profile.azimuthStepDeg, altitudeDeg: altitude))
-            } else if !current.isEmpty {
-                result.append(current)
+            } else {
+                if current.count > 1 { result.append(current) }
                 current = []
             }
         }
