@@ -135,31 +135,52 @@ function moonNight(): number {
 
 let night = moonNight();
 
+interface MoonArc {
+  /** The path from moonrise to moonset. */
+  path: Horizontal[];
+  /** The time range of the moon chapter: the moon is up and the sky is dark. */
+  from: number;
+  to: number;
+}
+
 let moonArcKey = "";
-let moonArcPath: Horizontal[] = [];
+let moonArcValue: MoonArc = { path: [], from: 0, to: 0 };
 
 /**
  * The path of the moon from its rise to its set, around the midnight of the moon chapter. The
  * samples cover 14 hours on each side, because the moon can rise long before midnight.
  */
-function moonArc(): Horizontal[] {
+function moonArc(): MoonArc {
   const key = `${night}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
-  if (key === moonArcKey) return moonArcPath;
+  if (key === moonArcKey) return moonArcValue;
   const step = 600;
-  const samples: Horizontal[] = [];
-  for (let t = night - 14 * 3600; t <= night + 14 * 3600; t += step) {
-    samples.push(sunradar.moonPosition(t, observer));
+  const begin = night - 14 * 3600;
+  const moon: Horizontal[] = [];
+  const dark: boolean[] = [];
+  for (let t = begin; t <= night + 14 * 3600; t += step) {
+    moon.push(sunradar.moonPosition(t, observer));
+    dark.push(sunradar.sunPosition(t, observer).altitudeDeg < -8);
   }
   // Go from midnight to both sides while the moon is above the horizon. Keep the first sample
   // below the horizon, so the line reaches the horizon.
   const middle = Math.round((14 * 3600) / step);
   let first = middle;
-  while (first > 0 && samples[first].altitudeDeg > 0) first--;
+  while (first > 0 && moon[first].altitudeDeg > 0) first--;
   let last = middle;
-  while (last < samples.length - 1 && samples[last].altitudeDeg > 0) last++;
+  while (last < moon.length - 1 && moon[last].altitudeDeg > 0) last++;
+  // The chapter shows the part in a dark sky and above the skyline (its buildings are at most
+  // about 5° high), so the moon moves along its path until it goes behind the buildings.
+  let from = middle;
+  while (from > first && dark[from - 1] && moon[from - 1].altitudeDeg > 6) from--;
+  let to = middle;
+  while (to < last && dark[to + 1] && moon[to + 1].altitudeDeg > 6) to++;
   moonArcKey = key;
-  moonArcPath = samples.slice(first, last + 1);
-  return moonArcPath;
+  moonArcValue = {
+    path: moon.slice(first, last + 1),
+    from: begin + from * step,
+    to: begin + to * step,
+  };
+  return moonArcValue;
 }
 
 const chapters: Record<string, (p: number) => Partial<Target>> = {
@@ -185,7 +206,10 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     const to = d.start + 17 * 3600;
     return { time: from + (to - from) * p, window: 1, crosshair: true };
   },
-  moon: (p) => ({ time: night - 4 * 3600 + 8 * 3600 * p, moon: true }),
+  moon: (p) => {
+    const arc = moonArc();
+    return { time: arc.from + (arc.to - arc.from) * p, moon: true };
+  },
   compass: (p) => {
     const d = dayAt(now());
     const time = d.start + 13 * 3600 + p * 3 * 3600;
@@ -442,8 +466,10 @@ function frame(ms: number) {
   const center = innerWidth < 700 ? south + clamp(offset * 0.8, -60, 60) : south;
   shown.center += (center - shown.center) * k;
 
-  const moonVisible = target.moon || sun.altitudeDeg < -4;
-  const moonPath = target.moon ? moonArc() : [];
+  // While the date still moves, the moon would jump across the sky (13° per day), so it waits.
+  const settled = Math.abs(targetDay - shown.day) < DAY / 2;
+  const moonVisible = settled && (target.moon || sun.altitudeDeg < -4);
+  const moonPath = target.moon ? moonArc().path : [];
   const frameData: Frame = {
     sun,
     path: day.path,
