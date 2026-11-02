@@ -292,9 +292,9 @@ fun terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: Double): Double =
     SunradarNative.terrainAltitudeDeg(profile.packed, azimuthDeg)
 
 /**
- * Finds the times between the two times when the sun crosses the terrain horizon [profile]: the
- * visible sunrise and sunset, and the times when a peak hides the sun during the day. An azimuth
- * without data uses the altitude 0.
+ * Finds the times between the two times when the body of [options] (the sun or the moon) crosses
+ * the terrain horizon [profile]: the visible rise and set, and the times when a peak hides the
+ * body. An azimuth without data uses the altitude 0.
  */
 fun terrainEvents(
     observer: Observer,

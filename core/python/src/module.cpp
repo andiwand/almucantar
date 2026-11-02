@@ -546,7 +546,7 @@ void bind_terrain(py::module_& m) {
                                   .longitude_deg = longitude_deg,
                                   .distance_m = distance_m};
            }),
-           "latitude_deg"_a, "longitude_deg"_a, "distance_m"_a = 0.0)
+           "latitude_deg"_a, "longitude_deg"_a, "distance_m"_a = ElevationTile{}.distance_m)
       .def_readwrite("latitude_deg", &ElevationTile::latitude_deg)
       .def_readwrite("longitude_deg", &ElevationTile::longitude_deg)
       .def_readwrite("distance_m", &ElevationTile::distance_m)
@@ -561,7 +561,7 @@ void bind_terrain(py::module_& m) {
       .def(py::init([](const int zoom, const int x, const int y, const double distance_m) {
              return MapTile{.zoom = zoom, .x = x, .y = y, .distance_m = distance_m};
            }),
-           "zoom"_a, "x"_a, "y"_a, "distance_m"_a = 0.0)
+           "zoom"_a, "x"_a, "y"_a, "distance_m"_a = MapTile{}.distance_m)
       .def_readwrite("zoom", &MapTile::zoom)
       .def_readwrite("x", &MapTile::x)
       .def_readwrite("y", &MapTile::y)
@@ -620,7 +620,7 @@ void bind_terrain(py::module_& m) {
       .def_readonly("crossings", &TerrainEvents::crossings, "rising is an appearance");
   m.def("terrain_events", &terrain_events, "observer"_a, "profile"_a, "start_utc"_a, "end_utc"_a,
         "options"_a = TerrainEventOptions{},
-        "Finds the times when the sun crosses the terrain horizon.");
+        "Finds the times when the sun or the moon crosses the terrain horizon.");
 }
 
 void bind_sky(py::module_& m) {

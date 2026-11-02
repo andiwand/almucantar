@@ -251,6 +251,10 @@ Georeference georeference(const Reader& reader, const Directory& directory) {
   if (!(scale[0] > 0 && scale[1] > 0 && std::isfinite(scale[0]) && std::isfinite(scale[1]))) {
     fail("has a pixel scale that is not positive");
   }
+  if (!std::isfinite(tiepoint[0]) || !std::isfinite(tiepoint[1]) || !std::isfinite(tiepoint[3]) ||
+      !std::isfinite(tiepoint[4])) {
+    fail("has a tie point that is not finite");
+  }
   bool pixel_is_point = false;
   const std::vector<std::uint64_t> keys = integers(reader, directory, kGeoKeyDirectory);
   if (keys.size() >= 4) {
@@ -349,7 +353,9 @@ Image image_layout(const Reader& reader, const Directory& directory) {
     image.offsets = integers(reader, directory, kStripOffsets);
     image.byte_counts = integers(reader, directory, kStripByteCounts);
   }
-  if (image.chunk_width == 0 || image.chunk_height == 0 ||
+  // Each side is at most kMaxChunkBytes, so the product does not overflow 64 bits.
+  if (image.chunk_width == 0 || image.chunk_height == 0 || image.chunk_width > kMaxChunkBytes ||
+      image.chunk_height > kMaxChunkBytes ||
       image.chunk_width * image.chunk_height * static_cast<std::uint64_t>(image.bytes_per_sample) >
           kMaxChunkBytes) {
     fail("has a tile or strip size that is zero or too large");
@@ -439,10 +445,6 @@ std::vector<float> decode_chunk(const Reader& reader, const Image& image, const 
   return samples;
 }
 
-}  // namespace
-
-namespace {
-
 /// The metadata of one level of a file: everything except the data of the tiles or strips.
 struct Parsed {
   Georeference geo;
@@ -523,8 +525,10 @@ ElevationGrid read_geotiff(const std::vector<std::uint8_t>& data, const int leve
   grid.west_longitude_deg = geo.corner_x + (0.5 * scale_x);
   grid.rows = static_cast<int>(image.height);
   grid.columns = static_cast<int>(image.width);
-  if (grid.north_latitude_deg > 90 + scale_y ||
-      grid.north_latitude_deg - (static_cast<double>(grid.rows - 1) * scale_y) < -90 - scale_y) {
+  // Only a rounding error above the pole is clamped: a larger value would move all rows.
+  constexpr double kRoundingDeg = 1e-6;
+  if (grid.north_latitude_deg > 90 + kRoundingDeg ||
+      grid.north_latitude_deg - (static_cast<double>(grid.rows - 1) * scale_y) < -90) {
     fail("is not in the range of the latitude");
   }
   grid.north_latitude_deg = std::min(grid.north_latitude_deg, 90.0);

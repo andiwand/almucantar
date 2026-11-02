@@ -66,6 +66,13 @@ std::size_t azimuth_count(const double step_deg) {
   return static_cast<std::size_t>(count);
 }
 
+void validate(const HorizonProfile& profile) {
+  require(!profile.altitude_deg.empty(), "the profile is empty");
+  require_positive(profile.azimuth_step_deg, "azimuth_step_deg");
+  require(azimuth_count(profile.azimuth_step_deg) == profile.altitude_deg.size(),
+          "the profile does not have 360 / azimuth_step_deg values");
+}
+
 /// Returns the height at a place with a bilinear interpolation, or nothing if the place is
 /// outside the grid or a neighbor has no data. A place up to `margin` cells outside the edge uses
 /// the samples at the edge, so the gap between two tiles has data.
@@ -124,17 +131,19 @@ std::optional<double> height_in_tiles(const SortedTiles& tiles, const double lat
 }
 
 /// The distance from the observer to the nearest point of a box in latitude and longitude. The
-/// nearest point of the box is a good approximation of the nearest point for short distances.
+/// nearest point is on the meridian of the box that is nearest to the observer. On that meridian,
+/// it is the point where the great circle from the observer meets the meridian at a right angle.
 double box_distance_m(const Observer& observer, const double south_deg, const double north_deg,
                       const double west_deg, const double width_deg) {
-  const double lat = std::clamp(observer.latitude_deg, south_deg, north_deg);
   const double half = width_deg / 2;
   const double offset = internal::wrap_180(observer.longitude_deg - west_deg - half);
   const double lon = observer.longitude_deg - offset + std::clamp(offset, -half, half);
   const double phi1 = observer.latitude_deg * kDegToRad;
-  const double phi2 = lat * kDegToRad;
-  const double dphi = phi2 - phi1;
   const double dlambda = (lon - observer.longitude_deg) * kDegToRad;
+  const double nearest_deg =
+      std::atan2(std::sin(phi1), std::cos(phi1) * std::cos(dlambda)) * kRadToDeg;
+  const double phi2 = std::clamp(nearest_deg, south_deg, north_deg) * kDegToRad;
+  const double dphi = phi2 - phi1;
   const double a =
       (std::sin(dphi / 2) * std::sin(dphi / 2)) +
       (std::cos(phi1) * std::cos(phi2) * std::sin(dlambda / 2) * std::sin(dlambda / 2));
@@ -236,8 +245,7 @@ std::vector<ElevationTile> elevation_tiles(const Observer& observer, const doubl
   for (int latitude = south; latitude <= north; ++latitude) {
     for (int longitude = -180; longitude < 180; ++longitude) {
       const double d = box_distance_m(observer, latitude, latitude + 1, longitude, 1);
-      // A small margin, because the box is an approximation of the nearest point.
-      if (d <= max_distance_m * 1.01) {
+      if (d <= max_distance_m) {
         found.emplace_back(
             d,
             ElevationTile{.latitude_deg = latitude, .longitude_deg = longitude, .distance_m = d});
@@ -278,7 +286,7 @@ std::vector<MapTile> map_tiles(const Observer& observer, const double max_distan
     for (int x = 0; x < n; ++x) {
       const double d =
           box_distance_m(observer, tile_south, tile_north, -180 + (x * width_deg), width_deg);
-      if (d <= max_distance_m * 1.01) {
+      if (d <= max_distance_m) {
         found.emplace_back(d, MapTile{.zoom = zoom, .x = x, .y = y, .distance_m = d});
       }
     }
@@ -417,8 +425,7 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
 
 double terrain_altitude_deg(const HorizonProfile& profile, const double azimuth_deg) {
   require_finite(azimuth_deg, "azimuth_deg");
-  require(!profile.altitude_deg.empty(), "the profile is empty");
-  require_positive(profile.azimuth_step_deg, "azimuth_step_deg");
+  validate(profile);
   const std::size_t count = profile.altitude_deg.size();
   const double position = internal::wrap_360(azimuth_deg) / profile.azimuth_step_deg;
   const auto i = std::min(static_cast<std::size_t>(position), count - 1);
@@ -435,10 +442,7 @@ TerrainEvents terrain_events(const Observer& observer, const HorizonProfile& pro
   require_finite(start_utc, "start_utc");
   require_finite(end_utc, "end_utc");
   require(end_utc > start_utc, "end_utc is not after start_utc");
-  require(!profile.altitude_deg.empty(), "the profile is empty");
-  require_positive(profile.azimuth_step_deg, "azimuth_step_deg");
-  require(azimuth_count(profile.azimuth_step_deg) == profile.altitude_deg.size(),
-          "the profile does not have 360 / azimuth_step_deg values");
+  validate(profile);
   require(options.body == Body::sun || options.body == Body::moon, "body is not a Body");
   require_finite(options.limb_deg, "limb_deg");
   require_positive(options.search_step_s, "search_step_s");

@@ -515,10 +515,10 @@ public struct TerrainEventOptions: Sendable {
     @usableFromInline static let c = sr_default_terrain_event_options()
 }
 
-/// The times when the sun appears (rising) or goes away behind the terrain.
+/// The times when the body appears (rising) or goes away behind the terrain.
 public struct TerrainEvents: Sendable {
-    /// normal: the sun crosses the terrain at least once. polarDay: the sun stays above the terrain.
-    /// polarNight: the sun stays behind the terrain or below the horizon.
+    /// normal: the body crosses the terrain at least once. polarDay: the body stays above the terrain.
+    /// polarNight: the body stays behind the terrain or below the horizon.
     public var kind: DayKind
     public var crossings: [Crossing]
 }

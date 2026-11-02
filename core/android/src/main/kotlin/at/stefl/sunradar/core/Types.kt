@@ -305,7 +305,7 @@ data class TerrainEventOptions(
 
 /** The times when the body appears or goes away behind the terrain. */
 data class TerrainEvents(
-    /** POLAR_DAY: the sun stays above the terrain. POLAR_NIGHT: it stays behind or below. */
+    /** POLAR_DAY: the body stays above the terrain. POLAR_NIGHT: it stays behind or below. */
     val kind: DayKind,
     /** All crossings, in time order. `rising` is an appearance. */
     val crossings: List<Crossing>,

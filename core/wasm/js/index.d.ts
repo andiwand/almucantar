@@ -56,7 +56,7 @@ export interface TerrainEventOptions {
   model: number; refraction: boolean; atmosphere: Atmosphere; limbDeg: number; searchStepS: number;
   toleranceS: number;
 }
-/** The times when the sun appears (rising) or goes away behind the terrain. */
+/** The times when the body appears (rising) or goes away behind the terrain. */
 export interface TerrainEvents { kind: number; crossings: Crossing[] }
 
 export interface Camera {

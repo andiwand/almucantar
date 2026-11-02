@@ -348,8 +348,8 @@ public func terrainAltitudeDeg(_ profile: HorizonProfile, azimuthDeg: Double) th
     return out
 }
 
-/// Finds the times between `startUtc` and `endUtc` when the sun crosses the terrain horizon: the
-/// visible sunrise and sunset, and the times when a peak hides the sun during the day.
+/// Finds the times between `startUtc` and `endUtc` when the body of `options` (the sun or the moon)
+/// crosses the terrain horizon: the visible rise and set, and the times when a peak hides the body.
 public func terrainEvents(
     observer: Observer, profile: HorizonProfile, startUtc: Double, endUtc: Double,
     options: TerrainEventOptions = TerrainEventOptions()

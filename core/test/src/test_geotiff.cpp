@@ -3,8 +3,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -42,7 +44,105 @@ void require_layout(const ElevationGrid& grid) {
   REQUIRE_THAT(grid.west_longitude_deg, WithinAbs(11.25, 1e-12));
 }
 
+/// One entry of a directory for tiff(): the tag, the type, the count, and the values in the
+/// bytes of a little-endian file.
+struct TestEntry {
+  std::uint16_t tag = 0;
+  std::uint16_t type = 0;
+  std::uint32_t count = 0;
+  std::vector<std::uint8_t> values;
+};
+
+void put(std::vector<std::uint8_t>& out, const std::uint64_t value, const int bytes) {
+  for (int i = 0; i < bytes; ++i) {
+    out.push_back(static_cast<std::uint8_t>(value >> (8U * static_cast<unsigned>(i))));
+  }
+}
+
+TestEntry long_entry(const std::uint16_t tag, const std::uint32_t value) {
+  TestEntry e{.tag = tag, .type = 4, .count = 1, .values = {}};
+  put(e.values, value, 4);
+  return e;
+}
+
+TestEntry double_entry(const std::uint16_t tag, const std::vector<double>& values) {
+  TestEntry e{
+      .tag = tag, .type = 12, .count = static_cast<std::uint32_t>(values.size()), .values = {}};
+  for (const double v : values) {
+    std::uint64_t bits = 0;
+    std::memcpy(&bits, &v, sizeof bits);
+    put(e.values, bits, 8);
+  }
+  return e;
+}
+
+/// A little-endian TIFF with one directory. The values that do not fit into an entry come after
+/// the directory.
+std::vector<std::uint8_t> tiff(const std::vector<TestEntry>& entries) {
+  std::vector<std::uint8_t> out{'I', 'I', 42, 0};
+  put(out, 8, 4);
+  put(out, entries.size(), 2);
+  std::size_t extra = 8 + 2 + (12 * entries.size()) + 4;
+  std::vector<std::uint8_t> tail;
+  for (const TestEntry& e : entries) {
+    put(out, e.tag, 2);
+    put(out, e.type, 2);
+    put(out, e.count, 4);
+    if (e.values.size() <= 4) {
+      std::vector<std::uint8_t> inline_values = e.values;
+      inline_values.resize(4);
+      out.insert(out.end(), inline_values.begin(), inline_values.end());
+    } else {
+      put(out, extra + tail.size(), 4);
+      tail.insert(tail.end(), e.values.begin(), e.values.end());
+    }
+  }
+  put(out, 0, 4);
+  out.insert(out.end(), tail.begin(), tail.end());
+  out.resize(out.size() + 64);  // the data of the tiles
+  return out;
+}
+
+/// A float32 image of 2 x 2 pixels in one tile, without compression, at 48° north and 11° east.
+std::vector<TestEntry> small_image(const std::uint32_t tile_width, const std::uint32_t tile_length,
+                                   const double tie_latitude_deg) {
+  return {long_entry(256, 2),
+          long_entry(257, 2),
+          long_entry(258, 32),
+          long_entry(339, 3),
+          long_entry(322, tile_width),
+          long_entry(323, tile_length),
+          long_entry(324, 8),
+          long_entry(325, 16),
+          double_entry(33550, {0.5, 0.5, 0}),
+          double_entry(33922, {0, 0, 0, 11, tie_latitude_deg, 0})};
+}
+
 }  // namespace
+
+TEST_CASE("read_elevation_geotiff reads a minimal file", "[geotiff]") {
+  const ElevationGrid grid = read_elevation_geotiff(tiff(small_image(2, 2, 48)));
+  REQUIRE(grid.rows == 2);
+  REQUIRE(grid.columns == 2);
+  REQUIRE_THAT(grid.north_latitude_deg, WithinAbs(47.75, 1e-12));
+}
+
+TEST_CASE("read_elevation_geotiff refuses a tile size that overflows", "[geotiff]") {
+  // 2^31 * 2^31 * 4 bytes is 2^64, which is 0 in 64 bits.
+  REQUIRE_THROWS_AS(read_elevation_geotiff(tiff(small_image(1U << 31U, 1U << 31U, 48))),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(read_elevation_geotiff(tiff(small_image(1U << 30U, 1U << 30U, 48))),
+                    std::invalid_argument);
+}
+
+TEST_CASE("read_elevation_geotiff refuses a tie point that is not finite", "[geotiff]") {
+  REQUIRE_THROWS_AS(
+      read_elevation_geotiff(tiff(small_image(2, 2, std::numeric_limits<double>::quiet_NaN()))),
+      std::invalid_argument);
+  REQUIRE_THROWS_AS(
+      read_elevation_geotiff(tiff(small_image(2, 2, std::numeric_limits<double>::infinity()))),
+      std::invalid_argument);
+}
 
 TEST_CASE("read_elevation_geotiff reads tiles with DEFLATE and the float predictor", "[geotiff]") {
   const std::vector<std::uint8_t> data = read_file("float_tiles_deflate_p3.tif");

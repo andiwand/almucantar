@@ -561,7 +561,7 @@ SUNRADAR_JNI(readElevationGeotiff)
 (JNIEnv* env, jclass, jbyteArray data, jint level, jdoubleArray header)->jfloatArray {
   return guarded<jfloatArray>(env, nullptr, [&]() -> jfloatArray {
     if (data == nullptr || header == nullptr) {
-      throw std::invalid_argument("data is null");
+      throw std::invalid_argument("data or header is null");
     }
     if (env->GetArrayLength(header) != 6) {
       throw std::invalid_argument("header has the wrong length");

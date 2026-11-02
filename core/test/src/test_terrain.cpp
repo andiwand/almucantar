@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -165,6 +166,9 @@ TEST_CASE("terrain_altitude_deg interpolates across north", "[terrain]") {
   REQUIRE_THAT(terrain_altitude_deg(profile, -45), WithinAbs(15, 1e-12));
   REQUIRE_THAT(terrain_altitude_deg(profile, 360), WithinAbs(0, 1e-12));
   REQUIRE_THROWS_AS(terrain_altitude_deg(HorizonProfile{}, 0), std::invalid_argument);
+  // The profile must cover 360°, else the interpolation goes past its end.
+  profile.altitude_deg = {0, 10, 20};
+  REQUIRE_THROWS_AS(terrain_altitude_deg(profile, 300), std::invalid_argument);
 }
 
 TEST_CASE("terrain_events over a flat horizon agrees with sun_events", "[terrain]") {
@@ -310,6 +314,15 @@ TEST_CASE("elevation_tiles lists the tiles near the observer", "[terrain]") {
   // Near the pole, all longitudes.
   const auto pole = elevation_tiles({.latitude_deg = 89.9, .longitude_deg = 0}, 50'000);
   REQUIRE(pole.size() == 360);
+
+  // At a high latitude, the nearest point of a tile is not at the latitude of the observer: the
+  // great circle to the east edge goes toward the pole. The tile 80° N, 26° E has its nearest
+  // point at 81° N, 494.1 km away (a brute-force search over its edges gives the same).
+  const auto north = elevation_tiles({.latitude_deg = 80, .longitude_deg = -0.5}, 500'000);
+  const auto tile = std::ranges::find_if(
+      north, [](const ElevationTile& t) { return t.latitude_deg == 80 && t.longitude_deg == 26; });
+  REQUIRE(tile != north.end());
+  REQUIRE_THAT(tile->distance_m, WithinAbs(494'143, 10));
   REQUIRE_THROWS_AS(elevation_tiles({.latitude_deg = 47, .longitude_deg = 11}, 0),
                     std::invalid_argument);
 }

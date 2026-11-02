@@ -194,6 +194,10 @@ ElevationGrid to_cpp(const sr_elevation_grid& g) {
   if (g.heights_m == nullptr && size > 0) {
     throw std::invalid_argument("heights_m is null");
   }
+  // The same limit as the core, checked before the copy reads the buffer of the caller.
+  if (size > 200'000'000) {
+    throw std::invalid_argument("the grid has more than 200,000,000 samples");
+  }
   ElevationGrid out{.north_latitude_deg = g.north_latitude_deg,
                     .west_longitude_deg = g.west_longitude_deg,
                     .latitude_step_deg = g.latitude_step_deg,

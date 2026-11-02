@@ -129,7 +129,8 @@ struct MapTile {
 
 /// Returns the altitude of the terrain horizon at `azimuth_deg`, with a linear interpolation
 /// between the azimuths of `profile`. Returns NaN if a neighbor has no data. Throws
-/// `std::invalid_argument` if the profile is empty or the azimuth is not finite.
+/// `std::invalid_argument` if the profile does not have `360 / azimuth_step_deg` values, or if the
+/// azimuth is not finite.
 [[nodiscard]] double terrain_altitude_deg(const HorizonProfile& profile, double azimuth_deg);
 
 /// A body that can rise and set behind the terrain.

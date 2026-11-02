@@ -21,7 +21,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   `read_elevation_geotiff()` reads a GeoTIFF tile, for example of Copernicus GLO-90, and
   `elevation_tiles()` lists the tiles of 1° that a profile needs. For a web app, `map_tiles()` and
   `terrarium_grid()` read the Web Mercator tiles of the AWS Terrain Tiles (Terrarium PNG), which
-  allow CORS. The WASM package, the AAR, and the Swift package have all terrain functions.
+  allow CORS. The WASM package has all terrain functions. The AAR and the Swift package have all
+  except `map_tiles()` and `terrarium_grid()`.
 - `terrain_events()` also finds the moon behind the terrain: `TerrainEventOptions.body` is
   `Body::sun` (the default) or `Body::moon`, in all bindings.
 - `elevation_geotiff_prefix_size()` gives the bytes from the start of a GeoTIFF that a level needs.
