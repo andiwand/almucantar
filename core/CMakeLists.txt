@@ -33,6 +33,7 @@ set(SUNRADAR_SOURCE_FILES
   src/sunradar/view.cpp
   src/sunradar/internal/astronomy_engine.cpp
   src/sunradar/internal/events.cpp
+  src/sunradar/internal/geotiff.cpp
   src/sunradar/internal/noaa_model.cpp
   src/sunradar/internal/path.cpp
   src/sunradar/internal/projection.cpp
@@ -52,7 +53,16 @@ if(NOT MSVC)
   target_link_libraries(astronomy_engine PRIVATE m)
 endif()
 
-add_library(sunradar ${SUNRADAR_SOURCE_FILES} $<TARGET_OBJECTS:astronomy_engine>)
+# miniz (MIT, vendored), only its inflate code, for the GeoTIFF reader. An object library, as
+# Astronomy Engine. The definitions switch off the parts that the core does not use.
+add_library(miniz OBJECT third_party/miniz/miniz.c)
+set_target_properties(miniz PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99)
+set(SUNRADAR_MINIZ_DEFINITIONS MINIZ_NO_STDIO MINIZ_NO_TIME MINIZ_NO_ARCHIVE_APIS
+  MINIZ_NO_DEFLATE_APIS MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
+target_compile_definitions(miniz PRIVATE ${SUNRADAR_MINIZ_DEFINITIONS})
+
+add_library(sunradar ${SUNRADAR_SOURCE_FILES} $<TARGET_OBJECTS:astronomy_engine>
+  $<TARGET_OBJECTS:miniz>)
 add_library(sunradar::sunradar ALIAS sunradar)
 
 # The build tree exposes src/, so the tests can include the internal headers. The
@@ -69,6 +79,8 @@ if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
 endif()
 target_compile_definitions(sunradar PRIVATE SUNRADAR_VERSION="${SUNRADAR_VERSION_STRING}")
 target_include_directories(sunradar SYSTEM PRIVATE third_party/astronomy-engine)
+target_include_directories(sunradar SYSTEM PRIVATE third_party/miniz)
+target_compile_definitions(sunradar PRIVATE ${SUNRADAR_MINIZ_DEFINITIONS})
 if(NOT MSVC AND NOT APPLE)
   target_link_libraries(sunradar PUBLIC m)
 endif()

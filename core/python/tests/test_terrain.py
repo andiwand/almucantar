@@ -1,4 +1,5 @@
 import math
+import pathlib
 
 import pytest
 
@@ -24,7 +25,7 @@ def flat_grid(height=0.0):
 
 def test_horizon_profile_over_flat_ground():
     profile = sunradar.horizon_profile(
-        VIENNA, flat_grid(150.0), sunradar.HorizonOptions(azimuth_step_deg=10)
+        VIENNA, [flat_grid(150.0)], sunradar.HorizonOptions(azimuth_step_deg=10)
     )
     assert len(profile.altitude_deg) == 36
     assert profile.observer_elevation_m == pytest.approx(150.0)
@@ -39,7 +40,7 @@ def test_horizon_profile_without_data_at_the_observer():
     grid = flat_grid()
     grid.heights_m = [math.nan] * len(grid.heights_m)
     with pytest.raises(ValueError, match="no data at the observer"):
-        sunradar.horizon_profile(VIENNA, grid)
+        sunradar.horizon_profile(VIENNA, [grid])
 
 
 def test_terrain_events():
@@ -61,3 +62,22 @@ def test_terrain_events():
     events = sunradar.terrain_events(VIENNA, wall, SOLSTICE, SOLSTICE + 86400, options)
     assert events.kind == sunradar.DayKind.polar_night
     assert events.crossings == []
+
+
+def test_read_elevation_geotiff():
+    path = (
+        pathlib.Path(__file__).parents[2]
+        / "test/data/geotiff/float_tiles_deflate_p3.tif"
+    )
+    grid = sunradar.read_elevation_geotiff(path.read_bytes())
+    assert (grid.rows, grid.columns) == (7, 5)
+    assert grid.north_latitude_deg == pytest.approx(47.75)
+    assert grid.heights_m[0] == pytest.approx(1000.25)
+    assert sunradar.read_elevation_geotiff(path.read_bytes(), level=1).rows == 4
+    with pytest.raises(ValueError, match="GeoTIFF"):
+        sunradar.read_elevation_geotiff(b"II*\0")
+
+
+def test_elevation_tiles():
+    tiles = sunradar.elevation_tiles(VIENNA, 20000)
+    assert (tiles[0].latitude_deg, tiles[0].longitude_deg) == (48, 16)

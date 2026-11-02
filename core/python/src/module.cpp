@@ -4,7 +4,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -515,8 +517,29 @@ void bind_terrain(py::module_& m) {
       .def_readwrite("distance_m", &HorizonProfile::distance_m, "NaN without data")
       .def_readwrite("observer_elevation_m", &HorizonProfile::observer_elevation_m);
 
-  m.def("horizon_profile", &horizon_profile, "observer"_a, "grid"_a, "options"_a = HorizonOptions{},
-        "Calculates the terrain horizon of the observer.");
+  m.def(
+      "read_elevation_geotiff",
+      [](const py::bytes& data, const int level) {
+        const std::string_view view(data);
+        return read_elevation_geotiff(std::vector<std::uint8_t>(view.begin(), view.end()), level);
+      },
+      "data"_a, "level"_a = 0, "Reads a GeoTIFF of heights, for example a Copernicus tile.");
+  py::class_<ElevationTile>(m, "ElevationTile",
+                            "A tile of 1° by 1°, named by its south-west corner.")
+      .def(py::init([](const int latitude_deg, const int longitude_deg) {
+             return ElevationTile{.latitude_deg = latitude_deg, .longitude_deg = longitude_deg};
+           }),
+           "latitude_deg"_a, "longitude_deg"_a)
+      .def_readwrite("latitude_deg", &ElevationTile::latitude_deg)
+      .def_readwrite("longitude_deg", &ElevationTile::longitude_deg)
+      .def("__repr__", [](const ElevationTile& t) {
+        return "ElevationTile(latitude_deg=" + std::to_string(t.latitude_deg) +
+               ", longitude_deg=" + std::to_string(t.longitude_deg) + ")";
+      });
+  m.def("elevation_tiles", &elevation_tiles, "observer"_a, "max_distance_m"_a,
+        "Returns the tiles of 1° by 1° that a horizon profile needs, the nearest first.");
+  m.def("horizon_profile", &horizon_profile, "observer"_a, "tiles"_a,
+        "options"_a = HorizonOptions{}, "Calculates the terrain horizon from the grids in tiles.");
   m.def("terrain_altitude_deg", &terrain_altitude_deg, "profile"_a, "azimuth_deg"_a,
         "Returns the altitude of the terrain horizon at an azimuth (linear interpolation).");
 

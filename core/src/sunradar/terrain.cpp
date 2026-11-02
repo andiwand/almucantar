@@ -6,7 +6,10 @@
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
+#include "sunradar/internal/geotiff.hpp"
 #include "sunradar/internal/math.hpp"
 #include "sunradar/internal/numeric.hpp"
 #include "sunradar/internal/refraction.hpp"
@@ -59,15 +62,25 @@ std::size_t azimuth_count(const double step_deg) {
 }
 
 /// Returns the height at a place with a bilinear interpolation, or nothing if the place is
-/// outside the grid or a neighbor has no data.
+/// outside the grid or a neighbor has no data. A place up to `margin` cells outside the edge uses
+/// the samples at the edge, so the gap between two tiles has data.
 std::optional<double> height_at(const ElevationGrid& grid, const double latitude_deg,
-                                const double longitude_deg) {
-  const double row = (grid.north_latitude_deg - latitude_deg) / grid.latitude_step_deg;
-  const double column =
+                                const double longitude_deg, const double margin) {
+  double row = (grid.north_latitude_deg - latitude_deg) / grid.latitude_step_deg;
+  double column =
       internal::wrap_360(longitude_deg - grid.west_longitude_deg) / grid.longitude_step_deg;
-  if (row < 0 || row > grid.rows - 1 || column < 0 || column > grid.columns - 1) {
+  const double full_turn = 360 / grid.longitude_step_deg;
+  if (column > full_turn - margin) {
+    column -= full_turn;  // a place just west of the grid
+  }
+  const double last_row = grid.rows - 1;
+  const double last_column = grid.columns - 1;
+  if (row < -margin || row > last_row + margin || column < -margin ||
+      column > last_column + margin) {
     return std::nullopt;
   }
+  row = std::clamp(row, 0.0, last_row);
+  column = std::clamp(column, 0.0, last_column);
   const int r = std::min(static_cast<int>(row), grid.rows - 2);
   const int c = std::min(static_cast<int>(column), grid.columns - 2);
   const double u = row - r;
@@ -86,14 +99,39 @@ std::optional<double> height_at(const ElevationGrid& grid, const double latitude
   return h;
 }
 
+/// Returns the height at a place from the first tile that has data there. The tile `hint` is
+/// tried first, because the next sample of a ray is usually in the same tile.
+std::optional<double> height_in_tiles(const std::vector<ElevationGrid>& tiles,
+                                      const double latitude_deg, const double longitude_deg,
+                                      std::size_t& hint) {
+  for (const double margin : {0.0, 1.0}) {
+    if (hint < tiles.size()) {
+      if (const auto h = height_at(tiles[hint], latitude_deg, longitude_deg, margin)) {
+        return h;
+      }
+    }
+    for (std::size_t i = 0; i < tiles.size(); ++i) {
+      if (i == hint) {
+        continue;
+      }
+      if (const auto h = height_at(tiles[i], latitude_deg, longitude_deg, margin)) {
+        hint = i;
+        return h;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
 /// The highest terrain along one azimuth.
 struct RayResult {
   double altitude_deg = kNaN;
   double distance_m = kNaN;
 };
 
-RayResult trace_ray(const ElevationGrid& grid, const Observer& observer, const double azimuth_deg,
-                    const double eye_m, const HorizonOptions& options, const double cell_m) {
+RayResult trace_ray(const std::vector<ElevationGrid>& tiles, const Observer& observer,
+                    const double azimuth_deg, const double eye_m, const HorizonOptions& options,
+                    const double cell_m) {
   const double phi1 = observer.latitude_deg * kDegToRad;
   const double sin_phi1 = std::sin(phi1);
   const double cos_phi1 = std::cos(phi1);
@@ -106,6 +144,7 @@ RayResult trace_ray(const ElevationGrid& grid, const Observer& observer, const d
   const double near_step = 0.5 * cell_m;
 
   RayResult result;
+  std::size_t hint = 0;
   double best_tangent = -std::numeric_limits<double>::infinity();
   // The step grows with the distance, so a counter of the steps does not give d.
   double d = near_step;
@@ -121,12 +160,10 @@ RayResult trace_ray(const ElevationGrid& grid, const Observer& observer, const d
     const double lambda2 =
         (observer.longitude_deg * kDegToRad) +
         std::atan2(sin_theta * sin_delta * cos_phi1, cos_delta - (sin_phi1 * sin_phi2));
-    const std::optional<double> h = height_at(grid, phi2 * kRadToDeg, lambda2 * kRadToDeg);
+    const std::optional<double> h =
+        height_in_tiles(tiles, phi2 * kRadToDeg, lambda2 * kRadToDeg, hint);
     if (!h) {
-      if (std::isnan(result.distance_m)) {
-        continue;  // The data can start after a gap near the observer, for example at a coast.
-      }
-      break;  // The ray leaves the grid.
+      continue;  // A gap, for example the sea between two coasts.
     }
     const double drop_m = here * here / two_effective_radius;
     const double tangent = (*h - eye_m - drop_m) / here;
@@ -156,10 +193,63 @@ double clearance_deg(const internal::SolarModelImpl& model, const Observer& obse
 
 }  // namespace
 
-HorizonProfile horizon_profile(const Observer& observer, const ElevationGrid& grid,
+ElevationGrid read_elevation_geotiff(const std::vector<std::uint8_t>& data, const int level) {
+  return internal::read_geotiff(data, level);
+}
+
+std::vector<ElevationTile> elevation_tiles(const Observer& observer, const double max_distance_m) {
+  internal::validate(observer);
+  require_positive(max_distance_m, "max_distance_m");
+  require(max_distance_m <= kMaxDistanceM, "max_distance_m is greater than 500 km");
+  const double reach_deg = max_distance_m / kEarthRadiusM * kRadToDeg;
+  const auto south =
+      static_cast<int>(std::floor(std::max(observer.latitude_deg - reach_deg, -90.0)));
+  const auto north = std::min(static_cast<int>(std::floor(observer.latitude_deg + reach_deg)), 89);
+
+  // The distance from the observer to the nearest point of a tile. The nearest point of the box
+  // in latitude and longitude is a good approximation for these short distances.
+  const auto distance_m = [&observer](const int latitude, const int longitude) {
+    const double lat = std::clamp(observer.latitude_deg, static_cast<double>(latitude),
+                                  static_cast<double>(latitude + 1));
+    const double offset = internal::wrap_180(observer.longitude_deg - longitude - 0.5);
+    const double lon = observer.longitude_deg - offset + std::clamp(offset, -0.5, 0.5);
+    const double phi1 = observer.latitude_deg * kDegToRad;
+    const double phi2 = lat * kDegToRad;
+    const double dphi = phi2 - phi1;
+    const double dlambda = (lon - observer.longitude_deg) * kDegToRad;
+    const double a =
+        (std::sin(dphi / 2) * std::sin(dphi / 2)) +
+        (std::cos(phi1) * std::cos(phi2) * std::sin(dlambda / 2) * std::sin(dlambda / 2));
+    return 2 * kEarthRadiusM * std::asin(std::min(1.0, std::sqrt(a)));
+  };
+
+  std::vector<std::pair<double, ElevationTile>> found;
+  for (int latitude = south; latitude <= north; ++latitude) {
+    for (int longitude = -180; longitude < 180; ++longitude) {
+      const double d = distance_m(latitude, longitude);
+      // A small margin, because the box is an approximation of the nearest point.
+      if (d <= max_distance_m * 1.01) {
+        found.emplace_back(d, ElevationTile{.latitude_deg = latitude, .longitude_deg = longitude});
+      }
+    }
+  }
+  std::ranges::stable_sort(found, {}, &std::pair<double, ElevationTile>::first);
+  std::vector<ElevationTile> tiles;
+  tiles.reserve(found.size());
+  for (const auto& entry : found) {
+    tiles.push_back(entry.second);
+  }
+  return tiles;
+}
+
+HorizonProfile horizon_profile(const Observer& observer, const std::vector<ElevationGrid>& tiles,
                                const HorizonOptions& options) {
   internal::validate(observer);
-  validate(grid);
+  require(!tiles.empty(), "tiles is empty");
+  require(tiles.size() <= 1000, "tiles has more than 1000 grids");
+  for (const ElevationGrid& grid : tiles) {
+    validate(grid);
+  }
   require_positive(options.azimuth_step_deg, "azimuth_step_deg");
   const std::size_t count = azimuth_count(options.azimuth_step_deg);
   require(count > 0, "360 is not a multiple of azimuth_step_deg");
@@ -175,10 +265,11 @@ HorizonProfile horizon_profile(const Observer& observer, const ElevationGrid& gr
   HorizonProfile profile;
   profile.azimuth_step_deg = options.azimuth_step_deg;
   if (options.use_grid_elevation) {
+    std::size_t hint = 0;
     const std::optional<double> ground =
-        height_at(grid, observer.latitude_deg, observer.longitude_deg);
+        height_in_tiles(tiles, observer.latitude_deg, observer.longitude_deg, hint);
     if (!ground) {
-      throw std::invalid_argument("the grid has no data at the observer");
+      throw std::invalid_argument("the tiles have no data at the observer");
     }
     profile.observer_elevation_m = *ground;
   } else {
@@ -190,14 +281,17 @@ HorizonProfile horizon_profile(const Observer& observer, const ElevationGrid& gr
   // narrow, so the cosine has a lower limit.
   const double meters_per_degree = kEarthRadiusM * kDegToRad;
   const double cos_lat = std::max(std::cos(observer.latitude_deg * kDegToRad), 0.01);
-  const double cell_m = std::min(grid.latitude_step_deg * meters_per_degree,
-                                 grid.longitude_step_deg * meters_per_degree * cos_lat);
+  double cell_m = std::numeric_limits<double>::infinity();
+  for (const ElevationGrid& grid : tiles) {
+    cell_m = std::min({cell_m, grid.latitude_step_deg * meters_per_degree,
+                       grid.longitude_step_deg * meters_per_degree * cos_lat});
+  }
 
   profile.altitude_deg.resize(count);
   profile.distance_m.resize(count);
   for (std::size_t i = 0; i < count; ++i) {
     const RayResult ray = trace_ray(
-        grid, observer, static_cast<double>(i) * options.azimuth_step_deg, eye_m, options, cell_m);
+        tiles, observer, static_cast<double>(i) * options.azimuth_step_deg, eye_m, options, cell_m);
     profile.altitude_deg[i] = ray.altitude_deg;
     profile.distance_m[i] = ray.distance_m;
   }

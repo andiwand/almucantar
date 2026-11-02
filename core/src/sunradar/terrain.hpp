@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "sunradar/sun.hpp"
@@ -30,7 +31,7 @@ struct HorizonOptions {
   double max_distance_m = 100'000;  ///< the terrain farther away is not used, at most 500 km
   /// The height of the eye above the ground. For a flat, add the height of the floor.
   double eye_height_m = 1.6;
-  /// If true, the elevation of the ground at the observer comes from the grid. If false, it is
+  /// If true, the elevation of the ground at the observer comes from the tiles. If false, it is
   /// `observer_elevation_m`.
   bool use_grid_elevation = true;
   double observer_elevation_m = 0;  ///< used only if `use_grid_elevation` is false
@@ -44,19 +45,44 @@ struct HorizonOptions {
 struct HorizonProfile {
   double azimuth_step_deg = 0;
   /// The altitude of the highest terrain that the observer sees, with the curvature of the Earth
-  /// and the terrestrial refraction. NaN if the grid has no data in this direction.
+  /// and the terrestrial refraction. NaN if the tiles have no data in this direction.
   std::vector<double> altitude_deg;
-  /// The distance to the terrain point of `altitude_deg`. NaN if the grid has no data in this
+  /// The distance to the terrain point of `altitude_deg`. NaN if the tiles have no data in this
   /// direction.
   std::vector<double> distance_m;
   double observer_elevation_m = 0;  ///< the elevation of the ground at the observer
 };
 
-/// Calculates the terrain horizon of `observer` from `grid`. The function follows a line from the
-/// observer for each azimuth, until `max_distance_m` or the edge of the grid. Buildings and trees
-/// are not in a DEM, so they are not in the profile. Throws `std::invalid_argument` if an argument
-/// is not valid, or if `use_grid_elevation` is true and the grid has no data at the observer.
-[[nodiscard]] HorizonProfile horizon_profile(const Observer& observer, const ElevationGrid& grid,
+/// Reads one image of a GeoTIFF file with heights in latitude and longitude, for example a tile
+/// of Copernicus GLO-90. `level` 0 is the full image, and 1, 2, ... are the overviews (each has
+/// half the size of the one before). The reader supports classic TIFF (not BigTIFF), 16-bit
+/// integers and 32-bit floats, tiles and strips, no compression and DEFLATE, and the predictors.
+/// Throws `std::invalid_argument` if the file is not valid or not supported.
+[[nodiscard]] ElevationGrid read_elevation_geotiff(const std::vector<std::uint8_t>& data,
+                                                   int level = 0);
+
+/// A tile of 1° by 1° of a global DEM, named by its south-west corner. Copernicus names the tile
+/// with `latitude_deg` 47 and `longitude_deg` 11 `N47_00_E011_00`; it covers 47° to 48° north and
+/// 11° to 12° east.
+struct ElevationTile {
+  int latitude_deg = 0;   ///< -90 to 89
+  int longitude_deg = 0;  ///< -180 to 179
+};
+
+/// Returns the tiles of 1° by 1° that a horizon profile with `max_distance_m` needs: all tiles
+/// that have a point nearer than `max_distance_m` to the observer, the tile of the observer first.
+/// Throws `std::invalid_argument` if an argument is not valid.
+[[nodiscard]] std::vector<ElevationTile> elevation_tiles(const Observer& observer,
+                                                         double max_distance_m);
+
+/// Calculates the terrain horizon of `observer` from the grids in `tiles`. The function follows a
+/// line from the observer for each azimuth, until `max_distance_m`. A point between two tiles
+/// uses the nearest sample at their edges, and a point outside all tiles has no data (for example
+/// the sea, which has no tile in Copernicus). Buildings and trees are not in a DEM, so they are not
+/// in the profile. Throws `std::invalid_argument` if an argument is not valid, or if
+/// `use_grid_elevation` is true and the tiles have no data at the observer.
+[[nodiscard]] HorizonProfile horizon_profile(const Observer& observer,
+                                             const std::vector<ElevationGrid>& tiles,
                                              const HorizonOptions& options = {});
 
 /// Returns the altitude of the terrain horizon at `azimuth_deg`, with a linear interpolation

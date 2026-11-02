@@ -616,10 +616,20 @@ terrain around the place. It changes the visible sunrise and sunset by many minu
 - **Open:** the height of the observer (GPS altitude is bad; the DEM height plus the eye
   height is better), near objects (buildings and trees are not in the DEM), and the size of
   the download.
-- **Status:** the core part is done (`terrain.hpp`, in C++ and Python). `horizon_profile()`
-  takes a grid in latitude and longitude, rows from north to south. A grid of 2400 × 3600
-  samples (about 90 m) and a step of 0.25° takes about 70 ms on a laptop. Next: the Android,
-  WASM, and Apple bindings, then the download of the DEM in the apps.
+- **Decided:** the data is Copernicus GLO-90 from AWS Open Data
+  (`https://copernicus-dem-90m.s3.amazonaws.com/`), tiles of 1° in latitude and longitude as
+  GeoTIFF (float32, DEFLATE, predictor 3). A tile is about 2–5 MB. The sea has no tile (HTTP 404).
+  The license allows free use, also commercial, with the attribution "© DLR e.V. 2010-2014 and ©
+  Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA;
+  all rights reserved". The bucket sends no CORS headers, so the PWA cannot download the tiles
+  directly.
+- **Status:** the core part is done (`terrain.hpp`): `elevation_tiles()` lists the tiles,
+  `read_elevation_geotiff()` reads one, and `horizon_profile()` takes all of them. A grid of
+  about 90 m within 100 km and a step of 0.25° takes about 70 ms on a laptop.
+- **Cache in the apps:** the apps keep the tiles on the disk. The cache must not grow without
+  limit and must not keep old data forever: it removes the tiles that were used least recently
+  when it is larger than its limit, and it checks a tile again (with its ETag) when the tile is
+  older than its maximum age.
 
 ### 13.2 Virtual place: find photo spots
 

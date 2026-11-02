@@ -3,7 +3,10 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <set>
 #include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "sunradar/sun.hpp"
@@ -60,7 +63,7 @@ HorizonProfile constant_profile(const double altitude_deg) {
 TEST_CASE("horizon_profile gives the dip of the horizon over flat ground", "[terrain]") {
   // From 100 m above a flat Earth with refraction, the horizon is at -sqrt(2 h / R').
   const HorizonProfile profile =
-      horizon_profile(kAlps, flat_grid(), {.eye_height_m = 100, .use_grid_elevation = true});
+      horizon_profile(kAlps, {flat_grid()}, {.eye_height_m = 100, .use_grid_elevation = true});
   const double effective_radius = kEarthRadiusM / (1 - 0.13);
   const double dip_deg = -std::sqrt(2 * 100 / effective_radius) * kRadToDeg;
   const double distance_m = std::sqrt(2 * effective_radius * 100);
@@ -90,7 +93,7 @@ TEST_CASE("horizon_profile finds a ridge in the east", "[terrain]") {
     }
   }
   const double ridge_m = (first_column_deg - kAlps.longitude_deg) * meters_per_degree_east;
-  const HorizonProfile profile = horizon_profile(kAlps, grid, {.azimuth_step_deg = 1});
+  const HorizonProfile profile = horizon_profile(kAlps, {grid}, {.azimuth_step_deg = 1});
   REQUIRE(profile.altitude_deg.size() == 360);
 
   // The first sample on the ridge can be up to one step (316 m) behind its edge.
@@ -108,9 +111,9 @@ TEST_CASE("horizon_profile uses the given elevation of the observer", "[terrain]
   ElevationGrid grid = flat_grid();
   const std::size_t center = index(grid, 144, 216);
   grid.heights_m[center] = std::numeric_limits<float>::quiet_NaN();
-  REQUIRE_THROWS_AS(horizon_profile(kAlps, grid), std::invalid_argument);
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {grid}), std::invalid_argument);
 
-  const HorizonProfile profile = horizon_profile(kAlps, grid,
+  const HorizonProfile profile = horizon_profile(kAlps, {grid},
                                                  {.azimuth_step_deg = 10,
                                                   .eye_height_m = 0,
                                                   .use_grid_elevation = false,
@@ -122,7 +125,7 @@ TEST_CASE("horizon_profile uses the given elevation of the observer", "[terrain]
   }
 }
 
-TEST_CASE("horizon_profile stops at the edge of the grid", "[terrain]") {
+TEST_CASE("horizon_profile has no data where the tiles have none", "[terrain]") {
   ElevationGrid grid = flat_grid();
   grid.heights_m.assign(grid.heights_m.size(), std::numeric_limits<float>::quiet_NaN());
   // Only the observer and its neighbors have data.
@@ -131,8 +134,8 @@ TEST_CASE("horizon_profile stops at the edge of the grid", "[terrain]") {
       grid.heights_m[index(grid, r, c)] = 0;
     }
   }
-  const HorizonProfile profile = horizon_profile(kAlps, grid, {.azimuth_step_deg = 90});
-  // To the north and the west, the ray leaves the data at once.
+  const HorizonProfile profile = horizon_profile(kAlps, {grid}, {.azimuth_step_deg = 90});
+  // To the north and the west, the ray finds no data.
   REQUIRE(std::isnan(profile.altitude_deg[0]));
   REQUIRE(std::isnan(profile.distance_m[3]));
   REQUIRE(std::isnan(terrain_altitude_deg(profile, 10)));
@@ -140,13 +143,15 @@ TEST_CASE("horizon_profile stops at the edge of the grid", "[terrain]") {
 
 TEST_CASE("horizon_profile validates its arguments", "[terrain]") {
   ElevationGrid grid = flat_grid();
-  REQUIRE_THROWS_AS(horizon_profile(kAlps, grid, {.azimuth_step_deg = 0.7}), std::invalid_argument);
-  REQUIRE_THROWS_AS(horizon_profile(kAlps, grid, {.max_distance_m = 600'000}),
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {grid}, {.azimuth_step_deg = 0.7}),
                     std::invalid_argument);
-  REQUIRE_THROWS_AS(horizon_profile({.latitude_deg = 10, .longitude_deg = 11}, grid),
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {grid}, {.max_distance_m = 600'000}),
                     std::invalid_argument);
+  REQUIRE_THROWS_AS(horizon_profile({.latitude_deg = 10, .longitude_deg = 11}, {grid}),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {}), std::invalid_argument);
   grid.heights_m.pop_back();
-  REQUIRE_THROWS_AS(horizon_profile(kAlps, grid), std::invalid_argument);
+  REQUIRE_THROWS_AS(horizon_profile(kAlps, {grid}), std::invalid_argument);
 }
 
 TEST_CASE("terrain_altitude_deg interpolates across north", "[terrain]") {
@@ -217,4 +222,89 @@ TEST_CASE("terrain_events gives polar_day and polar_night", "[terrain]") {
   const Observer svalbard{.latitude_deg = 78.2, .longitude_deg = 15.6};
   REQUIRE(terrain_events(svalbard, constant_profile(0), start, end).kind == DayKind::polar_day);
   REQUIRE_THROWS_AS(terrain_events(vienna, constant_profile(0), end, start), std::invalid_argument);
+}
+
+namespace {
+
+/// Splits `grid` at column `split` into two tiles with a gap of one cell between them, as the
+/// tiles of Copernicus have: the last sample of the west tile and the first of the east tile are
+/// one step apart.
+std::pair<ElevationGrid, ElevationGrid> split_tiles(const ElevationGrid& grid, const int split) {
+  ElevationGrid west = grid;
+  ElevationGrid east = grid;
+  west.columns = split;
+  east.columns = grid.columns - split;
+  east.west_longitude_deg = grid.west_longitude_deg + (split * grid.longitude_step_deg);
+  west.heights_m.clear();
+  east.heights_m.clear();
+  for (int r = 0; r < grid.rows; ++r) {
+    for (int c = 0; c < grid.columns; ++c) {
+      (c < split ? west : east).heights_m.push_back(grid.heights_m[index(grid, r, c)]);
+    }
+  }
+  return {west, east};
+}
+
+}  // namespace
+
+TEST_CASE("horizon_profile joins tiles across the gap at their edges", "[terrain]") {
+  // A ridge of 1500 m at 10 km to the east, and a tile edge on top of it.
+  ElevationGrid grid = flat_grid();
+  for (int r = 0; r < grid.rows; ++r) {
+    for (int c = 230; c < 240; ++c) {
+      grid.heights_m[index(grid, r, c)] = 1500;
+    }
+  }
+  const HorizonOptions options{.azimuth_step_deg = 5};
+  const HorizonProfile one = horizon_profile(kAlps, {grid}, options);
+  const auto [west, east] = split_tiles(grid, 235);
+  // The order of the tiles does not matter.
+  const HorizonProfile two = horizon_profile(kAlps, {east, west}, options);
+  for (std::size_t i = 0; i < one.altitude_deg.size(); ++i) {
+    INFO("azimuth " << static_cast<double>(i) * 5);
+    REQUIRE_THAT(two.altitude_deg[i], WithinAbs(one.altitude_deg[i], 0.01));
+  }
+  REQUIRE(one.altitude_deg[18] > 5);  // the ridge in the east
+
+  // Without the tile of the ridge, the rays to the east find only the flat ground.
+  const auto [near_tile, ridge_tile] = split_tiles(grid, 225);
+  REQUIRE(horizon_profile(kAlps, {near_tile}, options).altitude_deg[18] < 0);
+}
+
+TEST_CASE("elevation_tiles lists the tiles near the observer", "[terrain]") {
+  const auto as_set = [](const std::vector<ElevationTile>& tiles) {
+    std::set<std::pair<int, int>> set;
+    for (const ElevationTile& t : tiles) {
+      set.emplace(t.latitude_deg, t.longitude_deg);
+    }
+    return set;
+  };
+  // 47.1° N, 11.1° E: the tiles to the south (11 km), the west (7.6 km), and the south-west
+  // (13.5 km) are nearer than 20 km, the others are not.
+  const std::vector<ElevationTile> near =
+      elevation_tiles({.latitude_deg = 47.1, .longitude_deg = 11.1}, 20'000);
+  REQUIRE(near.front().latitude_deg == 47);
+  REQUIRE(near.front().longitude_deg == 11);
+  REQUIRE(as_set(near) == std::set<std::pair<int, int>>{{47, 11}, {46, 11}, {47, 10}, {46, 10}});
+  REQUIRE(elevation_tiles({.latitude_deg = 47.5, .longitude_deg = 11.5}, 20'000).size() == 1);
+
+  // 100 km covers about 0.9° north and south, and 1.3° east and west.
+  const std::vector<ElevationTile> far =
+      elevation_tiles({.latitude_deg = 47.27, .longitude_deg = 11.39}, 100'000);
+  REQUIRE(far.size() >= 9);
+  REQUIRE(far.size() <= 12);
+  REQUIRE(as_set(far).contains({48, 12}));
+  REQUIRE_FALSE(as_set(far).contains({49, 11}));
+
+  // Across the antimeridian.
+  const auto fiji =
+      as_set(elevation_tiles({.latitude_deg = -17.5, .longitude_deg = 179.9}, 50'000));
+  REQUIRE(fiji.contains({-18, 179}));
+  REQUIRE(fiji.contains({-18, -180}));
+
+  // Near the pole, all longitudes.
+  const auto pole = elevation_tiles({.latitude_deg = 89.9, .longitude_deg = 0}, 50'000);
+  REQUIRE(pole.size() == 360);
+  REQUIRE_THROWS_AS(elevation_tiles({.latitude_deg = 47, .longitude_deg = 11}, 0),
+                    std::invalid_argument);
 }

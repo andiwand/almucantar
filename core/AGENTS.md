@@ -20,6 +20,8 @@ The design is in [`../PLAN.md`](../PLAN.md) section 5.
 | `android/` | The JNI binding and the AAR. See [`android/AGENTS.md`](android/AGENTS.md). |
 | `wasm/` | The WebAssembly binding and the npm package. See [`wasm/AGENTS.md`](wasm/AGENTS.md). |
 | `apple/` | The C API and the Swift package (`Package.swift` at the root). See [`apple/AGENTS.md`](apple/AGENTS.md). |
+| `src/sunradar/internal/geotiff.*` | The GeoTIFF reader of the elevation tiles. The file comes from the network, so each read checks its range. `test/tools/make_geotiff.py` makes the test files in `test/data/geotiff/`. |
+| `third_party/miniz/` | miniz (MIT), vendored, for the inflate of DEFLATE. Do not edit; see its `README.md`. |
 | `third_party/astronomy-engine/` | Astronomy Engine (MIT), vendored. Do not edit; see its `README.md`. |
 | `cmake/` | Compiler options and the check of the public headers. |
 | `conan/profiles/` | Cross-compilation profiles: `android-armv8`, `android-x86_64`, `emscripten`, and `apple-*` (the xcframework slices). |
