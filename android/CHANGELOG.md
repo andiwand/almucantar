@@ -5,6 +5,9 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The place panel looks like a map app: a rounded search bar with a back arrow, results with the
+  country, round map buttons, a pin, and a card with the place, its time zone, and "Keep offline".
+- The icons of the system bars are always light, also when the system uses its light theme.
 - The terrain horizon ignores the terrain nearer than 2 km. The elevation data of Copernicus
   includes buildings and forests, so a city gave a false wall of several degrees around you (5.6°
   in the centre of Vienna). Now the centre of Vienna shows the Wienerwald in the northwest at 2.3°.

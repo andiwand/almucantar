@@ -16,17 +16,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,9 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -49,12 +59,16 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.stefl.sunradar.core.Observer
 import java.time.ZoneId
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
@@ -103,8 +117,9 @@ internal fun droppedPlaceName(map: BaseMap, at: Observer, name: String?): String
 /**
  * The place panel: a search of the places of the base map and a map of Natural Earth that works
  * offline. Drag to move, pinch or the buttons to zoom, and tap to drop the place. [onDrop] gets the
- * place, its name, and its time zone. If [offline] is true, the panel also shows the kept places
- * and the action "Keep offline" for the terrain tiles of [place].
+ * place, its name, and its time zone. A card at the bottom shows the place and its time zone. If
+ * [offline] is true, the card also shows the kept places and the action "Keep offline" for the
+ * terrain tiles of [place].
  */
 @Composable
 fun PlacePanel(
@@ -124,12 +139,10 @@ fun PlacePanel(
     // The center of the view in Web Mercator coordinates of a world of the size 1, and the zoom.
     var cx by remember { mutableDoubleStateOf(mercatorX(place.observer.longitudeDeg)) }
     var cy by remember { mutableDoubleStateOf(mercatorY(place.observer.latitudeDeg)) }
-    var zoom by remember { mutableDoubleStateOf(5.0) }
-    var pin by remember { mutableStateOf(place.observer) }
+    var zoom by remember { mutableDoubleStateOf(7.0) }
 
     fun drop(at: Observer, name: String?) {
         val m = map ?: return
-        pin = at
         onDrop(at, droppedPlaceName(m, at, name), m.timeZoneAt(at, deviceZone))
     }
 
@@ -157,6 +170,7 @@ fun PlacePanel(
                 }
                 .pointerInput(Unit) {
                     detectTapGestures { at ->
+                        focus.clearFocus()
                         val world = worldSize(zoom, density)
                         val x = cx + (at.x - size.width / 2.0) / world
                         val y = (cy + (at.y - size.height / 2.0) / world).coerceIn(0.0, 1.0)
@@ -164,77 +178,172 @@ fun PlacePanel(
                     }
                 }
         ) {
-            map?.let { drawBaseMap(it, cx, cy, zoom, pin) }
+            map?.let { drawBaseMap(it, cx, cy, zoom, place.observer) }
         }
 
+        // The search: a rounded bar with the back arrow, and the results below it.
         Column(
             Modifier.align(Alignment.TopCenter)
                 .safeDrawingPadding()
-                .padding(12.dp)
-                .fillMaxWidth()
-                .background(Color(0xE6000000), RoundedCornerShape(12.dp))
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = PanelColors.surface,
+                shadowElevation = 6.dp,
             ) {
-                OutlinedTextField(
-                    query,
-                    { query = it },
-                    Modifier.weight(1f),
-                    placeholder = { Text("Search a place") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                )
-                FilledTonalButton(onClick = onClose) { Text("Close") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) { Glyph(GlyphKind.BACK, "Close") }
+                    TextField(
+                        query,
+                        { query = it },
+                        Modifier.weight(1f),
+                        placeholder = { Text("Search a place") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        colors =
+                            TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                    )
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) { Glyph(GlyphKind.CLEAR, "Clear") }
+                    }
+                }
             }
             val results = remember(map, query) { map?.search(query).orEmpty() }
-            for (p in results) {
-                Text(
-                    "${p.name}, ${p.country}",
-                    color = Color.White,
-                    modifier =
-                        Modifier.fillMaxWidth()
-                            .clickable {
-                                cx = mercatorX(p.longitudeDeg)
-                                cy = mercatorY(p.latitudeDeg)
-                                zoom = maxOf(zoom, 8.0)
-                                query = ""
-                                focus.clearFocus()
-                                drop(p.observer, p.name)
+            if (results.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = PanelColors.surface,
+                    shadowElevation = 6.dp,
+                ) {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        for (p in results) {
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable {
+                                        cx = mercatorX(p.longitudeDeg)
+                                        cy = mercatorY(p.latitudeDeg)
+                                        zoom = maxOf(zoom, 8.0)
+                                        query = ""
+                                        focus.clearFocus()
+                                        drop(p.observer, p.name)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                Glyph(GlyphKind.PIN, null, tint = PanelColors.muted)
+                                Column {
+                                    Text(p.name, color = PanelColors.text)
+                                    if (p.country.isNotEmpty()) {
+                                        Text(p.country, color = PanelColors.muted, fontSize = 13.sp)
+                                    }
+                                }
                             }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                )
+                        }
+                    }
+                }
             }
-            if (map == null) Text("Loading the map …", color = Color.White)
+            if (map == null) Text("Loading the map …", color = PanelColors.text)
         }
 
         Column(
-            Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            horizontalAlignment = Alignment.End,
         ) {
-            if (offline) OfflineSection(place)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(
-                    onClick = { zoom = (zoom.roundToInt() - 1.0).coerceAtLeast(MIN_MAP_ZOOM) }
-                ) {
-                    Text("−")
+            // The map buttons, above the card on the right, as in other map apps.
+            Column(
+                Modifier.padding(end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MapButton(GlyphKind.PLUS, "Zoom in") {
+                    zoom = (zoom.roundToInt() + 1.0).coerceAtMost(MAX_MAP_ZOOM)
                 }
-                FilledTonalButton(
-                    onClick = { zoom = (zoom.roundToInt() + 1.0).coerceAtMost(MAX_MAP_ZOOM) }
-                ) {
-                    Text("+")
+                MapButton(GlyphKind.MINUS, "Zoom out") {
+                    zoom = (zoom.roundToInt() - 1.0).coerceAtLeast(MIN_MAP_ZOOM)
                 }
-                Button(onClick = onUseDevice) { Text("Use my location") }
+                MapButton(GlyphKind.LOCATE, "Use my location") {
+                    cx = mercatorX(place.observer.longitudeDeg)
+                    cy = mercatorY(place.observer.latitudeDeg)
+                    onUseDevice()
+                }
             }
+            PlaceCard(place, deviceZone, offline, map?.attribution)
+        }
+    }
+}
+
+/** A round button of the map with a [glyph]. */
+@Composable
+private fun MapButton(glyph: GlyphKind, description: String, onClick: () -> Unit) {
+    SmallFloatingActionButton(
+        onClick = onClick,
+        containerColor = PanelColors.surface,
+        contentColor = PanelColors.text,
+    ) {
+        Glyph(glyph, description)
+    }
+}
+
+/**
+ * The card at the bottom: the name of [place], its coordinates and time zone, the hint, and (if
+ * [offline]) the kept places and "Keep offline".
+ */
+@Composable
+private fun PlaceCard(place: Place, deviceZone: ZoneId, offline: Boolean, attribution: String?) {
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        color = PanelColors.surface,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            Modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // A dropped place has the name "near X · coordinates": the card shows the coordinates
+            // in the second line, with the time zone.
             Text(
-                "Tap the map to drop the place. ${map?.attribution ?: "Map: Natural Earth"}",
-                color = Color.White,
+                place.name?.substringBefore(" · ") ?: "Your location",
+                color = PanelColors.text,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // The readable name of the zone ("Central European Time"), not the IANA ID.
+            val zone =
+                (place.zone ?: deviceZone).getDisplayName(TextStyle.FULL, Locale.getDefault())
+            Text(
+                "%.3f°, %.3f° · %s"
+                    .format(
+                        Locale.ROOT,
+                        place.observer.latitudeDeg,
+                        place.observer.longitudeDeg,
+                        zone,
+                    ),
+                color = PanelColors.muted,
+                fontSize = 14.sp,
+            )
+            Text(
+                "Tap the map to move the place, or search for it.",
+                color = PanelColors.muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (offline) OfflineSection(place)
+            Text(
+                attribution ?: "Map: Natural Earth",
+                color = PanelColors.muted.copy(alpha = 0.6f),
                 fontSize = 11.sp,
-                modifier = Modifier.background(Color(0x99000000)).padding(horizontal = 4.dp),
+                modifier = Modifier.align(Alignment.End).padding(vertical = 6.dp),
             )
         }
     }
@@ -254,52 +363,135 @@ private fun OfflineSection(place: Place) {
         produceState(emptyList<KeptPlaceStatus>(), version) {
             value = withContext(Dispatchers.IO) { OfflinePlaces.list(context) }
         }
-    Column(
-        Modifier.fillMaxWidth()
-            .background(Color(0xE6000000), RoundedCornerShape(12.dp))
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    HorizontalDivider(Modifier.padding(vertical = 8.dp), color = PanelColors.divider)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (kept.isNotEmpty()) {
-            Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
-                for (k in kept) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                k.place.name,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            val missing = if (k.missing > 0) " · ${k.missing} missing" else ""
-                            Text(
-                                "${tileCount(k.place.tileCount)}, ${megabytes(k.bytes)}$missing",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 12.sp,
-                            )
-                        }
-                        TextButton(onClick = { OfflinePlaces.remove(context, k.place.id) }) {
-                            Text("Remove")
-                        }
+        val running = job?.finished == false
+        if (place.isKnown) {
+            FilledTonalButton(
+                onClick = { OfflinePlaces.keep(context, place.observer, keptName(place)) },
+                enabled = !running,
+            ) {
+                Text("Keep offline")
+            }
+        }
+        Text(
+            job?.text ?: "Keep the terrain of this place for a trip without a network.",
+            color = PanelColors.muted,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    if (kept.isNotEmpty()) {
+        Text(
+            "Kept offline",
+            color = PanelColors.text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
+            for (k in kept) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            k.place.name,
+                            color = PanelColors.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val missing = if (k.missing > 0) " · ${k.missing} missing" else ""
+                        Text(
+                            "${tileCount(k.place.tileCount)}, ${megabytes(k.bytes)}$missing",
+                            color = PanelColors.muted,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    TextButton(onClick = { OfflinePlaces.remove(context, k.place.id) }) {
+                        Text("Remove")
                     }
                 }
             }
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val running = job?.finished == false
-            if (place.isKnown) {
-                FilledTonalButton(
-                    onClick = { OfflinePlaces.keep(context, place.observer, keptName(place)) },
-                    enabled = !running,
-                ) {
-                    Text("Keep offline")
-                }
-            }
-            job?.let { Text(it.text, color = Color.White, fontSize = 13.sp) }
+    }
+}
+
+/** The colors of the surfaces of the panel. */
+private object PanelColors {
+    val surface = Color(0xFF1B2433)
+    val text = Color(0xFFE8ECF2)
+    val muted = Color(0xFFA9B3C2)
+    val divider = Color(0x33FFFFFF)
+}
+
+private enum class GlyphKind {
+    BACK,
+    CLEAR,
+    PLUS,
+    MINUS,
+    LOCATE,
+    PIN,
+}
+
+/** A small line icon of 24 dp. The app draws its few icons itself, so it needs no icon library. */
+@Composable
+private fun Glyph(kind: GlyphKind, description: String?, tint: Color = PanelColors.text) {
+    Canvas(
+        Modifier.size(24.dp).semantics {
+            if (description != null) contentDescription = description
         }
+    ) {
+        val u = size.minDimension / 24f
+        val stroke = Stroke(2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun line(x1: Float, y1: Float, x2: Float, y2: Float) =
+            drawLine(tint, Offset(x1 * u, y1 * u), Offset(x2 * u, y2 * u), 2f * u, StrokeCap.Round)
+        when (kind) {
+            GlyphKind.BACK -> {
+                line(5f, 12f, 19f, 12f)
+                line(5f, 12f, 11f, 6f)
+                line(5f, 12f, 11f, 18f)
+            }
+            GlyphKind.CLEAR -> {
+                line(6f, 6f, 18f, 18f)
+                line(18f, 6f, 6f, 18f)
+            }
+            GlyphKind.PLUS -> {
+                line(5f, 12f, 19f, 12f)
+                line(12f, 5f, 12f, 19f)
+            }
+            GlyphKind.MINUS -> line(5f, 12f, 19f, 12f)
+            GlyphKind.LOCATE -> {
+                drawCircle(tint, 6f * u, Offset(12f * u, 12f * u), style = stroke)
+                drawCircle(tint, 2.5f * u, Offset(12f * u, 12f * u))
+                line(12f, 2f, 12f, 5f)
+                line(12f, 19f, 12f, 22f)
+                line(2f, 12f, 5f, 12f)
+                line(19f, 12f, 22f, 12f)
+            }
+            GlyphKind.PIN -> {
+                drawPath(pinPath(Offset(12f * u, 21f * u), 6.5f * u), tint, style = stroke)
+                drawCircle(tint, 2f * u, Offset(12f * u, 9.5f * u))
+            }
+        }
+    }
+}
+
+/** The outline of a map pin with its tip at [tip] and a round head of the radius [r]. */
+private fun pinPath(tip: Offset, r: Float): Path {
+    val head = Offset(tip.x, tip.y - 1.75f * r)
+    return Path().apply {
+        moveTo(tip.x, tip.y)
+        // The two sides touch the head; the arc closes the top.
+        lineTo(head.x - r * 0.87f, head.y + r * 0.5f)
+        arcTo(
+            Rect(head.x - r, head.y - r, head.x + r, head.y + r),
+            startAngleDegrees = 150f,
+            sweepAngleDegrees = 240f,
+            forceMoveTo = false,
+        )
+        close()
     }
 }
 
@@ -330,6 +522,18 @@ private fun placePaint(sizePx: Float) =
             color = Color.White.copy(alpha = 0.85f).toArgb()
             textSize = sizePx
             typeface = Typeface.DEFAULT
+        }
+    }
+
+private val haloPaints = mutableMapOf<Float, Paint>()
+
+private fun haloPaint(sizePx: Float) =
+    haloPaints.getOrPut(sizePx) {
+        Paint(placePaint(sizePx)).apply {
+            color = MapColors.sea.toArgb()
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx / 4
+            strokeJoin = Paint.Join.ROUND
         }
     }
 
@@ -374,6 +578,7 @@ private fun DrawScope.drawBaseMap(
     // place gets its label before a small one near it.
     val maxRank = minOf(10, (zoom * 1.6).roundToInt())
     val paint = placePaint(12 * px)
+    val halo = haloPaint(12 * px)
     val used = mutableListOf<Offset>()
     for (place in map.places) {
         if (place.rank > maxRank) continue
@@ -384,18 +589,29 @@ private fun DrawScope.drawBaseMap(
         val y = (mercatorY(place.latitudeDeg) - top) * world
         if (y < 0 || y > size.height) continue
         val at = Offset(x.toFloat(), y.toFloat())
-        if (used.any { abs(it.x - at.x) < 70 * px && abs(it.y - at.y) < 16 * px }) continue
+        if (used.any { abs(it.x - at.x) < 90 * px && abs(it.y - at.y) < 22 * px }) continue
         used += at
-        drawCircle(Color.White, radius = 1.5f * px, center = at)
-        drawContext.canvas.nativeCanvas.drawText(place.name, at.x + 4 * px, at.y - 3 * px, paint)
+        drawCircle(Color.White, radius = 2f * px, center = at)
+        // A dark halo, so the name stays readable over the lines of the map.
+        val canvas = drawContext.canvas.nativeCanvas
+        canvas.drawText(place.name, at.x + 5 * px, at.y - 4 * px, halo)
+        canvas.drawText(place.name, at.x + 5 * px, at.y - 4 * px, paint)
         if (used.size > 200) break
     }
 
     var pinX = (mercatorX(pin.longitudeDeg) - left) * world
     pinX -= floor(pinX / world) * world
     val pinAt = Offset(pinX.toFloat(), ((mercatorY(pin.latitudeDeg) - top) * world).toFloat())
-    drawCircle(MapColors.pin, radius = 7 * px, center = pinAt)
-    drawCircle(Color.Black, radius = 7 * px, center = pinAt, style = Stroke(1.5f * px))
+    // A map pin with its tip at the place, and a shadow on the ground.
+    drawOval(
+        Color(0x66000000),
+        topLeft = Offset(pinAt.x - 5 * px, pinAt.y - 2 * px),
+        size = Size(10 * px, 4 * px),
+    )
+    val outline = pinPath(pinAt, 11 * px)
+    drawPath(outline, MapColors.pin)
+    drawPath(outline, Color(0xFF3A2A00), style = Stroke(1.5f * px))
+    drawCircle(Color(0xFF3A2A00), radius = 4 * px, center = Offset(pinAt.x, pinAt.y - 19.25f * px))
 }
 
 /** A box in Web Mercator coordinates. */
