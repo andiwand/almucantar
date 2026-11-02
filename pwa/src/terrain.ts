@@ -12,8 +12,28 @@
 
 import type { ElevationGrid, HorizonProfile, MapTile, Observer, Sunradar } from "@sunradar/core";
 
-export const TERRAIN_ZOOM = 10;
+/** The coarse tiles for the whole profile: about 420 m per pixel at 47° latitude. */
+export const COARSE_ZOOM = 8;
+/** The fine tiles near the observer, only where the terrain matters: about 100 m per pixel. */
+export const FINE_ZOOM = 10;
 export const TERRAIN_DISTANCE_M = 100_000;
+export const FINE_DISTANCE_M = 25_000;
+/**
+ * The terrain matters if the coarse profile reaches this altitude somewhere. 1° moves the sunrise
+ * by about 5–8 minutes in Europe. Below it, the coarse profile is enough, and the app loads nothing
+ * more.
+ */
+export const THRESHOLD_DEG = 1;
+
+/** The tiles of the terrain of a place: always the coarse ones, and the fine ones if `fine`. */
+export function terrainTiles(
+  sunradar: Pick<Sunradar, "mapTiles">,
+  observer: Observer,
+  fine: boolean,
+): MapTile[] {
+  const coarse = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, COARSE_ZOOM);
+  return fine ? [...coarse, ...sunradar.mapTiles(observer, FINE_DISTANCE_M, FINE_ZOOM)] : coarse;
+}
 export const MAX_CACHE_BYTES = 100 * 1024 * 1024;
 export const MAX_AGE_MS = 180 * 86_400_000;
 /** The profile is calculated again only if the place moves more than this distance. */
@@ -210,8 +230,10 @@ export async function keepOffline(
   observer: Observer,
   name: string,
   onProgress: (done: number, total: number) => void,
+  fine = true,
 ): Promise<KeepResult> {
-  const urls = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, TERRAIN_ZOOM).map(tileUrl);
+  // The same tiles as the terrain uses: the fine ones only if the terrain matters at the place.
+  const urls = terrainTiles(sunradar, observer, fine).map(tileUrl);
   const id = `${observer.latitudeDeg.toFixed(4)},${observer.longitudeDeg.toFixed(4)}`;
   cache.keep({ id, name, observer, urls });
   let next = 0;
@@ -258,7 +280,7 @@ export async function decodePng(
 export type TerrainState =
   | { kind: "off" }
   | { kind: "loading"; done: number; total: number }
-  | { kind: "ready"; profile: HorizonProfile; missing: number }
+  | { kind: "ready"; profile: HorizonProfile; missing: number; observer: Observer; fine: boolean }
   | { kind: "failed"; message: string };
 
 export interface TerrainDeps {
@@ -297,13 +319,55 @@ export class Terrain {
 
   private async load(observer: Observer, generation: number) {
     const { sunradar, cache } = this.deps;
-    const tiles = sunradar.mapTiles(observer, TERRAIN_DISTANCE_M, TERRAIN_ZOOM);
-    const urls = tiles.map(tileUrl);
-    let done = 0;
-    let missing = 0;
-    const grids: ElevationGrid[] = [];
-    this.set({ kind: "loading", done, total: tiles.length });
+    const coarseTiles = terrainTiles(sunradar, observer, false);
+    this.set({ kind: "loading", done: 0, total: coarseTiles.length });
+    const coarse = await this.fetchGrids(coarseTiles, generation, true);
+    if (!coarse) return; // a newer place
+    let profile: HorizonProfile;
+    try {
+      if (coarse.grids.length === 0) throw new Error("no terrain data (offline?)");
+      profile = sunradar.horizonProfile(observer, coarse.grids);
+    } catch (e) {
+      // For example, no tile has data at the place itself.
+      this.set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
+      return;
+    }
+    const highest = Math.max(...Array.from(profile.altitudeDeg).filter((a) => !Number.isNaN(a)));
+    const fine = highest >= THRESHOLD_DEG;
+    let missing = coarse.missing;
+    if (fine) {
+      // Show the coarse profile at once, then load the fine tiles near the observer.
+      this.set({ kind: "ready", profile, missing, observer, fine });
+      const fineTiles = sunradar.mapTiles(observer, FINE_DISTANCE_M, FINE_ZOOM);
+      const near = await this.fetchGrids(fineTiles, generation, false);
+      if (!near) return;
+      missing += near.missing;
+      try {
+        profile = sunradar.horizonProfile(observer, [...coarse.grids, ...near.grids]);
+      } catch {
+        // The coarse profile stays.
+      }
+    }
+    const urls = terrainTiles(sunradar, observer, fine).map(tileUrl);
+    await cache.evict(new Set(urls));
+    if (generation !== this.generation) return;
+    this.set({ kind: "ready", profile, missing, observer, fine });
+  }
 
+  /**
+   * Downloads and decodes the tiles, a few at the same time, the nearest first. Returns null if a
+   * newer place started. `progress` shows the "loading" state; the fine stage does not show it,
+   * because the coarse profile is already on the screen.
+   */
+  private async fetchGrids(
+    tiles: MapTile[],
+    generation: number,
+    progress: boolean,
+  ): Promise<{ grids: ElevationGrid[]; missing: number } | null> {
+    const { sunradar, cache } = this.deps;
+    const grids: ElevationGrid[] = [];
+    let missing = 0;
+    let done = 0;
     const loadTile = async (tile: MapTile, url: string, retry = true): Promise<void> => {
       const blob = await cache.get(url);
       if (generation !== this.generation) return;
@@ -321,32 +385,19 @@ export class Terrain {
         missing++;
       }
     };
-
-    // A few downloads at the same time, the nearest tiles first.
+    const urls = tiles.map(tileUrl);
     let next = 0;
     const worker = async () => {
       while (next < tiles.length && generation === this.generation) {
         const i = next++;
         await loadTile(tiles[i], urls[i]);
         done++;
-        if (generation === this.generation)
+        if (generation === this.generation && progress)
           this.set({ kind: "loading", done, total: tiles.length });
       }
     };
     await Promise.all(Array.from({ length: 6 }, worker));
-    if (generation !== this.generation) return;
-    await cache.evict(new Set(urls));
-    if (grids.length === 0) {
-      this.set({ kind: "failed", message: "no terrain data (offline?)" });
-      return;
-    }
-    try {
-      const profile = sunradar.horizonProfile(observer, grids);
-      this.set({ kind: "ready", profile, missing });
-    } catch (e) {
-      // For example, no tile has data at the place itself.
-      this.set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
-    }
+    return generation === this.generation ? { grids, missing } : null;
   }
 }
 

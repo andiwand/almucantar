@@ -953,9 +953,25 @@ keepButton.addEventListener("click", async () => {
   void navigator.storage?.persist?.();
   const name = placeText.split(" · ")[0];
   try {
-    const result = await keepOffline(sunradar, tileCache, observer, name, (done, total) => {
-      keepStatus.textContent = `Downloading ${done}/${total}`;
-    });
+    // The fine tiles only where the terrain matters, as the terrain of this place decided.
+    // Without a decision (the terrain is off or not ready), keep all of them.
+    const state = terrain.state;
+    const fine =
+      state.kind === "ready" &&
+      state.observer.latitudeDeg === observer.latitudeDeg &&
+      state.observer.longitudeDeg === observer.longitudeDeg
+        ? state.fine
+        : true;
+    const result = await keepOffline(
+      sunradar,
+      tileCache,
+      observer,
+      name,
+      (done, total) => {
+        keepStatus.textContent = `Downloading ${done}/${total}`;
+      },
+      fine,
+    );
     keepStatus.textContent = result.missing
       ? `${result.missing} tiles missing, try again online`
       : `Ready offline: ${result.tiles} tiles, ${megabytes(result.bytes)}`;

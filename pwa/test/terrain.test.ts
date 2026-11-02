@@ -113,20 +113,24 @@ describe("TileCache", () => {
 
 describe("Terrain", () => {
   const tiles: MapTile[] = [
-    { zoom: 10, x: 1, y: 2, distanceM: 0 },
-    { zoom: 10, x: 2, y: 2, distanceM: 1000 },
+    { zoom: 8, x: 1, y: 2, distanceM: 0 },
+    { zoom: 8, x: 2, y: 2, distanceM: 1000 },
   ];
-  const profile = { azimuthStepDeg: 90 } as HorizonProfile;
+  const fineTiles: MapTile[] = [{ zoom: 10, x: 4, y: 8, distanceM: 0 }];
+  // A flat profile: below the threshold, so the app loads only the coarse tiles.
+  const profile = { azimuthStepDeg: 90, altitudeDeg: [0, 0.5, 0, 0] } as unknown as HorizonProfile;
 
-  function terrain(decode: (blob: Blob) => Promise<never> | Promise<object>) {
+  function terrain(
+    decode: (blob: Blob) => Promise<never> | Promise<object>,
+    coarseProfile: HorizonProfile = profile,
+  ) {
     const t = setup(() => png(10));
     const states: TerrainState[] = [];
-    const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[]) => {
-      expect(grids).toHaveLength(2);
-      return profile;
-    });
+    const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[]) =>
+      grids.length === 2 ? coarseProfile : profile,
+    );
     const sunradar = {
-      mapTiles: vi.fn(() => tiles),
+      mapTiles: vi.fn((_o: unknown, _d: number, zoom: number) => (zoom === 8 ? tiles : fineTiles)),
       terrariumGrid: vi.fn(() => ({}) as ElevationGrid),
       horizonProfile,
     };
@@ -150,7 +154,13 @@ describe("Terrain", () => {
     }));
     subject.update({ latitudeDeg: 47, longitudeDeg: 11 });
     await done(states);
-    expect(states.at(-1)).toEqual({ kind: "ready", profile, missing: 0 });
+    expect(states.at(-1)).toEqual({
+      kind: "ready",
+      profile,
+      missing: 0,
+      observer: { latitudeDeg: 47, longitudeDeg: 11 },
+      fine: false,
+    });
     expect(t.fetch.mock.calls.map((c) => c[0]).sort()).toEqual(tiles.map(tileUrl).sort());
   });
 
@@ -162,10 +172,11 @@ describe("Terrain", () => {
     }));
     subject.update({ latitudeDeg: 47, longitudeDeg: 11 });
     await done(states);
+    const calls = sunradar.mapTiles.mock.calls.length;
     subject.update({ latitudeDeg: 47.001, longitudeDeg: 11 }); // about 110 m
-    expect(sunradar.mapTiles).toHaveBeenCalledTimes(1);
+    expect(sunradar.mapTiles).toHaveBeenCalledTimes(calls);
     subject.update({ latitudeDeg: 47.01, longitudeDeg: 11 }); // about 1.1 km
-    expect(sunradar.mapTiles).toHaveBeenCalledTimes(2);
+    expect(sunradar.mapTiles.mock.calls.length).toBeGreaterThan(calls);
   });
 
   test("downloads a damaged tile again one time", async () => {
@@ -243,10 +254,54 @@ describe("kept places", () => {
       { latitudeDeg: 47, longitudeDeg: 11 },
       "Innsbruck",
       (done) => progress.push(done),
+      false, // only the coarse tiles, as for a flat place
     );
     expect(result).toEqual({ tiles: 3, bytes: 20, missing: 1 });
     expect(progress).toEqual([1, 2, 3]);
     expect(t.kept()[0].name).toBe("Innsbruck");
     expect(t.kept()[0].urls).toEqual(tiles.map(tileUrl));
+  });
+});
+
+describe("the threshold of the terrain", () => {
+  test("a high coarse profile loads the fine tiles near the observer", async () => {
+    const t = setup(() => png(10));
+    const states: TerrainState[] = [];
+    const coarse: MapTile[] = [{ zoom: 8, x: 1, y: 2, distanceM: 0 }];
+    const fine: MapTile[] = [
+      { zoom: 10, x: 4, y: 8, distanceM: 0 },
+      { zoom: 10, x: 5, y: 8, distanceM: 100 },
+    ];
+    const high = { azimuthStepDeg: 90, altitudeDeg: [0, 5, 0, 0] } as unknown as HorizonProfile;
+    const detailed = {
+      azimuthStepDeg: 90,
+      altitudeDeg: [0, 5.5, 0, 0],
+    } as unknown as HorizonProfile;
+    const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[]) =>
+      grids.length === 1 ? high : detailed,
+    );
+    const subject = new Terrain({
+      sunradar: {
+        mapTiles: (_o: unknown, distance: number, zoom: number) => {
+          expect(zoom === 8 ? distance : 25_000).toBe(zoom === 8 ? 100_000 : distance);
+          return zoom === 8 ? coarse : fine;
+        },
+        terrariumGrid: () => ({}) as ElevationGrid,
+        horizonProfile,
+      } as unknown as TerrainDeps["sunradar"],
+      cache: t.cache,
+      decode: async () => ({ rgba: new Uint8ClampedArray(16), width: 2, height: 2 }),
+      onChange: (s) => states.push(s),
+    });
+    subject.update({ latitudeDeg: 47, longitudeDeg: 11 });
+    await vi.waitFor(() => {
+      const last = states.at(-1);
+      expect(last?.kind === "ready" && last.profile === detailed).toBe(true);
+    });
+    // First the coarse profile, then the detailed one from the coarse and the fine tiles.
+    const ready = states.filter((s) => s.kind === "ready");
+    expect(ready.map((s) => s.kind === "ready" && s.profile)).toEqual([high, detailed]);
+    expect(horizonProfile.mock.calls.at(-1)?.[1]).toHaveLength(3);
+    expect(t.fetch).toHaveBeenCalledTimes(3);
   });
 });

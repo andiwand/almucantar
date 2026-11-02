@@ -5,6 +5,9 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The terrain loads much less data: first coarse tiles (about 400 KB), and the detailed tiles near
+  the place only where the terrain is higher than 1°. Berlin needs 0.4 MB, Vienna 1.4 MB, and no
+  place needs the 9 MB of before.
 - "Keep offline" in the Place panel: the app downloads the terrain of the place for a trip and
   keeps it. The cache does not remove these tiles, and "Remove" releases them.
 - The Place panel: search a place or tap it on a map, also offline. The map is in the app
