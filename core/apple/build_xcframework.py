@@ -8,10 +8,12 @@
 The output is core/apple/build/SunradarC.xcframework. Package.swift (at the root of the
 repository) uses it if it exists. Each Conan profile gets its own build; `libtool` merges
 libsunradar_c.a and libsunradar.a, and `lipo` joins the architectures of one platform, because
-an xcframework has one entry for each platform (device, simulator, macOS).
+an xcframework has one entry for each platform (device, simulator, macOS). The merge also takes
+the static libraries of the Conan dependencies of the core (miniz), so the app links one library.
 """
 
 import argparse
+import json
 import pathlib
 import shutil
 import subprocess
@@ -42,21 +44,34 @@ def run(command):
     subprocess.run([str(c) for c in command], cwd=CORE, check=True)
 
 
+def dependency_archives(graph: dict) -> list[pathlib.Path]:
+    """The static libraries of the host dependencies in the JSON graph of `conan install`."""
+    archives = []
+    for node in graph["graph"]["nodes"].values():
+        folder = node.get("package_folder")
+        if node.get("context") != "host" or not folder or node.get("ref", "").startswith("sunradar"):
+            continue
+        archives += sorted((pathlib.Path(folder) / "lib").glob("*.a"))
+    return archives
+
+
 def build(profile: str, conan: str) -> pathlib.Path:
-    run(
-        [
-            conan,
-            "install",
-            ".",
-            "--build=missing",
-            f"-pr:h=conan/profiles/{profile}",
-            "-pr:b=default",
-            "-o",
-            "&:with_tests=False",
-            "-o",
-            "&:with_apple=True",
-        ]
-    )
+    command = [
+        conan,
+        "install",
+        ".",
+        "--build=missing",
+        f"-pr:h=conan/profiles/{profile}",
+        "-pr:b=default",
+        "-o",
+        "&:with_tests=False",
+        "-o",
+        "&:with_apple=True",
+        "--format=json",
+    ]
+    print("+", " ".join(command), flush=True)
+    result = subprocess.run(command, cwd=CORE, check=True, stdout=subprocess.PIPE, text=True)
+    dependencies = dependency_archives(json.loads(result.stdout))
     preset = f"conan-{FOLDERS[profile]}"
     run(["cmake", "--preset", preset, "-DSUNRADAR_WARNINGS_AS_ERRORS=ON"])
     run(["cmake", "--build", "--preset", preset, "--target", "sunradar_c"])
@@ -70,6 +85,7 @@ def build(profile: str, conan: str) -> pathlib.Path:
             merged,
             build_dir / "apple" / "libsunradar_c.a",
             build_dir / "libsunradar.a",
+            *dependencies,
         ]
     )
     return merged

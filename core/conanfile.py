@@ -44,6 +44,8 @@ class SunradarConan(ConanFile):
     ]
 
     def requirements(self):
+        # The inflate of DEFLATE, for the GeoTIFF reader of the elevation tiles.
+        self.requires("miniz/3.0.2")
         if self.options.with_python:
             self.requires("pybind11/3.0.1")
 
