@@ -14,7 +14,11 @@ targets:
   SunradarApp:
     type: application
     platform: iOS
-    sources: [Sunradar]
+    sources:
+      - Sunradar
+      # The offline base map (Natural Earth). The app reads it from the bundle; see assets/basemap/README.md.
+      - path: ../assets/basemap/basemap.json
+        buildPhase: resources
     dependencies:
       - package: Sunradar
         product: Sunradar

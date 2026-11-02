@@ -13,11 +13,13 @@ struct SkyDay {
     let hours: [(direction: Horizontal, label: String)]
     let summary: String
     let guides: [[Horizontal]]
+    /// The time zone of the place: the day and all its times are in this zone.
+    let timeZone: TimeZone
 
     init(observer: Observer, date: Date, calendar: Calendar) {
-        let day = calendar.startOfDay(for: date)
-        start = day.timeIntervalSince1970
-        end = calendar.date(byAdding: .day, value: 1, to: day)!.timeIntervalSince1970
+        timeZone = calendar.timeZone
+        (start, end) = PlaceTime.day(of: date, calendar: calendar)
+        let day = Date(timeIntervalSince1970: start)
         let points = (try? sunPath(observer: observer, startUtc: start, endUtc: end)) ?? []
         path = points.map(\.position)
         daySegments = Self.segments(points)
@@ -36,7 +38,7 @@ struct SkyDay {
             case .polarNight: "Polar night"
             default:
                 (events?.crossings ?? []).map {
-                    ($0.rising ? "Sunrise " : "Sunset ") + Date(timeIntervalSince1970: $0.unixUtc).formatted(date: .omitted, time: .shortened)
+                    ($0.rising ? "Sunrise " : "Sunset ") + PlaceTime.time($0.unixUtc, calendar.timeZone)
                 }.joined(separator: " · ")
             }
         let year = calendar.component(.year, from: date)
@@ -66,14 +68,14 @@ struct SkyDay {
 /// Keeps the last SkyDay, because the body runs for each frame of the motion sensor.
 @MainActor
 final class SkyDayCache {
-    private var key: (Observer, Date)?
+    private var key: (Observer, Date, TimeZone)?
     private var day: SkyDay?
 
     func day(observer: Observer, date: Date, calendar: Calendar) -> SkyDay {
         let start = calendar.startOfDay(for: date)
-        if let key, let day, key.0 == observer, key.1 == start { return day }
+        if let key, let day, key.0 == observer, key.1 == start, key.2 == calendar.timeZone { return day }
         let day = SkyDay(observer: observer, date: start, calendar: calendar)
-        (key, self.day) = ((observer, start), day)
+        (key, self.day) = ((observer, start, calendar.timeZone), day)
         return day
     }
 }
@@ -110,6 +112,7 @@ struct SkyScreen: SwiftUI.View {
     @State private var camera: Sunradar.Camera?
     @State private var aligning: AlignTarget?
     @State private var pickingLandmark = false
+    @State private var showPlace = false
     @State private var landmark: Observer?
     @State private var blobs: [ViewBlob] = []
     @State private var dayCache = SkyDayCache()
@@ -121,7 +124,8 @@ struct SkyScreen: SwiftUI.View {
     /// The search for the dates of the crosshair finished at least once. The demo mode is ready then.
     @State private var datesSearched = false
 
-    private let calendar = Calendar.current
+    /// The calendar in the time zone of the place. All days and times of the screen use it.
+    private var calendar: Calendar { PlaceTime.calendar(location.timeZone) }
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private static let maxCrosshairAltitude = 75.0
     /// The angular error of a tap on the sun or the moon (both have a diameter of 0.5°).
@@ -134,6 +138,8 @@ struct SkyScreen: SwiftUI.View {
     private static let maxSunBlobRadiusDeg = 3.0
     /// Within this angle of the prediction, the detected sun counts as aligned.
     private static let alignedDeg = 1.0
+    /// The assumed error of a manual place, in metres.
+    private static let placeErrorM = 500.0
 
     var body: some SwiftUI.View {
         GeometryReader { geometry in
@@ -223,8 +229,13 @@ struct SkyScreen: SwiftUI.View {
                 motion.observer = location.observer
                 updateTerrain()
             }
+            .onChange(of: location.hasPlace) { updateTerrain() }
             .onChange(of: terrainOn) { updateTerrain() }
+            .onChange(of: location.notice) {
+                if let notice = location.notice { message = notice }
+            }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showPlace) { PlacePanel(location: location) }
             .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
                 MapPicker(observer: location.observer) { picked in
@@ -236,16 +247,16 @@ struct SkyScreen: SwiftUI.View {
                     }
                 }
             }
-            .task(id: center.map { "\(Int($0.azimuthDeg * 2)):\(Int($0.altitudeDeg * 2)):\(observer)" } ?? "") {
+            .task(id: center.map { "\(Int($0.azimuthDeg * 2)):\(Int($0.altitudeDeg * 2)):\(observer):\(location.timeZone.identifier)" } ?? "") {
                 await searchDates(center: usable ? center : nil)
             }
         }
     }
 
-    /// The demo mode shows no terrain. Without a location, the place is the default (Vienna), so the
-    /// app waits for the location before it downloads tiles.
+    /// The demo mode shows no terrain. The default place (Vienna) gets no terrain, so the app waits
+    /// for a place before it downloads tiles: the device location, a manual place, or the last place.
     private func updateTerrain() {
-        if terrainOn && ScreenshotMode.scene == nil && location.accuracyM == nil { return }
+        if terrainOn && ScreenshotMode.scene == nil && !location.hasPlace { return }
         terrain.update(observer: location.observer, enabled: terrainOn && ScreenshotMode.scene == nil)
     }
 
@@ -380,7 +391,8 @@ struct SkyScreen: SwiftUI.View {
         let observer = location.observer
         let distance = Geo.distanceM(from: observer, to: landmark)
         if distance < 50 { return "The landmark is too near. Choose one that is farther away." }
-        let positionError = (location.accuracyM ?? 50) + 5
+        // A manual place has no accuracy: assume the error of a drop on the map.
+        let positionError = (location.accuracyM ?? Self.placeErrorM) + 5
         let sigma = atan(positionError / distance) * 180 / .pi + 0.3
         let center = ScreenPoint(x: view.camera.cx, y: view.camera.cy)
         return apply(
@@ -678,7 +690,7 @@ struct SkyScreen: SwiftUI.View {
             if !usable {
                 Text("Hold the phone up to see when the sun is in that direction.")
             } else if let crossing {
-                Text(Date(timeIntervalSince1970: crossing.unixUtc).formatted(date: .omitted, time: .shortened))
+                Text(PlaceTime.time(crossing.unixUtc, location.timeZone))
                     .font(.system(size: 34, weight: .bold))
                     .foregroundColor(Color(red: 0.498, green: 0.847, blue: 1))
                 Text(
@@ -691,9 +703,7 @@ struct SkyScreen: SwiftUI.View {
             if !dates.isEmpty {
                 Text(
                     "In the crosshair: "
-                        + dates.map {
-                            Date(timeIntervalSince1970: $0.unixUtc).formatted(.dateTime.day().month(.abbreviated).hour().minute())
-                        }.joined(separator: ", ")
+                        + dates.map { PlaceTime.dayAndTime($0.unixUtc, location.timeZone) }.joined(separator: ", ")
                 )
                 .foregroundColor(Color(red: 1, green: 0.878, blue: 0.541))
             }
@@ -704,7 +714,7 @@ struct SkyScreen: SwiftUI.View {
     private var timePanel: some SwiftUI.View {
         VStack(alignment: .leading) {
             HStack {
-                Text(calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!.formatted(date: .abbreviated, time: .omitted))
+                Text(PlaceTime.date(calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!, location.timeZone))
                     .frame(width: 120, alignment: .leading)
                 Slider(value: $dayOffset, in: -183...183, step: 1)
                 Button("Today") { dayOffset = 0 }
@@ -727,7 +737,7 @@ struct SkyScreen: SwiftUI.View {
         let sunUp = ((try? sunPosition(t, observer: observer))?.altitudeDeg ?? -1) > 0
         let moonUp = ((try? moonPosition(t, observer: observer))?.altitudeDeg ?? -1) > 0
         let moonBright = ((try? moonIlluminatedFraction(t)) ?? 0) >= Self.minMoonFraction
-        let located = location.accuracyM != nil
+        let located = location.hasPlace
         return Menu("Align") {
             Button {
                 startBodyAlign(.sun)
@@ -751,7 +761,7 @@ struct SkyScreen: SwiftUI.View {
                 pickingLandmark = true
             } label: {
                 Text("With a landmark")
-                Text(located ? "Pick it on a map, then aim at it" : "Needs your location (allow location access)")
+                Text(located ? "Pick it on a map, then aim at it" : "Needs your place (allow location access, or drop it)")
             }
             .disabled(!located)
         }
@@ -784,6 +794,11 @@ struct SkyScreen: SwiftUI.View {
                 Button("Cancel") { aligning = nil }.buttonStyle(.borderedProminent)
             } else {
                 alignMenu
+                Button("Place") {
+                    message = nil
+                    showPlace = true
+                }
+                .buttonStyle(.bordered)
                 // The menu of the app: the settings and the credits. It is hidden during an alignment.
                 Menu {
                     Button("Settings and credits") { showSettings = true }

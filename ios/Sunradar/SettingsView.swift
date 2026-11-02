@@ -28,6 +28,7 @@ struct SettingsView: SwiftUI.View {
                 }
                 Section("Credits") {
                     Text(Self.copernicusAttribution).font(.footnote)
+                    Text("Map: Natural Earth (public domain), naturalearthdata.com").font(.footnote)
                 }
             }
             .navigationTitle("Settings")

@@ -5,6 +5,15 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The place works fully offline. The new button "Place" opens a search of 7342 places and a map
+  (Natural Earth, in the app, no network needed). A tap on the map drops the place. The app keeps
+  the last place and starts with it, also offline and without a location permission. A dropped
+  place stays until you choose "Use my location".
+- All days and times use the time zone of the place: the day of the path, the hours, the time
+  panel, the dates of the crosshair, and the sunrise and sunset. A dropped place gets the time
+  zone of the nearest place on the map.
+- The terrain horizon also loads for a dropped place and for the last place.
+
 - The terrain horizon: a line of the mountains around you, from the Copernicus DEM GLO-90. The
   parts of the sun path behind the terrain are dashed, and the status panel shows the visible
   sunrise and sunset. The app downloads the elevation tiles of the place and keeps them for

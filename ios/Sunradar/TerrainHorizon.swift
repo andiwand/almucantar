@@ -197,7 +197,7 @@ struct TerrainDay {
         self.visible = visible
         self.hidden = hidden
         let events = try? terrainEvents(observer: observer, profile: profile, startUtc: day.start, endUtc: day.end)
-        let time = { (t: Double) in Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened) }
+        let time = { (t: Double) in PlaceTime.time(t, day.timeZone) }
         switch events?.kind {
         case nil: summary = ""
         case .polarDay: summary = "Above the terrain all day"
@@ -215,16 +215,16 @@ struct TerrainDay {
 /// Keeps the last TerrainDay, because the body runs for each frame of the motion sensor.
 @MainActor
 final class TerrainDayCache {
-    private var key: (start: Double, observer: Observer, revision: Int)?
+    private var key: (start: Double, timeZone: TimeZone, observer: Observer, revision: Int)?
     private var value: TerrainDay?
 
     func day(_ day: SkyDay, observer: Observer, terrain: TerrainHorizon) -> TerrainDay? {
         guard let profile = terrain.profile else { return nil }
-        if let key, let value, key.start == day.start, key.observer == observer, key.revision == terrain.revision {
+        if let key, let value, key.start == day.start, key.timeZone == day.timeZone, key.observer == observer, key.revision == terrain.revision {
             return value
         }
         let value = TerrainDay(day: day, observer: observer, profile: profile)
-        (key, self.value) = ((day.start, observer, terrain.revision), value)
+        (key, self.value) = ((day.start, day.timeZone, observer, terrain.revision), value)
         return value
     }
 }
