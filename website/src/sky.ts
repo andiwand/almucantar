@@ -20,6 +20,8 @@ export interface Frame {
   moon: Horizontal | null;
   /** The illuminated fraction of the moon, from 0 to 1. */
   moonFraction: number;
+  /** How visible the moon is, from 0 to 1. The moon is pale in a bright sky. */
+  moonAlpha: number;
   /** The path of the moon in the shown night, or none. */
   moonPath: Horizontal[];
   /** The uncertainty of the heading in degrees: a band around the path. 0 draws no band. */
@@ -247,8 +249,8 @@ export class Sky {
 
     // The moon and its path.
     if (frame.moonPath.length) this.line(p, frame.moonPath, "rgba(214, 226, 255, 0.7)", 2, [2, 6]);
-    if (frame.moon && frame.moon.altitudeDeg > -2) {
-      this.moon(p, frame.moon, frame.sun, frame.moonFraction);
+    if (frame.moon && frame.moon.altitudeDeg > -2 && frame.moonAlpha > 0.01) {
+      this.moon(p, frame.moon, frame.sun, frame.moonFraction, frame.moonAlpha, day);
     }
 
     // The sun.
@@ -330,7 +332,14 @@ export class Sky {
   }
 
   /** The moon with its phase. The bright side faces the sun. */
-  private moon(p: Panorama, moon: Horizontal, sun: Horizontal, fraction: number) {
+  private moon(
+    p: Panorama,
+    moon: Horizontal,
+    sun: Horizontal,
+    fraction: number,
+    alpha: number,
+    day: number,
+  ) {
     const ctx = this.ctx;
     const x = p.x(moon.azimuthDeg);
     const y = p.y(moon.altitudeDeg);
@@ -344,7 +353,9 @@ export class Sky {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.fillStyle = "rgba(140, 150, 180, 0.25)";
+    ctx.globalAlpha = alpha;
+    // The dark part of the moon is visible only in a dark sky.
+    ctx.fillStyle = `rgba(140, 150, 180, ${0.25 * (1 - day)})`;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
@@ -352,7 +363,7 @@ export class Sky {
     const k = 1 - 2 * fraction;
     ctx.fillStyle = "#eef2ff";
     ctx.shadowColor = "rgba(220, 230, 255, 0.8)";
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 16 * (1 - day);
     ctx.beginPath();
     ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);
     ctx.ellipse(0, 0, Math.abs(k) * r, r, 0, Math.PI / 2, -Math.PI / 2, k > 0);

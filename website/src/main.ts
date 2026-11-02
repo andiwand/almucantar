@@ -109,6 +109,8 @@ interface Target {
   window: number;
   crosshair: boolean;
   moon: boolean;
+  /** The chapter hides the moon, because it changes the date all the time. */
+  hideMoon: boolean;
   tap: number;
   dim: number;
 }
@@ -198,7 +200,7 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     const december = dateStart(year, 11, 21);
     const hour = clamp((now() - startOfDay(now())) / 3600, 9, 15);
     const date = june + (december - june) * p;
-    return { time: startOfDay(date) + hour * 3600, guides: 1 };
+    return { time: startOfDay(date) + hour * 3600, guides: 1, hideMoon: true };
   },
   window: (p) => {
     const d = dayAt(now());
@@ -395,6 +397,28 @@ function readouts(name: string, time: number, sun: Horizontal, band: number) {
   }
 }
 
+/** The angle between two directions in the sky, in degrees. */
+function separation(a: Horizontal, b: Horizontal): number {
+  const r = Math.PI / 180;
+  const cos =
+    Math.sin(a.altitudeDeg * r) * Math.sin(b.altitudeDeg * r) +
+    Math.cos(a.altitudeDeg * r) *
+      Math.cos(b.altitudeDeg * r) *
+      Math.cos((a.azimuthDeg - b.azimuthDeg) * r);
+  return Math.acos(clamp(cos, -1, 1)) / r;
+}
+
+/**
+ * How visible the moon is, from 0 to 1. At night the moon is fully visible. In a bright sky, a
+ * thin moon or a moon near the sun is not visible, and a large moon far from the sun is pale.
+ */
+function moonAlpha(sun: Horizontal, moon: Horizontal, fraction: number): number {
+  const day = clamp((sun.altitudeDeg + 6) / 10);
+  const inDaylight =
+    0.6 * clamp((fraction - 0.12) / 0.3) * clamp((separation(sun, moon) - 15) / 25);
+  return 1 + (inDaylight - 1) * day;
+}
+
 // --- The frame ----------------------------------------------------------------------------------
 
 const DEFAULTS: Target = {
@@ -404,6 +428,7 @@ const DEFAULTS: Target = {
   window: 0,
   crosshair: false,
   moon: false,
+  hideMoon: false,
   tap: 0,
   dim: 0,
 };
@@ -419,11 +444,19 @@ const shown = {
   window: 0,
   dim: 0,
   center: 180,
+  /** The visibility of the moon, from 0 to 1. It fades while the date moves. */
+  moon: 0,
 };
 let lastMs = performance.now();
 let lastChapter = "";
-/** After a change of chapter, the time of the day only goes forward, so the sun never goes back. */
-let forward = false;
+/**
+ * After a change of chapter, the time of the day moves in the direction of the scroll: forward
+ * (1) after a scroll down, back (-1) after a scroll up. 0 takes the shorter way round the clock.
+ */
+let direction = 0;
+
+/** The start of the day after or before the day that starts at `start`. */
+const nextDay = (start: number, n: number) => startOfDay(start + n * DAY + DAY / 2);
 
 function frame(ms: number) {
   const dt = Math.min(0.1, (ms - lastMs) / 1000);
@@ -434,22 +467,55 @@ function frame(ms: number) {
 
   const k = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 7);
   if (name !== lastChapter) {
-    forward = lastChapter !== "";
+    const index = (chapter: string) => sections.findIndex((s) => s.dataset.chapter === chapter);
+    direction = lastChapter === "" ? 0 : Math.sign(index(name) - index(lastChapter));
     lastChapter = name;
   }
-  // The date and the time of the day move separately. A jump of more than 40 days is not
-  // animated, because the paths would flicker through the year.
-  const targetDay = startOfDay(target.time);
-  const targetHours = (target.time - targetDay) / 3600;
+  // The date and the time of the day move separately, so a change of the date does not turn the
+  // sun round the sky. The hours count from the start of the shown day and can go past 24, so
+  // a move across midnight is continuous and does not change the date.
+  const base = startOfDay(shown.day + DAY / 2);
+  const dh = (target.time - base) / 3600 - shown.hours;
+  const round = ((dh % 24) + 24) % 24;
+  // The part of the move inside one day. A direction accepts a small step the other way, so the
+  // sun does not go round the whole day for a target that is a little behind.
+  let h = round >= 12 ? round - 24 : round;
+  if (direction > 0 && h < -1) h += 24;
+  if (direction < 0 && h > 1) h -= 24;
+  // The rest of the move is whole days: a change of the date.
+  const days = Math.round((dh - h) / 24);
+  // A direction can need one day more or less, for example forward from the evening to the
+  // morning of the same day. Then the hours make the whole move, and the date changes by one day
+  // at the end. The sun is at almost the same place on the next day, so this change is not seen.
+  const carry = direction !== 0 && Math.abs(days) === 1;
+  if (Math.abs(h) < 0.02) {
+    direction = 0;
+    if (carry) shown.day += nextDay(base, days) - base;
+  }
+  const targetDay = days === 0 || carry ? base : nextDay(base, days);
+  const targetHours = carry ? shown.hours + h : (target.time - targetDay) / 3600;
+  // A jump of more than 40 days is not animated, because the paths would flicker through the year.
   if (Math.abs(targetDay - shown.day) > 40 * DAY) shown.day = targetDay;
   else shown.day += (targetDay - shown.day) * k;
-  let dh = targetHours - shown.hours;
-  // Inside a chapter, the shorter way round the clock, for example across midnight.
-  if (forward && dh < 0) dh += 24;
-  else if (!forward && dh > 12) dh -= 24;
-  else if (!forward && dh < -12) dh += 24;
-  if (Math.abs(dh) < 0.02) forward = false;
-  shown.hours = (((shown.hours + dh * k) % 24) + 24) % 24;
+  shown.hours += (targetHours - shown.hours) * k;
+  // While the date moves, the moon jumps across the sky (13° per day), so it is not shown. It
+  // fades in when the date stops. During a carry, the moon moves smoothly, so it fades out before
+  // the date changes. This check comes before the hours go back into one day, because that
+  // changes the date.
+  const settled = !carry && Math.abs(targetDay - shown.day) < DAY / 2;
+  if (!settled && !carry) shown.moon = 0;
+  else shown.moon += ((settled && !target.hideMoon ? 1 : 0) - shown.moon) * k;
+  // Keep the hours in one day. The date changes by the same amount, so the time stays the same.
+  const shownBase = startOfDay(shown.day + DAY / 2);
+  if (shown.hours >= 24) {
+    const next = nextDay(shownBase, 1);
+    shown.hours -= (next - shownBase) / 3600;
+    shown.day += next - shownBase;
+  } else if (shown.hours < 0) {
+    const previous = nextDay(shownBase, -1);
+    shown.hours += (shownBase - previous) / 3600;
+    shown.day -= shownBase - previous;
+  }
   shown.guides += (target.guides - shown.guides) * k;
   shown.band += (target.band - shown.band) * k;
   shown.window += (target.window - shown.window) * k;
@@ -466,9 +532,8 @@ function frame(ms: number) {
   const center = innerWidth < 700 ? south + clamp(offset * 0.8, -60, 60) : south;
   shown.center += (center - shown.center) * k;
 
-  // While the date still moves, the moon would jump across the sky (13° per day), so it waits.
-  const settled = Math.abs(targetDay - shown.day) < DAY / 2;
-  const moonVisible = settled && (target.moon || sun.altitudeDeg < -4);
+  const moon = shown.moon > 0.01 ? sunradar.moonPosition(time, observer) : null;
+  const moonFraction = moon ? sunradar.moonIlluminatedFraction(time) : 0;
   const moonPath = target.moon ? moonArc().path : [];
   const frameData: Frame = {
     sun,
@@ -476,8 +541,9 @@ function frame(ms: number) {
     hours: day.hours,
     guides: solsticeGuides(localYear(time)),
     guideAlpha: shown.guides,
-    moon: moonVisible ? sunradar.moonPosition(time, observer) : null,
-    moonFraction: moonVisible ? sunradar.moonIlluminatedFraction(time) : 0,
+    moon,
+    moonFraction,
+    moonAlpha: moon ? shown.moon * moonAlpha(sun, moon, moonFraction) : 0,
     moonPath,
     bandDeg: shown.band,
     window: shown.window > 0.01 ? { ...WINDOW, alpha: shown.window } : null,
