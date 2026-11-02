@@ -56,6 +56,7 @@ import kotlinx.coroutines.withContext
 private const val TILE_SIZE = 256
 private const val MIN_ZOOM = 3
 private const val MAX_ZOOM = 19
+private const val MAX_MAP_LATITUDE_DEG = 85.0511287798066
 
 // The OSM tile usage policy asks for a User-Agent that identifies the app, and for the
 // attribution on the map. https://operations.osmfoundation.org/policies/tiles/
@@ -67,7 +68,7 @@ internal fun worldX(longitudeDeg: Double, zoom: Int) =
     (longitudeDeg + 180) / 360 * TILE_SIZE * 2.0.pow(zoom)
 
 internal fun worldY(latitudeDeg: Double, zoom: Int): Double {
-    val lat = Math.toRadians(latitudeDeg)
+    val lat = Math.toRadians(latitudeDeg.coerceIn(-MAX_MAP_LATITUDE_DEG, MAX_MAP_LATITUDE_DEG))
     return (1 - ln(tan(lat) + 1 / cos(lat)) / PI) / 2 * TILE_SIZE * 2.0.pow(zoom)
 }
 

@@ -18,6 +18,12 @@ class MapTest {
     }
 
     @Test
+    fun thePolesStayAtTheMapBoundary() {
+        assertEquals(0.0, worldY(90.0, 3), 1e-9)
+        assertEquals(2048.0, worldY(-90.0, 3), 1e-9)
+    }
+
+    @Test
     fun theTileOfVienna() {
         // The OSM tile formula: x = floor((lon + 180) / 360 * 2^z), and y from the Mercator
         // formula.

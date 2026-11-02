@@ -62,10 +62,14 @@ object SunDetector {
                 maxX = maxOf(maxX, x)
                 minY = minOf(minY, y)
                 maxY = maxOf(maxY, y)
-                for (n in intArrayOf(i - 1, i + 1, i - gw, i + gw)) {
+                for (n in
+                    intArrayOf(
+                        if (x > 0) i - 1 else -1,
+                        if (x < gw - 1) i + 1 else -1,
+                        i - gw,
+                        i + gw,
+                    )) {
                     if (n < 0 || n >= bright.size || seen[n] || !bright[n]) continue
-                    // No wrap from the end of one row to the start of the next.
-                    if ((n == i - 1 || n == i + 1) && n / gw != y) continue
                     seen[n] = true
                     queue[tail++] = n
                 }

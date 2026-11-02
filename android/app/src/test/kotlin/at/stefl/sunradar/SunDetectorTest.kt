@@ -58,6 +58,13 @@ class SunDetectorTest {
     }
 
     @Test
+    fun connectsPixelsInASingleColumn() {
+        val blobs = SunDetector.findBlobs(ByteArray(4 * 16) { 255.toByte() }, 4, 16, 4)
+        assertEquals(1, blobs.size)
+        assertEquals(64, blobs[0].pixels)
+    }
+
+    @Test
     fun aDarkImageHasNoRegions() {
         assertTrue(SunDetector.findBlobs(image(), width, height, stride).isEmpty())
     }

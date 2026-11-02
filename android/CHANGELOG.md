@@ -5,6 +5,10 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The sun path, hour labels, and crosshair dates refresh when the device time zone changes.
+- Alignment near the zenith or nadir shows a message instead of closing the app.
+- The landmark map keeps polar locations within its bounds.
+- Sun detection connects adjacent pixels in images with one sampled column.
 - The heading filter estimates the bias of the magnetometer. After an alignment with the sun,
   the moon, or a landmark, the heading stays aligned and does not drift back to the compass
   heading. The app reads the raw magnetometer and calibrates it itself; the OS calibration is
