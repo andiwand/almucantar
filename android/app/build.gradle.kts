@@ -75,6 +75,10 @@ android {
 
     buildFeatures { compose = true }
 
+    // The offline base map (PLAN.md 13.3) is shared with the other apps, so the app takes it from
+    // the root of the repository. The APK compresses it.
+    sourceSets["main"].assets.directories.add("../../assets/basemap")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

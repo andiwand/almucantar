@@ -87,14 +87,8 @@ class SkyDay(val observer: Observer, val startUtc: Double, val endUtc: Double, z
 /** The parts above the horizon of the paths of the two solstices of [year], as guide lines. */
 fun solsticeGuides(observer: Observer, year: Int, zone: ZoneId): List<DirectionLine> =
     listOf(6, 12).flatMap { month ->
-        val date = java.time.LocalDate.of(year, month, 21)
-        SkyDay(
-                observer,
-                date.atStartOfDay(zone).toEpochSecond().toDouble(),
-                date.plusDays(1).atStartOfDay(zone).toEpochSecond().toDouble(),
-                zone,
-            )
-            .daySegments
+        val (start, end) = dayBounds(LocalDate.of(year, month, 21), zone)
+        SkyDay(observer, start, end, zone).daySegments
     }
 
 /**
@@ -103,3 +97,15 @@ fun solsticeGuides(observer: Observer, year: Int, zone: ZoneId): List<DirectionL
  */
 fun wallClockTime(date: LocalDate, minuteOfDay: Int, zone: ZoneId): Double =
     date.atTime(minuteOfDay / 60, minuteOfDay % 60).atZone(zone).toEpochSecond().toDouble()
+
+/** The local date of [unixUtc] in [zone]: the day of the place, not of the device. */
+fun localDate(unixUtc: Double, zone: ZoneId): LocalDate =
+    Instant.ofEpochSecond(unixUtc.toLong()).atZone(zone).toLocalDate()
+
+/**
+ * The start and the end of [date] in [zone], as Unix times. A day with a DST change has 23 or 25
+ * hours.
+ */
+fun dayBounds(date: LocalDate, zone: ZoneId): Pair<Double, Double> =
+    date.atStartOfDay(zone).toEpochSecond().toDouble() to
+        date.plusDays(1).atStartOfDay(zone).toEpochSecond().toDouble()

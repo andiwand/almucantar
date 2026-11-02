@@ -5,6 +5,15 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The place works offline. The new button "Place" (or a tap on the place in the status) opens a
+  search of 7342 places and a map of Natural Earth that is in the app. A tap on the map drops the
+  place. The app keeps the last place and starts with it, also offline and without the location
+  permission. A dropped place stays until you choose "Use my location".
+- All days and times use the time zone of the place, not of the device: the path, the hour labels,
+  the time panel, the crosshair dates, and the sunrise and sunset. The status shows the zone if it
+  is not the zone of the device.
+- The terrain horizon also works for a dropped place and for the last place.
+- The settings button (⋮) is the last button of the bottom row.
 - The terrain horizon: the app downloads the elevation data of Copernicus DEM GLO-90 for 100 km
   around the device location and draws the mountains as a line on the sky and on the camera
   image. The parts of the sun path behind the mountains are dim and dashed. The status shows the

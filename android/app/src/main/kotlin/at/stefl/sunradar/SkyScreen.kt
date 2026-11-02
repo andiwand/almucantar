@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,6 +111,9 @@ private const val MAX_SUN_BLOB_RADIUS_DEG = 3.0
 /** Within this angle of the prediction, the detected sun counts as aligned. */
 private const val ALIGNED_DEG = 1.0
 
+/** The padding of the buttons of the bottom row, so five buttons fit on a narrow phone. */
+private val BUTTON_PADDING = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+
 /** The things that the user can align the heading with. */
 enum class AlignTarget {
     SUN,
@@ -128,9 +132,17 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     // The demo mode of the store screenshots fixes the view, the heading, the place, and the time.
     val tracker = rememberHeadingTracker(scene)
     val deviceZone = rememberTimeZone()
-    val zone = scene?.zone ?: deviceZone
-    val devicePlace by rememberPlace(locationGranted && scene == null, zone)
-    val place = scene?.place ?: devicePlace
+    var message by remember { mutableStateOf<String?>(null) }
+    // The demo mode does not read or write the last place.
+    val placeState =
+        rememberPlace(locationGranted && scene == null, deviceZone, scene == null) {
+            message = it
+        }
+    val place = scene?.place ?: placeState.place
+    // All days and times are in the time zone of the place: a dropped place can be in another
+    // time zone than the device.
+    val zone = scene?.zone ?: place.zone ?: deviceZone
+    var showPlace by remember { mutableStateOf(false) }
     SideEffect { tracker.observer = place.observer }
 
     var now by remember {
@@ -160,19 +172,15 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
 
     val day =
         remember(place.observer, date, zone) {
-            SkyDay(
-                place.observer,
-                date.atStartOfDay(zone).toEpochSecond().toDouble(),
-                date.plusDays(1).atStartOfDay(zone).toEpochSecond().toDouble(),
-                zone,
-            )
+            val (start, end) = dayBounds(date, zone)
+            SkyDay(place.observer, start, end, zone)
         }
-    // The terrain horizon needs the true place: the city of the time zone can be far away. The
-    // demo mode downloads nothing and shows no terrain.
+    // The terrain horizon needs a place that the user is at or chose: the city of the time zone
+    // can be far away. The demo mode downloads nothing and shows no terrain.
     val terrainSetting = rememberTerrainSetting()
     val terrain by
         rememberTerrain(
-            place.observer.takeIf { place.source == PlaceSource.DEVICE && scene == null },
+            place.observer.takeIf { place.isKnown && scene == null },
             terrainSetting.value && scene == null,
         )
     val terrainProfile = terrain.profile
@@ -200,7 +208,6 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     var alignMenu by remember { mutableStateOf(scene?.alignMenu ?: false) }
     var pickingLandmark by remember { mutableStateOf(false) }
     var landmark by remember { mutableStateOf<Observer?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
     var pendingAlign by remember { mutableStateOf<AlignTarget?>(null) }
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -234,6 +241,24 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
         if (cameraOn && pendingAlign != null) {
             aligning = pendingAlign
             pendingAlign = null
+        }
+    }
+    // "Use my location" in the place panel asks for the permission, if needed.
+    val locationPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            if (it) placeState.useDevice() else message = "No location access: the place stays."
+        }
+    val useDeviceLocation = {
+        showPlace = false
+        if (
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            placeState.useDevice()
+        } else {
+            locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
     }
     val toggleCamera = {
@@ -386,6 +411,16 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
             }
             return@MaterialTheme
         }
+        if (showPlace) {
+            PlacePanel(
+                place,
+                deviceZone,
+                onDrop = { at, name, placeZone -> placeState.drop(at, name, placeZone) },
+                onUseDevice = useDeviceLocation,
+                onClose = { showPlace = false },
+            )
+            return@MaterialTheme
+        }
 
         Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
             if (scene != null && view != null) {
@@ -434,7 +469,19 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                     .widthIn(max = 440.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StatusCard(place, tracker, day, terrainDay, terrain.status, cameraOn, viewCamera)
+                StatusCard(
+                    place,
+                    zone.takeIf { scene == null && it != deviceZone },
+                    tracker,
+                    day,
+                    terrainDay,
+                    terrain.status,
+                    cameraOn,
+                    viewCamera,
+                ) {
+                    message = null
+                    showPlace = true
+                }
                 message?.let { Panel { Text(it, color = Color.White) } }
                 aligning?.let { Panel { Text(alignHint(it), color = Color.White) } }
             }
@@ -460,11 +507,14 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                     }
                 }
                 Readout(center, crosshairUsable, crossing, crosshairDates, zone)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = toggleCamera) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilledTonalButton(onClick = toggleCamera, contentPadding = BUTTON_PADDING) {
                         Text(if (cameraOn || scene != null) "Sky" else "Camera")
                     }
-                    FilledTonalButton(onClick = { showTime = !showTime }) {
+                    FilledTonalButton(
+                        onClick = { showTime = !showTime },
+                        contentPadding = BUTTON_PADDING,
+                    ) {
                         Text(if (dayOffset == 0 && minuteOfDay == null) "Time" else "Time ●")
                     }
                     if (aligning == AlignTarget.LANDMARK) {
@@ -480,13 +530,21 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                         Button(onClick = { aligning = null }) { Text("Cancel") }
                     } else {
                         FilledTonalButton(
-                            onClick = { showSettings = true },
-                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            onClick = {
+                                message = null
+                                showPlace = true
+                            },
+                            contentPadding = BUTTON_PADDING,
                         ) {
-                            Text("⋮")
+                            Text("Place")
                         }
                         Box {
-                            Button(onClick = { alignMenu = true }) { Text("Align") }
+                            Button(
+                                onClick = { alignMenu = true },
+                                contentPadding = BUTTON_PADDING,
+                            ) {
+                                Text("Align")
+                            }
                             DropdownMenu(
                                 expanded = alignMenu,
                                 onDismissRequest = { alignMenu = false },
@@ -495,6 +553,13 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                                 val moonUsable =
                                     moonNow.altitudeDeg > 0 && moonFraction >= MIN_MOON_FRACTION
                                 val located = place.source == PlaceSource.DEVICE
+                                val landmarkDetail =
+                                    when {
+                                        located -> "Pick it on a map, then aim at it"
+                                        place.source == PlaceSource.MANUAL ->
+                                            "Needs your location (Place, then Use my location)"
+                                        else -> "Needs your location (allow location access)"
+                                    }
                                 AlignItem(
                                     "With the sun",
                                     if (sunUp) "Tap the sun in the camera image"
@@ -519,8 +584,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                                 }
                                 AlignItem(
                                     "With a landmark",
-                                    if (located) "Pick it on a map, then aim at it"
-                                    else "Needs your location (allow location access)",
+                                    landmarkDetail,
                                     enabled = located,
                                 ) {
                                     alignMenu = false
@@ -528,6 +592,17 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                                     pickingLandmark = true
                                 }
                             }
+                        }
+                    }
+                    // The settings are the last button, and they are hidden during an alignment.
+                    if (aligning == null) {
+                        FilledTonalButton(
+                            onClick = { showSettings = true },
+                            // Narrower than the default minimum width of a button (58 dp).
+                            modifier = Modifier.widthIn(min = 40.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                        ) {
+                            Text("⋮")
                         }
                     }
                 }
@@ -641,16 +716,26 @@ private fun Panel(content: @Composable () -> Unit) {
 @Composable
 private fun StatusCard(
     place: Place,
+    /** The time zone of the place, if it is not the zone of the device. */
+    otherZone: ZoneId?,
     tracker: HeadingTracker,
     day: SkyDay,
     terrainDay: TerrainDay?,
     terrainStatus: String?,
     cameraOn: Boolean,
     camera: ViewCamera?,
+    onPlace: () -> Unit,
 ) {
     Panel {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(placeText(place), color = Color.White, fontWeight = FontWeight.SemiBold)
+            // A tap on the place opens the place panel, as the button "Place" does.
+            Text(
+                placeText(place),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(onClick = onPlace),
+            )
+            otherZone?.let { Text("Times in ${it.id}", color = Color(0xFFDDDDDD)) }
             HeadingText(tracker)
             Text(day.summary, color = Color(0xFFDDDDDD))
             terrainDay?.let { Text(it.summary, color = SkyColors.terrain) }
@@ -896,6 +981,8 @@ private fun placeText(place: Place): String {
         place.name ?: "%.2f°, %.2f°".format(place.observer.latitudeDeg, place.observer.longitudeDeg)
     return when (place.source) {
         PlaceSource.DEVICE -> name + (place.accuracyM?.let { " · ${errorScale(it)}" } ?: "")
+        PlaceSource.MANUAL -> name
+        PlaceSource.LAST -> "$name · last place"
         PlaceSource.TIME_ZONE -> "$name · approximate (time zone)"
         PlaceSource.DEFAULT -> "$name · no location"
     }

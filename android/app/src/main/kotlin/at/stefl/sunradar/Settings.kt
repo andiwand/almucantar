@@ -79,7 +79,8 @@ fun SettingsDialog(terrain: BooleanSetting, onDismiss: () -> Unit) {
                     Switch(checked = terrain.value, onCheckedChange = { terrain.value = it })
                 }
                 Text("About", fontWeight = FontWeight.SemiBold)
-                Text("Map: © OpenStreetMap contributors", fontSize = 12.sp)
+                Text("Landmark map: © OpenStreetMap contributors", fontSize = 12.sp)
+                Text("Place map: Natural Earth (public domain)", fontSize = 12.sp)
                 Text(COPERNICUS_ATTRIBUTION, fontSize = 12.sp)
             }
         },

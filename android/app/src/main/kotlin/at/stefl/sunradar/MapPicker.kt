@@ -41,14 +41,8 @@ import androidx.compose.ui.unit.sp
 import at.stefl.sunradar.core.Observer
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.math.PI
-import kotlin.math.atan
-import kotlin.math.cos
 import kotlin.math.floor
-import kotlin.math.ln
 import kotlin.math.pow
-import kotlin.math.sinh
-import kotlin.math.tan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,7 +50,6 @@ import kotlinx.coroutines.withContext
 private const val TILE_SIZE = 256
 private const val MIN_ZOOM = 3
 private const val MAX_ZOOM = 19
-private const val MAX_MAP_LATITUDE_DEG = 85.0511287798066
 
 // The OSM tile usage policy asks for a User-Agent that identifies the app, and for the
 // attribution on the map. https://operations.osmfoundation.org/policies/tiles/
@@ -65,17 +58,15 @@ private const val TILE_URL = "https://tile.openstreetmap.org/%d/%d/%d.png"
 
 /** Web Mercator: the world position in pixels at [zoom] (256 px tiles). */
 internal fun worldX(longitudeDeg: Double, zoom: Int) =
-    (longitudeDeg + 180) / 360 * TILE_SIZE * 2.0.pow(zoom)
+    mercatorX(longitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
 
-internal fun worldY(latitudeDeg: Double, zoom: Int): Double {
-    val lat = Math.toRadians(latitudeDeg.coerceIn(-MAX_MAP_LATITUDE_DEG, MAX_MAP_LATITUDE_DEG))
-    return (1 - ln(tan(lat) + 1 / cos(lat)) / PI) / 2 * TILE_SIZE * 2.0.pow(zoom)
-}
+internal fun worldY(latitudeDeg: Double, zoom: Int) =
+    mercatorY(latitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
 
 internal fun longitude(worldX: Double, zoom: Int) = worldX / (TILE_SIZE * 2.0.pow(zoom)) * 360 - 180
 
 internal fun latitude(worldY: Double, zoom: Int) =
-    Math.toDegrees(atan(sinh(PI * (1 - 2 * worldY / (TILE_SIZE * 2.0.pow(zoom))))))
+    mercatorLatitude(worldY / (TILE_SIZE * 2.0.pow(zoom)))
 
 /** The tiles in memory, shared by all maps of the process. */
 private object TileCache {
