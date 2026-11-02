@@ -5,6 +5,12 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- "Keep offline" in the place panel downloads the elevation data of the place (100 km around it),
+  so you can prepare a trip. The panel shows the progress ("Downloading 3/9") and the result
+  ("Ready offline: 9 tiles, 44 MB"). The download continues when you close the panel. The list of
+  the kept places shows the name, the number of tiles, and the size. The app never removes the data
+  of a kept place, and this data does not count toward the limit of 400 MB. "Remove" makes the data
+  a normal part of the cache again.
 - The alignment with a landmark also works with a dropped place, for example offline without GPS.
 - The place works offline. The new button "Place" (or a tap on the place in the status) opens a
   search of 7342 places and a map of Natural Earth that is in the app. A tap on the map drops the

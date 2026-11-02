@@ -15,15 +15,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.stefl.sunradar.core.Observer
@@ -97,12 +103,14 @@ internal fun droppedPlaceName(map: BaseMap, at: Observer, name: String?): String
 /**
  * The place panel: a search of the places of the base map and a map of Natural Earth that works
  * offline. Drag to move, pinch or the buttons to zoom, and tap to drop the place. [onDrop] gets the
- * place, its name, and its time zone.
+ * place, its name, and its time zone. If [offline] is true, the panel also shows the kept places
+ * and the action "Keep offline" for the terrain tiles of [place].
  */
 @Composable
 fun PlacePanel(
     place: Place,
     deviceZone: ZoneId,
+    offline: Boolean,
     onDrop: (Observer, String, ZoneId) -> Unit,
     onUseDevice: () -> Unit,
     onClose: () -> Unit,
@@ -208,6 +216,7 @@ fun PlacePanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (offline) OfflineSection(place)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(
                     onClick = { zoom = (zoom.roundToInt() - 1.0).coerceAtLeast(MIN_MAP_ZOOM) }
@@ -230,6 +239,75 @@ fun PlacePanel(
         }
     }
 }
+
+/**
+ * The kept places (name, number of tiles, size, and "Remove") and the action "Keep offline" for
+ * [place]. The default place and the city of the time zone cannot be kept, because the user is not
+ * there and did not choose them.
+ */
+@Composable
+private fun OfflineSection(place: Place) {
+    val context = LocalContext.current.applicationContext
+    val job by OfflinePlaces.job.collectAsState()
+    val version by OfflinePlaces.version.collectAsState()
+    val kept by
+        produceState(emptyList<KeptPlaceStatus>(), version) {
+            value = withContext(Dispatchers.IO) { OfflinePlaces.list(context) }
+        }
+    Column(
+        Modifier.fillMaxWidth()
+            .background(Color(0xE6000000), RoundedCornerShape(12.dp))
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (kept.isNotEmpty()) {
+            Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+                for (k in kept) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                k.place.name,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val missing = if (k.missing > 0) " · ${k.missing} missing" else ""
+                            Text(
+                                "${tileCount(k.place.tiles.size)}, ${megabytes(k.bytes)}$missing",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                            )
+                        }
+                        TextButton(onClick = { OfflinePlaces.remove(context, k.place.id) }) {
+                            Text("Remove")
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val running = job?.finished == false
+            if (place.isKnown) {
+                FilledTonalButton(
+                    onClick = { OfflinePlaces.keep(context, place.observer, keptName(place)) },
+                    enabled = !running,
+                ) {
+                    Text("Keep offline")
+                }
+            }
+            job?.let { Text(it.text, color = Color.White, fontSize = 13.sp) }
+        }
+    }
+}
+
+/** The name of a kept place: the name of [place], else its coordinates. */
+private fun keptName(place: Place): String =
+    place.name
+        ?: "%.3f°, %.3f°"
+            .format(Locale.ROOT, place.observer.latitudeDeg, place.observer.longitudeDeg)
 
 private object MapColors {
     val sea = Color(0xFF0E2440)

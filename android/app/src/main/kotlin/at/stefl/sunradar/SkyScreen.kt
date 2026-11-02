@@ -415,6 +415,8 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
             PlacePanel(
                 place,
                 deviceZone,
+                // The demo mode downloads nothing.
+                offline = scene == null,
                 onDrop = { at, name, placeZone -> placeState.drop(at, name, placeZone) },
                 onUseDevice = useDeviceLocation,
                 onClose = { showPlace = false },

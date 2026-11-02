@@ -6,6 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 import kotlin.math.abs
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -42,6 +43,41 @@ sealed interface TileLoad<out T> {
     data object Unreadable : TileLoad<Nothing>
 }
 
+/** The result of [DemCache.fetch]. */
+enum class TileFetch {
+    /** The file of the tile is on the disk. */
+    READY,
+    /** The tile is in the sea: the server has no file for it. */
+    SEA,
+    /** The tile is not on the disk, and the download failed (for example offline). */
+    MISSING,
+}
+
+/**
+ * A place that the user keeps offline ("Keep offline"). The cache never evicts its [tiles] (names
+ * of [DemCache.tileName]), and their size does not count toward the limit of the cache.
+ */
+data class KeptPlace(
+    val id: String,
+    val name: String,
+    val latitudeDeg: Double,
+    val longitudeDeg: Double,
+    val tiles: List<String>,
+)
+
+/** A kept place with the state of its tiles on the disk. */
+data class KeptPlaceStatus(
+    val place: KeptPlace,
+    /** The number of tiles that are on the disk or in the sea. */
+    val ready: Int,
+    /** The size of the files of the tiles on the disk, in bytes. */
+    val bytes: Long,
+) {
+    /** The number of tiles that are not on the disk. */
+    val missing: Int
+        get() = place.tiles.size - ready
+}
+
 /** The record of one tile in the index of the cache. */
 data class DemEntry(
     val etag: String?,
@@ -65,6 +101,9 @@ data class DemEntry(
  *   works offline.
  * - When the files are larger than [maxBytes] in total, [load] deletes the tiles that were used
  *   least recently, but not the tiles in its argument `keep`.
+ * - The index also has the kept places ([KeptPlace]). The cache never deletes a tile of a kept
+ *   place, and these tiles do not count toward [maxBytes]. The check after [maxAgeMs] is the same
+ *   for all tiles.
  * - A file that the decoder cannot read is deleted and downloaded again one time.
  *
  * All functions block (file and network access), so call them off the main thread.
@@ -78,6 +117,7 @@ class DemCache(
 ) {
     private val indexFile = File(dir, "index.json")
     private val entries = mutableMapOf<String, DemEntry>()
+    private val kept = mutableListOf<KeptPlace>()
 
     init {
         dir.mkdirs()
@@ -93,8 +133,68 @@ class DemCache(
     /** The entry of the tile [name], or null if the tile is not in the cache. */
     @Synchronized fun entry(name: String): DemEntry? = entries[name]
 
-    /** The size of all files in the cache, in bytes. */
+    /** The size of all files in the cache, in bytes, also the files of the kept places. */
     @Synchronized fun totalBytes(): Long = entries.values.sumOf { it.size }
+
+    /** The size of the files that count toward the limit: all files but the kept tiles. */
+    @Synchronized
+    fun cacheBytes(): Long {
+        val keptTiles = keptTiles()
+        return entries.filterKeys { it !in keptTiles }.values.sumOf { it.size }
+    }
+
+    /** The kept places with the state of their tiles, in the order of their creation. */
+    @Synchronized
+    fun keptPlaces(): List<KeptPlaceStatus> = kept.map { place ->
+        val present =
+            place.tiles.mapNotNull { name ->
+                entries[name]?.takeIf { it.sea || fileOf(name).isFile }
+            }
+        KeptPlaceStatus(place, present.size, present.sumOf { it.size })
+    }
+
+    /**
+     * Adds [place] to the kept places, or replaces the kept place with the same id. Its tiles are
+     * kept from now on, also before they are downloaded.
+     */
+    @Synchronized
+    fun addKeptPlace(place: KeptPlace) {
+        val index = kept.indexOfFirst { it.id == place.id }
+        if (index >= 0) kept[index] = place else kept += place
+        writeIndex()
+    }
+
+    /**
+     * Removes the kept place [id]. Its tiles stay on the disk as normal tiles of the cache, so the
+     * next eviction can delete them. A tile of another kept place stays kept.
+     */
+    @Synchronized
+    fun removeKeptPlace(id: String) {
+        if (kept.removeAll { it.id == id }) writeIndex()
+    }
+
+    /**
+     * Makes sure that the file of the tile with the south-west corner [latitudeDeg], [longitudeDeg]
+     * is on the disk, without a read of the file. It downloads a tile that is not in the cache or
+     * whose file is gone, and checks a tile with the server if it is older than the maximum age. It
+     * does not change the time of the last use.
+     */
+    @Synchronized
+    fun fetch(latitudeDeg: Int, longitudeDeg: Int, keep: Set<String> = emptySet()): TileFetch {
+        val name = tileName(latitudeDeg, longitudeDeg)
+        val url = tileUrl(latitudeDeg, longitudeDeg)
+        var entry = entries[name]
+        if (entry != null && !entry.sea && !fileOf(name).isFile) {
+            // The file is gone, for example by a manual delete.
+            remove(name)
+            entry = null
+        }
+        if (entry != null && clock() - entry.checkedMs > maxAgeMs) {
+            entry = revalidate(name, url, entry, keep)
+        }
+        val current = entry ?: download(name, url, keep) ?: return TileFetch.MISSING
+        return if (current.sea) TileFetch.SEA else TileFetch.READY
+    }
 
     /**
      * Gives the tile with the south-west corner [latitudeDeg], [longitudeDeg], read with [decode].
@@ -138,14 +238,20 @@ class DemCache(
         return TileLoad.Unreadable
     }
 
-    /** Deletes the tiles that were used least recently and are not in [keep], down to the limit. */
+    /**
+     * Deletes the tiles that were used least recently and are not in [keep], down to the limit. It
+     * never deletes a tile of a kept place, and these tiles do not count toward the limit.
+     */
     @Synchronized
     fun evict(keep: Set<String>) {
-        var total = totalBytes()
+        var total = cacheBytes()
         if (total <= maxBytes) return
+        val keptTiles = keptTiles()
         val candidates =
             entries
-                .filter { (name, entry) -> name !in keep && entry.size > 0 }
+                .filter { (name, entry) ->
+                    name !in keep && name !in keptTiles && entry.size > 0
+                }
                 .toList()
                 .sortedBy {
                     it.second.usedMs
@@ -245,10 +351,13 @@ class DemCache(
 
     private fun fileOf(name: String) = File(dir, "$name.tif")
 
+    private fun keptTiles(): Set<String> = kept.flatMapTo(mutableSetOf()) { it.tiles }
+
     private fun readIndex() {
         if (!indexFile.isFile) return
         try {
-            val tiles = JSONObject(indexFile.readText()).getJSONObject("tiles")
+            val root = JSONObject(indexFile.readText())
+            val tiles = root.getJSONObject("tiles")
             for (name in tiles.keys()) {
                 val t = tiles.getJSONObject(name)
                 entries[name] =
@@ -261,11 +370,27 @@ class DemCache(
                         sea = t.getBoolean("sea"),
                     )
             }
+            // An index of version 1 has no kept places.
+            val places = root.optJSONArray("kept") ?: JSONArray()
+            for (i in 0 until places.length()) {
+                val k = places.getJSONObject(i)
+                val names = k.getJSONArray("tiles")
+                kept +=
+                    KeptPlace(
+                        id = k.getString("id"),
+                        name = k.getString("name"),
+                        latitudeDeg = k.getDouble("latitude"),
+                        longitudeDeg = k.getDouble("longitude"),
+                        tiles = List(names.length()) { names.getString(it) },
+                    )
+            }
         } catch (_: JSONException) {
             // A damaged index starts an empty cache; init deletes the files that it does not know.
             entries.clear()
+            kept.clear()
         } catch (_: IOException) {
             entries.clear()
+            kept.clear()
         }
     }
 
@@ -283,8 +408,21 @@ class DemCache(
                     .put("sea", e.sea),
             )
         }
+        val places = JSONArray()
+        for (k in kept) {
+            places.put(
+                JSONObject()
+                    .put("id", k.id)
+                    .put("name", k.name)
+                    .put("latitude", k.latitudeDeg)
+                    .put("longitude", k.longitudeDeg)
+                    .put("tiles", JSONArray(k.tiles))
+            )
+        }
         val temporary = File(dir, "index.json.part")
-        temporary.writeText(JSONObject().put("version", 1).put("tiles", tiles).toString())
+        temporary.writeText(
+            JSONObject().put("version", 2).put("tiles", tiles).put("kept", places).toString()
+        )
         if (!temporary.renameTo(indexFile)) temporary.delete()
     }
 

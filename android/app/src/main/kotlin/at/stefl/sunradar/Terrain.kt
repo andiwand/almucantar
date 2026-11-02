@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The terrain that the profile uses: the tiles nearer than this distance. */
-private const val TERRAIN_DISTANCE_M = 100_000.0
+internal const val TERRAIN_DISTANCE_M = 100_000.0
 
 /** A tile nearer than this uses the full resolution, a tile farther away the first overview. */
 private const val FULL_RESOLUTION_DISTANCE_M = 25_000.0
@@ -57,7 +57,7 @@ data class TerrainState(
 )
 
 /** The cache of the elevation tiles, one for the process. */
-private object TerrainStore {
+internal object TerrainStore {
     private var cache: DemCache? = null
 
     @Synchronized
