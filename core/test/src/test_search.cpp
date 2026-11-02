@@ -45,6 +45,25 @@ TEST_CASE("find_time gives the nearest point for a direction off the path", "[se
   CHECK(std::abs(m.unix_utc - t) < 2 * 3600);
 }
 
+TEST_CASE("find_time refines every minimum in a long interval", "[search]") {
+  const Observer vienna = test::site("vienna");
+  const double t = kYearStart + 120 * kDay + 10 * 3600 + 150;
+  const TimeMatch m =
+      find_time(vienna, sun_position(t, vienna), t - kDay - 150, t + 364 * kDay - 150);
+  CHECK_THAT(m.unix_utc, WithinAbs(t, 1));
+  CHECK(m.separation_deg < 1e-3);
+}
+
+TEST_CASE("find_dates includes a match in the final partial day", "[search]") {
+  const Observer vienna = test::site("vienna");
+  const double t = kYearStart + 120 * kDay + 10 * 3600;
+  const Horizontal direction = sun_position(t, vienna);
+  const auto matches = find_dates(vienna, direction, t - kDay - 3600, t + 3600);
+  REQUIRE(matches.size() == 1);
+  CHECK_THAT(matches[0].unix_utc, WithinAbs(t, 1));
+  CHECK(find_dates(vienna, direction, t - kDay - 3600, t - 60).empty());
+}
+
 TEST_CASE("find_time works in the polar day and the polar night", "[search]") {
   const Observer tromso = test::site("tromso");
   // 2026-06-21: the midnight sun in the north at about 3° altitude.
@@ -168,4 +187,16 @@ TEST_CASE("find_azimuth_times finds the time of an azimuth", "[search]") {
   CHECK_THROWS_AS(
       find_azimuth_times(vienna, std::numeric_limits<double>::quiet_NaN(), day, day + kDay),
       std::invalid_argument);
+}
+
+TEST_CASE("find_azimuth_times includes exact endpoints without duplicate crossings", "[search]") {
+  for (const Observer observer : {test::site("vienna"), test::site("sydney")}) {
+    const double t = kYearStart + 120 * kDay + 10 * 3600;
+    const double azimuth = sun_position(t, observer).azimuth_deg;
+    for (const double start : {t - 600, t - 300, t}) {
+      const auto crossings = find_azimuth_times(observer, azimuth, start, start + 600);
+      REQUIRE(crossings.size() == 1);
+      CHECK_THAT(crossings[0].unix_utc, WithinAbs(t, 0.5));
+    }
+  }
 }

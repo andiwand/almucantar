@@ -14,6 +14,10 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- `find_time()` refines each minimum, so a search across many days finds the nearest match.
+- `find_dates()` includes matches in the final partial day.
+- Searches keep exact crossings at sample times and at the ends of an azimuth interval.
+- A WebAssembly build copies changes to the JavaScript wrapper and types without a native rebuild.
 - `HeadingFilter` with `heading_filter_start()`, `heading_filter_predict()`,
   `heading_filter_update()`, and `heading_filter_update_magnetometer()`, in all bindings. The
   filter estimates the heading offset, the hard-iron bias of the magnetometer, and a local

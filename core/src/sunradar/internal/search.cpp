@@ -29,22 +29,36 @@ TimeMatch nearest_time(const SolarModelImpl& model, const Observer& observer, co
   const double step = span / static_cast<double>(steps);
   double best_t = start_utc;
   double best_s = separation(start_utc);
-  for (std::size_t i = 1; i <= steps; ++i) {
-    const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
-    const double s = separation(t);
+  const auto keep = [&](const double t, const double s) {
     if (s < best_s) {
       best_s = s;
       best_t = t;
     }
+  };
+  const auto refine = [&](const double a, const double b) {
+    const double t = golden_min(separation, a, b, tolerance_s);
+    keep(t, separation(t));
+  };
+  double a = start_utc;
+  double sa = best_s;
+  double b = start_utc;
+  double sb = best_s;
+  for (std::size_t i = 1; i <= steps; ++i) {
+    const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
+    const double s = separation(t);
+    keep(t, s);
+    // Refine each sampled minimum. The best sample need not surround the best minimum,
+    // especially when the interval contains several days.
+    if (sb <= sa && sb <= s) {
+      refine(a, t);
+    }
+    a = b;
+    sa = sb;
+    b = t;
+    sb = s;
   }
-
-  // Refine between the neighbors of the best sample, and keep the better result.
-  const double refined = golden_min(separation, std::max(start_utc, best_t - step),
-                                    std::min(end_utc, best_t + step), tolerance_s);
-  const double refined_s = separation(refined);
-  if (refined_s < best_s) {
-    best_s = refined_s;
-    best_t = refined;
+  if (sb <= sa) {
+    refine(a, b);
   }
   return TimeMatch{
       .unix_utc = best_t, .separation_deg = best_s * kRadToDeg, .sun = position(best_t)};

@@ -11,9 +11,15 @@ inline constexpr int kMaxSearchSteps = 200;
 /// and `f(b)` must have the other sign.
 template <typename F>
 double bisect(const F& f, double a, double b, double fa, const double tolerance) {
+  if (fa == 0) {
+    return a;
+  }
   for (int i = 0; i < kMaxSearchSteps && b - a > tolerance; ++i) {
     const double mid = 0.5 * (a + b);
     const double fm = f(mid);
+    if (fm == 0) {
+      return mid;
+    }
     if ((fm < 0) == (fa < 0)) {
       a = mid;
       fa = fm;

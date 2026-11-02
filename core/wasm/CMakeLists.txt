@@ -23,14 +23,17 @@ set_target_properties(sunradar_wasm PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${SUNRADAR_WASM_DIST}")
 
 # The hand-written half of the package goes next to the generated module.
+add_custom_target(sunradar_wasm_package
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SUNRADAR_WASM_DIST}")
 foreach(file package.json index.js index.d.ts README.md)
-  add_custom_command(TARGET sunradar_wasm POST_BUILD
+  add_custom_command(TARGET sunradar_wasm_package POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/js/${file}" "${SUNRADAR_WASM_DIST}/${file}")
 endforeach()
-add_custom_command(TARGET sunradar_wasm POST_BUILD
+add_custom_command(TARGET sunradar_wasm_package POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${PROJECT_SOURCE_DIR}/LICENSE" "${SUNRADAR_WASM_DIST}/LICENSE")
+add_dependencies(sunradar_wasm sunradar_wasm_package)
 
 # The tests need node 18 or later (node --test). emsdk brings an older node, and the Conan build
 # environment puts it first on the PATH, so SUNRADAR_NODE can name another one.

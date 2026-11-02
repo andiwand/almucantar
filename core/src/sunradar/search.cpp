@@ -73,12 +73,14 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
           "the interval has too many search steps");
 
   const internal::Vec3 d = internal::to_enu(direction);
-  const auto days = static_cast<std::size_t>((end_utc - start_utc) / kDay);
+  const auto days = static_cast<std::size_t>(std::ceil((end_utc - start_utc) / kDay));
   std::vector<TimeMatch> daily;
   daily.reserve(days);
   for (std::size_t i = 0; i < days; ++i) {
     const double start = start_utc + static_cast<double>(i) * kDay;
-    daily.push_back(search_window(observer, d, start, start + kDay, options));
+    // The last window ends at end_utc, so it finds a minimum in a partial last day.
+    const double end = std::min(start + kDay, end_utc);
+    daily.push_back(search_window(observer, d, start, end, options));
   }
 
   // A local minimum over the days: not larger than the day before, and smaller than
@@ -86,8 +88,8 @@ std::vector<TimeMatch> find_dates(const Observer& observer, const Horizontal dir
   // minimum outside the interval does not give a date at its edge.
   const double first_neighbor =
       search_window(observer, d, start_utc - kDay, start_utc, options).separation_deg;
-  const double end = start_utc + static_cast<double>(days) * kDay;
-  const double last_neighbor = search_window(observer, d, end, end + kDay, options).separation_deg;
+  const double last_neighbor =
+      search_window(observer, d, end_utc, end_utc + kDay, options).separation_deg;
   std::vector<TimeMatch> result;
   for (std::size_t i = 0; i < daily.size(); ++i) {
     const double s = daily[i].separation_deg;
@@ -124,10 +126,15 @@ std::vector<AzimuthCrossing> find_azimuth_times(const Observer& observer, const 
   const double step = span / static_cast<double>(steps);
   double t_prev = start_utc;
   double d_prev = difference(t_prev);
+  if (d_prev == 0) {
+    result.push_back({.unix_utc = t_prev, .sun = position(t_prev)});
+  }
   for (std::size_t i = 1; i <= steps; ++i) {
     const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
     const double d = difference(t);
-    if ((d < 0) != (d_prev < 0) && std::abs(d - d_prev) < 180) {
+    if (d == 0) {
+      result.push_back({.unix_utc = t, .sun = position(t)});
+    } else if (d_prev != 0 && (d < 0) != (d_prev < 0) && std::abs(d - d_prev) < 180) {
       const double root = internal::bisect(difference, t_prev, t, d_prev, options.tolerance_s);
       result.push_back({.unix_utc = root, .sun = position(root)});
     }

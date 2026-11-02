@@ -117,6 +117,15 @@ TEST_CASE("sun_events detects the polar day and the polar night", "[events]") {
   CHECK(winter.culmination_altitude_deg < kSunriseAltitudeDeg);
 }
 
+TEST_CASE("sun_events keeps an exact crossing at the start of a search step", "[events]") {
+  const Observer vienna = test::site("vienna");
+  const double t = 1782000000 + 6 * 3600;
+  const auto events = sun_events(vienna, t, t + 600, {.altitude_deg = airless(t, vienna)});
+  REQUIRE(events.crossings.size() == 1);
+  CHECK(events.crossings[0].rising);
+  CHECK_THAT(events.crossings[0].unix_utc, WithinAbs(t, 0.5));
+}
+
 TEST_CASE("sun_events rejects invalid arguments", "[events]") {
   const Observer vienna = test::site("vienna");
   const double t = 1782000000;
