@@ -61,6 +61,10 @@ jobs:
         run: |
           version="${VERSION}"
           if [ -z "${version}" ]; then version="$(python3 scripts/release.py version "${PROJECT}")"; fi
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The version must have the form X.Y.Z"
+            exit 1
+          fi
           # A tag or a release (also a draft, which has no tag yet) with this version stops the run.
           if git rev-parse -q --verify "refs/tags/${PROJECT}-v${version}" >/dev/null ||
             gh release view "${PROJECT}-v${version}" >/dev/null 2>&1; then

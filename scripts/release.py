@@ -93,7 +93,7 @@ def unreleased(project: str) -> str:
 def version(project: str) -> str:
     bumped = git_cliff(project, "--bumped-version")
     value = re.sub(rf"^{project}-v", "", bumped).lstrip("v")
-    if not SEMVER.match(value):
+    if not SEMVER.fullmatch(value):
         sys.exit(f"git cliff gave an unexpected version: {bumped!r}")
     tags = subprocess.run(
         ["git", "tag", "--list", f"{project}-v{value}"],
@@ -115,7 +115,7 @@ def check(project: str) -> None:
 
 
 def stamp(project: str, value: str, dry_run: bool) -> None:
-    if not SEMVER.match(value):
+    if not SEMVER.fullmatch(value):
         sys.exit(f"not a version: {value!r}")
     check(project)
     changes: dict[pathlib.Path, str] = {}

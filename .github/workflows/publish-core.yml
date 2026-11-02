@@ -37,15 +37,23 @@ jobs:
       publish: ${{ steps.v.outputs.publish }}
     steps:
       - id: v
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            tag="${{ github.event.release.tag_name }}"
-            echo "version=${tag#core-v}" >> "${GITHUB_OUTPUT}"
+          if [ "${EVENT_NAME}" = "release" ]; then
+            version="${RELEASE_TAG#core-v}"
             echo "publish=true" >> "${GITHUB_OUTPUT}"
           else
-            echo "version=${{ inputs.version }}" >> "${GITHUB_OUTPUT}"
+            version="${INPUT_VERSION}"
             echo "publish=false" >> "${GITHUB_OUTPUT}"
           fi
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The version must have the form X.Y.Z"
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
   npm:
     needs: version
