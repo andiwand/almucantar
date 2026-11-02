@@ -5,6 +5,13 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The place panel looks like a map app. The map fills the screen. The search bar is at the top,
+  with a back arrow and a clear button, and the results show the country below the name. The
+  buttons zoom in, zoom out, and "Use my location" are on the right. A card at the bottom shows the
+  place, its coordinates, the name of its time zone ("Central European Time"), "Keep offline", and
+  the kept places. The place has a map pin, and the place names have a dark halo, so they stay
+  readable over the lines.
+
 - The terrain line ignores the terrain nearer than 2 km. The elevation data (Copernicus) includes
   buildings and forests, so a city showed a false wall of several degrees around you. In the centre
   of Vienna, the highest terrain is now 2.3° (the Kahlenberg, 8 km away) in place of 5.6°. The

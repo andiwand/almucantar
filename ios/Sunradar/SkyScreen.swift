@@ -237,7 +237,7 @@ struct SkyScreen: SwiftUI.View {
                 if let notice = location.notice { message = notice }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showPlace) { PlacePanel(location: location, kept: kept) }
+            .fullScreenCover(isPresented: $showPlace) { PlacePanel(location: location, kept: kept) }
             .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
                 MapPicker(observer: location.observer) { picked in

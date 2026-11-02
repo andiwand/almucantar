@@ -1,9 +1,10 @@
 import Sunradar
 import SwiftUI
 
-/// The place panel: a search of the places of the base map, and the offline map (Natural Earth),
-/// where a tap drops the place. "Use my location" ends a manual place. The map needs no network.
-/// "Keep offline" downloads the terrain tiles of the place, and the list below shows the kept places.
+/// The place panel: the offline map (Natural Earth) fills the screen, and a tap drops the place.
+/// The search bar is at the top, the map buttons are on the right, and the card at the bottom shows
+/// the place, "Keep offline", and the kept places. The layout is the one of a map app, the same as
+/// on Android. The map needs no network.
 struct PlacePanel: SwiftUI.View {
     @ObservedObject var location: LocationProvider
     @ObservedObject var kept: KeptPlaces
@@ -17,80 +18,29 @@ struct PlacePanel: SwiftUI.View {
     @State private var viewport: MapViewport
     @State private var dragStart: MapViewport?
     @State private var zoomStart: Double?
+    /// True after "Use my location", so the map follows the next device location.
+    @State private var followDevice = false
     @FocusState private var searching: Bool
 
     init(location: LocationProvider, kept: KeptPlaces) {
         self.location = location
         self.kept = kept
-        _viewport = State(initialValue: MapViewport(center: location.observer, zoom: 5))
+        _viewport = State(initialValue: MapViewport(center: location.observer, zoom: 7))
     }
 
     var body: some SwiftUI.View {
-        NavigationStack {
+        ZStack {
+            mapView.ignoresSafeArea()
             VStack(spacing: 0) {
-                TextField("Search a place", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($searching)
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-                ZStack(alignment: .top) {
-                    mapView
-                    if !results.isEmpty {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(results.enumerated()), id: \.offset) { _, place in
-                                Button {
-                                    choose(place)
-                                } label: {
-                                    Text("\(place.name), \(place.country)")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 9)
-                                }
-                                Divider()
-                            }
-                        }
-                        .background(.regularMaterial)
-                    }
-                }
-                VStack(spacing: 6) {
-                    Text(location.text).bold()
-                    Text("Time zone: \(location.timeZone.identifier)").font(.footnote).foregroundStyle(.secondary)
-                    Text(
-                        location.manual
-                            ? "The place stays until you choose \"Use my location\"."
-                            : "Tap the map to drop the place, or search a place."
-                    )
-                    .font(.footnote).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Use my location") {
-                            location.useDeviceLocation()
-                            dismiss()
-                        }
-                        if kept.cache != nil && location.hasPlace {
-                            Button("Keep offline") { kept.keep(name: location.text, observer: location.observer) }
-                                .disabled(kept.downloading || !terrainOn)
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    if kept.cache != nil && location.hasPlace && !terrainOn {
-                        Text("The terrain horizon is off in the settings.").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if let text = kept.stateText {
-                        Text(text).font(.footnote)
-                    }
-                }
-                .multilineTextAlignment(.center)
-                .padding()
-                if !kept.places.isEmpty { keptList }
-            }
-            .navigationTitle("Place")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                searchBar
+                Spacer(minLength: 0)
+                mapButtons
+                card
             }
         }
+        .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
+        .statusBarHidden(false)
         .task { await kept.refresh() }
         .task {
             do {
@@ -101,45 +51,99 @@ struct PlacePanel: SwiftUI.View {
             }
         }
         .onChange(of: query) { search() }
+        .onChange(of: location.observer) {
+            if followDevice && !location.manual {
+                followDevice = false
+                viewport.center = MapViewport(center: location.observer, zoom: viewport.zoom).center
+            }
+        }
     }
 
-    /// The kept places: the name, the tiles that the cache has, the size, and "Remove".
-    private var keptList: some SwiftUI.View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Kept offline").font(.footnote.bold()).padding(.horizontal).padding(.bottom, 4)
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(kept.places) { summary in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(summary.place.name).font(.footnote).lineLimit(1)
-                                Text(keptText(summary)).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Remove", role: .destructive) { Task { await kept.remove(summary.id) } }
-                                .buttonStyle(.borderless)
-                                .font(.footnote)
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 6)
-                        Divider()
+    // MARK: - The search
+
+    /// The search: a rounded bar with the back arrow, and the results in a card below it.
+    private var searchBar: some SwiftUI.View {
+        VStack(spacing: 8) {
+            HStack(spacing: 0) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "arrow.left").font(.system(size: 20, weight: .medium))
+                        .frame(width: 52, height: 52)
+                }
+                .accessibilityLabel("Close")
+                TextField(
+                    "", text: $query,
+                    prompt: Text("Search a place").foregroundColor(PanelColors.muted)
+                )
+                .font(.system(size: 17))
+                .foregroundColor(PanelColors.text)
+                .tint(PanelColors.text)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .focused($searching)
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
+                            .frame(width: 52, height: 52)
                     }
+                    .accessibilityLabel("Clear")
+                } else {
+                    Spacer().frame(width: 16)
                 }
             }
-            .frame(maxHeight: 150)
+            .foregroundColor(PanelColors.text)
+            .frame(height: 52)
+            .background(Capsule().fill(PanelColors.surface).shadow(color: .black.opacity(0.35), radius: 6, y: 2))
+            if !results.isEmpty { resultList }
+            if map == nil {
+                Text(failed ? "The map is not available." : "Loading the map…").foregroundColor(PanelColors.text)
+            }
         }
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
     }
 
-    /// "9 tiles, 44 MB", or "7/9 tiles, 30 MB" if tiles are missing.
-    private func keptText(_ summary: DemCache.KeptSummary) -> String {
-        let total = summary.place.tiles.count
-        let tiles = summary.tiles == total ? KeptPlaces.tilesText(total) : "\(summary.tiles)/\(total) tiles"
-        return "\(tiles), \(KeptPlaces.sizeText(summary.bytes))"
+    /// The results: for each place a pin, the name, and the country in a second line.
+    private var resultList: some SwiftUI.View {
+        VStack(spacing: 0) {
+            ForEach(Array(results.enumerated()), id: \.offset) { _, place in
+                Button {
+                    choose(place)
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "mappin.and.ellipse").font(.system(size: 18))
+                            .foregroundColor(PanelColors.muted)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(place.name).foregroundColor(PanelColors.text)
+                            if !place.country.isEmpty {
+                                Text(place.country).font(.system(size: 13)).foregroundColor(PanelColors.muted)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 16).fill(PanelColors.surface)
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 2))
     }
+
+    // MARK: - The map
 
     private var mapView: some SwiftUI.View {
         ZStack {
+            BaseMapDrawing.background
             if let map {
                 GeometryReader { geometry in
                     Canvas { context, size in
@@ -148,32 +152,26 @@ struct PlacePanel: SwiftUI.View {
                     .gesture(dragGesture(size: geometry.size).simultaneously(with: zoomGesture))
                     .accessibilityLabel("The map: tap to drop the place")
                 }
-            } else {
-                Color(red: 0.055, green: 0.141, blue: 0.251)
-                Text(failed ? "The map is not available." : "Loading the map…").foregroundColor(.white)
             }
+        }
+    }
+
+    /// The map buttons, above the card on the right, as in other map apps.
+    private var mapButtons: some SwiftUI.View {
+        HStack {
+            Spacer()
             VStack(spacing: 8) {
-                Spacer()
-                HStack(alignment: .bottom) {
-                    Text(map?.attribution ?? "Map: Natural Earth (public domain)")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding(4)
-                        .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 4))
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Button("+") { viewport.setZoom(viewport.zoom.rounded(.down) + 1) }
-                            .accessibilityLabel("Zoom in")
-                        Button("−") { viewport.setZoom(viewport.zoom.rounded(.up) - 1) }
-                            .accessibilityLabel("Zoom out")
-                    }
-                    .font(.title2.bold())
-                    .buttonStyle(.bordered)
+                MapButton(symbol: "plus", label: "Zoom in") { viewport.setZoom(viewport.zoom.rounded() + 1) }
+                MapButton(symbol: "minus", label: "Zoom out") { viewport.setZoom(viewport.zoom.rounded() - 1) }
+                MapButton(symbol: "scope", label: "Use my location") {
+                    viewport.center = MapViewport(center: location.observer, zoom: viewport.zoom).center
+                    followDevice = true
+                    location.useDeviceLocation()
                 }
             }
-            .padding(8)
         }
-        .clipped()
+        .padding(.trailing, 12)
+        .padding(.bottom, 12)
     }
 
     /// A drag moves the map; a tap without a move drops the place.
@@ -206,28 +204,177 @@ struct PlacePanel: SwiftUI.View {
             .onEnded { _ in zoomStart = nil }
     }
 
+    // MARK: - The card
+
+    /// The card at the bottom: the place, its coordinates and time zone, the hint, "Keep offline",
+    /// the kept places, and the attribution.
+    private var card: some SwiftUI.View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(placeName)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(PanelColors.text)
+                .lineLimit(1)
+            Text("\(coordinates(location.observer)) · \(zoneName)")
+                .font(.system(size: 14))
+                .foregroundColor(PanelColors.muted)
+            Text("Tap the map to move the place, or search for it.")
+                .font(.system(size: 13))
+                .foregroundColor(PanelColors.muted)
+                .padding(.top, 4)
+            if kept.cache != nil { offlineSection }
+            Text(map?.attribution ?? "Map: Natural Earth (public domain)")
+                .font(.system(size: 11))
+                .foregroundColor(PanelColors.muted.opacity(0.6))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.vertical, 6)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+                .fill(PanelColors.surface)
+                .shadow(color: .black.opacity(0.4), radius: 8)
+                .ignoresSafeArea(edges: .bottom))
+    }
+
+    /// The name of the place: the part before " · " of a dropped or searched place, else
+    /// "Your location" for the device location.
+    private var placeName: String {
+        if location.hasPlace && !location.manual { return "Your location" }
+        let text = location.text
+        guard let range = text.range(of: " · ") else { return text }
+        return String(text[..<range.lowerBound])
+    }
+
+    /// The readable name of the time zone ("Central European Time"), not the IANA ID.
+    private var zoneName: String {
+        let zone = location.timeZone
+        return zone.localizedName(for: .generic, locale: .current)
+            ?? zone.localizedName(for: .standard, locale: .current) ?? zone.identifier
+    }
+
+    /// "Keep offline" with its status, and the list of the kept places.
+    private var offlineSection: some SwiftUI.View {
+        VStack(alignment: .leading, spacing: 4) {
+            Rectangle().fill(PanelColors.divider).frame(height: 1).padding(.vertical, 8)
+            HStack(spacing: 12) {
+                if location.hasPlace {
+                    Button("Keep offline") { kept.keep(name: location.text, observer: location.observer) }
+                        .font(.system(size: 15, weight: .semibold))
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(PanelColors.text)
+                        .disabled(kept.downloading || !terrainOn)
+                }
+                Text(offlineText)
+                    .font(.system(size: 13))
+                    .foregroundColor(PanelColors.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !kept.places.isEmpty { keptList }
+        }
+    }
+
+    /// The status of "Keep offline", or what it does when it is idle.
+    private var offlineText: String {
+        if let text = kept.stateText { return text }
+        if location.hasPlace && !terrainOn { return "The terrain horizon is off in the settings." }
+        return "Keep the terrain of this place for a trip without a network."
+    }
+
+    /// The kept places: the name, the tiles that the cache has, the size, and "Remove".
+    private var keptList: some SwiftUI.View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Kept offline")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(PanelColors.text)
+                .padding(.top, 8)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(kept.places) { summary in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(summary.place.name).foregroundColor(PanelColors.text).lineLimit(1)
+                                Text(keptText(summary)).font(.system(size: 12)).foregroundColor(PanelColors.muted)
+                            }
+                            Spacer()
+                            Button("Remove", role: .destructive) { Task { await kept.remove(summary.id) } }
+                                .buttonStyle(.borderless)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
+            .frame(maxHeight: 140)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "9 tiles, 44 MB", or "7/9 tiles, 30 MB" if tiles are missing.
+    private func keptText(_ summary: DemCache.KeptSummary) -> String {
+        let total = summary.place.tiles.count
+        let tiles = summary.tiles == total ? KeptPlaces.tilesText(total) : "\(summary.tiles)/\(total) tiles"
+        return "\(tiles), \(KeptPlaces.sizeText(summary.bytes))"
+    }
+
+    // MARK: - The actions
+
     private func search() { results = map?.search(query) ?? [] }
 
     private func choose(_ place: BaseMap.Place) {
         query = ""
         searching = false
-        viewport = MapViewport(center: place.observer, zoom: max(viewport.zoom, 9))
+        viewport = MapViewport(center: place.observer, zoom: max(viewport.zoom, 8))
         drop(place.observer, name: place.name)
+    }
+
+    private func coordinates(_ observer: Observer) -> String {
+        String(format: "%.3f°, %.3f°", observer.latitudeDeg, observer.longitudeDeg)
     }
 
     /// Drops the place, with the name of the nearest place and its time zone.
     private func drop(_ observer: Observer, name: String?) {
         guard let map else { return }
-        let coordinates = String(format: "%.3f°, %.3f°", observer.latitudeDeg, observer.longitudeDeg)
-        let label = name ?? map.nearestPlace(to: observer).map { "near \($0.name)" } ?? coordinates
-        location.drop(observer, name: "\(label) · \(coordinates)", timeZone: map.timeZone(at: observer))
+        followDevice = false
+        let text = coordinates(observer)
+        let label = name ?? map.nearestPlace(to: observer).map { "near \($0.name)" } ?? text
+        location.drop(observer, name: "\(label) · \(text)", timeZone: map.timeZone(at: observer))
+    }
+}
+
+/// The colors of the surfaces of the panel. Android has the same colors.
+private enum PanelColors {
+    static let surface = Color(red: 0x1B / 255.0, green: 0x24 / 255.0, blue: 0x33 / 255.0)
+    static let text = Color(red: 0xE8 / 255.0, green: 0xEC / 255.0, blue: 0xF2 / 255.0)
+    static let muted = Color(red: 0xA9 / 255.0, green: 0xB3 / 255.0, blue: 0xC2 / 255.0)
+    static let divider = Color.white.opacity(0.2)
+}
+
+/// A small round button of the map with an SF Symbol.
+private struct MapButton: SwiftUI.View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    var body: some SwiftUI.View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(PanelColors.text)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle().fill(PanelColors.surface).shadow(color: .black.opacity(0.35), radius: 4, y: 2))
+        }
+        .accessibilityLabel(label)
     }
 }
 
 /// Draws the base map in Web Mercator: the lines, the place names (more of them at a larger zoom),
 /// and the pin of the place.
 enum BaseMapDrawing {
-    private static let background = Color(red: 0.055, green: 0.141, blue: 0.251)
+    static let background = Color(red: 0.055, green: 0.141, blue: 0.251)
     private static let styles: [BaseMap.Layer: (color: Color, width: CGFloat, dash: [CGFloat])] = [
         .rivers: (Color(red: 0.43, green: 0.67, blue: 0.9).opacity(0.5), 1, []),
         .lakes: (Color(red: 0.43, green: 0.67, blue: 0.9).opacity(0.8), 1, []),
@@ -285,31 +432,58 @@ enum BaseMapDrawing {
         }
 
         // The place names: more of them at a larger zoom. A label near a label that is already
-        // drawn is skipped, so the larger place wins.
+        // drawn is skipped, so the larger place wins. A dark halo (the color of the sea) keeps the
+        // names readable over the lines.
         let maxRank = min(10, Int((viewport.zoom * 1.6).rounded()))
+        var labels = context
+        labels.addFilter(.shadow(color: background, radius: 1.5))
+        labels.addFilter(.shadow(color: background, radius: 1.5))
         var used: [CGPoint] = []
         for place in map.places where place.rank <= maxRank {
             let w = Mercator.world(latitudeDeg: place.latitudeDeg, longitudeDeg: place.longitudeDeg)
             for k in copies {
                 let p = screen(w, k)
                 if p.x < 0 || p.y < 0 || Double(p.x) > width || Double(p.y) > height { continue }
-                if used.contains(where: { abs($0.x - p.x) < 70 && abs($0.y - p.y) < 16 }) { continue }
+                if used.contains(where: { abs($0.x - p.x) < 90 && abs($0.y - p.y) < 22 }) { continue }
                 used.append(p)
-                context.fill(Path(CGRect(x: p.x - 1.5, y: p.y - 1.5, width: 3, height: 3)), with: .color(.white.opacity(0.85)))
-                context.draw(
-                    Text(place.name).font(.system(size: 12)).foregroundColor(.white.opacity(0.85)),
-                    at: CGPoint(x: p.x + 4, y: p.y - 2), anchor: .bottomLeading)
+                let dot = CGRect(x: p.x - 2, y: p.y - 2, width: 4, height: 4)
+                context.fill(Path(ellipseIn: dot), with: .color(.white))
+                let name = Text(place.name).font(.system(size: 12)).foregroundColor(.white.opacity(0.9))
+                let at = CGPoint(x: p.x + 5, y: p.y - 2)
+                labels.draw(name, at: at, anchor: .bottomLeading)
             }
+            if used.count > 200 { break }
         }
 
         if let pin {
             let w = Mercator.world(latitudeDeg: pin.latitudeDeg, longitudeDeg: pin.longitudeDeg)
             // The copy of the pin that is nearest to the center.
             let k = (viewport.center.x - w.x).rounded()
-            let p = screen(w, Int(k))
-            let circle = Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14))
-            context.fill(circle, with: .color(Color(red: 1, green: 0.78, blue: 0.24)))
-            context.stroke(circle, with: .color(.black), lineWidth: 1.5)
+            drawPin(&context, tip: screen(w, Int(k)))
         }
+    }
+
+    private static let pinColor = Color(red: 1, green: 0.784, blue: 0.239)
+    private static let pinOutline = Color(red: 0.227, green: 0.165, blue: 0)
+
+    /// A map pin with its tip at `tip`, and a small shadow on the ground. Android draws the same pin.
+    private static func drawPin(_ context: inout GraphicsContext, tip: CGPoint) {
+        let shadow = CGRect(x: tip.x - 5, y: tip.y - 2, width: 10, height: 4)
+        context.fill(Path(ellipseIn: shadow), with: .color(.black.opacity(0.4)))
+        let r: CGFloat = 11
+        let headY: CGFloat = tip.y - 1.75 * r
+        let head = CGPoint(x: tip.x, y: headY)
+        let sideX: CGFloat = tip.x - 0.87 * r
+        let sideY: CGFloat = headY + 0.5 * r
+        var outline = Path()
+        outline.move(to: tip)
+        // The two sides touch the head; the arc closes the top.
+        outline.addLine(to: CGPoint(x: sideX, y: sideY))
+        outline.addArc(center: head, radius: r, startAngle: .degrees(150), endAngle: .degrees(30), clockwise: false)
+        outline.closeSubpath()
+        context.fill(outline, with: .color(pinColor))
+        context.stroke(outline, with: .color(pinOutline), lineWidth: 1.5)
+        let eye = CGRect(x: tip.x - 4, y: headY - 4, width: 8, height: 8)
+        context.fill(Path(ellipseIn: eye), with: .color(pinOutline))
     }
 }
