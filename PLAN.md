@@ -706,3 +706,37 @@ it after 13.1 and 13.2.
 
 **Status:** the core part is done (`sky.hpp`, in C++ and Python): `galactic_position()` for the
 galactic center and `galactic_plane()` for the center line. No app uses it yet.
+
+## 14. A second app: the photo planner (idea, not planned in detail)
+
+A friend of the user proposed the idea: photographers point at a place on a map and look for the
+times when the sun, the moon, or the Milky Way is at a given place in the picture, for example the
+moon that rises behind a peak or the Milky Way above a building. Apps for this exist (PhotoPills,
+The Photographer's Ephemeris, PlanIt!), so photographers use and pay for such tools.
+
+**A second app, not a mode of sunradar.** sunradar starts from the camera and a place where the
+user is ("when does the sun come through this window?"). The planner starts from the map and a
+target ("from where and when is the moon behind this peak?"). It needs other screens: a map with
+the observer and the target, a calendar of results, the phases of the twilight and of the moon,
+and the darkness of the sky. Both apps use the same core, and the model of the repository (one
+core, one package per platform) allows a second app with little cost.
+
+**What could make it different:** the terrain horizon from a DEM, also offline (13.1, 13.3). Many
+tools use the horizon of 0°. Also the camera view of sunradar, so the user can check a plan at the
+place, and the PWA, which needs no installation.
+
+**The parts in the core first.** They are also useful for sunradar (13.2), so they come before a
+decision about the second app:
+
+1. The inverse search: the places from which a body (the sun, the moon, the galactic center) is in
+   line with a target (a place with a height) at a given date, and the times for a given observer
+   and target over a year. The second is `find_dates()` for any body and for a direction that
+   comes from the target.
+2. The rise and the set of the moon behind the terrain: `terrain_events()` for the moon, with its
+   phase.
+3. The windows of darkness: the astronomical twilight, the moon below the horizon or nearly new,
+   and the galactic center above the terrain. These give the times for the Milky Way (13.5).
+4. The line of sight between the observer and the target over the DEM: is the target visible?
+
+**The order:** the core parts first, then a prototype of the planner as a second web app next to
+the PWA (the cheapest UI to try), then a decision about a native app.
