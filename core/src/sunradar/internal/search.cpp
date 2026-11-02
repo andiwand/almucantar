@@ -3,12 +3,22 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 #include "sunradar/internal/math.hpp"
 #include "sunradar/internal/numeric.hpp"
 #include "sunradar/internal/refraction.hpp"
 
 namespace sunradar::internal {
+
+namespace {
+
+/// An upper bound of the rate of change of the separation, in radians per second. The sun moves
+/// in the sky at most with the rotation of the Earth (7.29e-5 rad/s), and the refraction makes
+/// the apparent motion slower near the horizon, not faster.
+constexpr double kMaxRate = 1e-4;
+
+}  // namespace
 
 TimeMatch nearest_time(const SolarModelImpl& model, const Observer& observer, const Vec3 direction,
                        const double start_utc, const double end_utc, const double step_s,
@@ -35,9 +45,18 @@ TimeMatch nearest_time(const SolarModelImpl& model, const Observer& observer, co
       best_t = t;
     }
   };
-  const auto refine = [&](const double a, const double b) {
-    const double t = golden_min(separation, a, b, tolerance_s);
-    keep(t, separation(t));
+
+  // A sampled minimum: the bracket around it and its sampled separation.
+  struct Bracket {
+    double a;
+    double b;
+    double s;
+  };
+  std::vector<Bracket> brackets;
+  const auto add = [&](const double a, const double b, const double s) {
+    if (brackets.empty() || brackets.back().a != a || brackets.back().b != b) {
+      brackets.push_back({.a = a, .b = b, .s = s});
+    }
   };
   double a = start_utc;
   double sa = best_s;
@@ -47,10 +66,8 @@ TimeMatch nearest_time(const SolarModelImpl& model, const Observer& observer, co
     const double t = i == steps ? end_utc : start_utc + static_cast<double>(i) * step;
     const double s = separation(t);
     keep(t, s);
-    // Refine each sampled minimum. The best sample need not surround the best minimum,
-    // especially when the interval contains several days.
     if (sb <= sa && sb <= s) {
-      refine(a, t);
+      add(a, t, sb);
     }
     a = b;
     sa = sb;
@@ -58,7 +75,20 @@ TimeMatch nearest_time(const SolarModelImpl& model, const Observer& observer, co
     sb = s;
   }
   if (sb <= sa) {
-    refine(a, b);
+    add(a, b, sb);
+  }
+
+  // The best sample need not surround the best minimum, especially when the interval contains
+  // several days. The minimum in a bracket is at most one step from its sample, so it is at
+  // least the sampled separation minus kMaxRate * step. Refine only a bracket that can contain
+  // a better minimum, and start with the lowest sample.
+  std::ranges::sort(brackets, {}, &Bracket::s);
+  for (const Bracket& bracket : brackets) {
+    if (bracket.s - kMaxRate * step >= best_s) {
+      break;
+    }
+    const double t = golden_min(separation, bracket.a, bracket.b, tolerance_s);
+    keep(t, separation(t));
   }
   return TimeMatch{
       .unix_utc = best_t, .separation_deg = best_s * kRadToDeg, .sun = position(best_t)};
