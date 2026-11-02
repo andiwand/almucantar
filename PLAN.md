@@ -696,7 +696,8 @@ calibration at night. The cost is small.
 
 **Status:** the core part is done (`sky.hpp`, in C++ and Python): `planet_position()` agrees
 with JPL Horizons to 0.006°, and `planet_magnitude()` gives the brightness, so an app can show
-only the planets that the eye sees. No app uses it yet.
+only the planets that the eye sees. The planets are for the photo planner and the sky map (14),
+not for sunradar.
 
 ### 13.5 Milky Way
 
@@ -707,38 +708,70 @@ night photography, and only together with 13.2 (planning). It needs the darkness
 it after 13.1 and 13.2.
 
 **Status:** the core part is done (`sky.hpp`, in C++ and Python): `galactic_position()` for the
-galactic center and `galactic_plane()` for the center line. No app uses it yet.
+galactic center and `galactic_plane()` for the center line. The Milky Way is for the photo planner
+and the sky map (14), not for sunradar.
 
-## 14. A second app: the photo planner (idea, not planned in detail)
+## 14. The family of apps: sunradar, the photo planner, and a sky map
+
+**Decided (2026-11-02):** the core gives more than one app, and a new app is mostly a new UI. The
+order of the apps:
+
+1. **sunradar** (this app) stays simple: "when is the sun at this place?", for a flat, a garden,
+   or a window. It starts from the camera and from the place where the user is.
+2. **The photo planner** is the second app, and it comes next.
+3. **A sky map** (an app like Sky Map or Stellarium) is a third option. It comes after the photo
+   planner.
+
+### 14.1 The photo planner (the second app)
 
 A friend of the user proposed the idea: photographers point at a place on a map and look for the
 times when the sun, the moon, or the Milky Way is at a given place in the picture, for example the
 moon that rises behind a peak or the Milky Way above a building. Apps for this exist (PhotoPills,
-The Photographer's Ephemeris, PlanIt!), so photographers use and pay for such tools.
+The Photographer's Ephemeris, PlanIt!), and photographers pay for them. So the niche is small, but
+it has a market, and the strengths of the core match it.
 
-**A second app, not a mode of sunradar.** sunradar starts from the camera and a place where the
-user is ("when does the sun come through this window?"). The planner starts from the map and a
-target ("from where and when is the moon behind this peak?"). It needs other screens: a map with
-the observer and the target, a calendar of results, the phases of the twilight and of the moon,
-and the darkness of the sky. Both apps use the same core, and the model of the repository (one
-core, one package per platform) allows a second app with little cost.
+**Not a mode of sunradar.** The planner starts from the map and a target ("from where and when is
+the moon behind this peak?"). It needs other screens: a map with the observer and the target, a
+calendar of results, the phases of the twilight and of the moon, and the darkness of the sky.
 
-**What could make it different:** the terrain horizon from a DEM, also offline (13.1, 13.3). Many
-tools use the horizon of 0°. Also the camera view of sunradar, so the user can check a plan at the
-place, and the PWA, which needs no installation.
+**Its main features** are the ones that sunradar needs only a little:
 
-**The parts in the core first.** They are also useful for sunradar (13.2), so they come before a
-decision about the second app:
+- The terrain horizon from a DEM, also offline (13.1, 13.3). The user plans a place where they
+  are not, so they cannot see the horizon, and many tools use the horizon of 0°.
+- The moon behind the terrain, the planets (13.4), and the Milky Way (13.5) as subjects of a photo.
+- The camera view of sunradar, so the user can check a plan at the place, and the PWA, which needs
+  no installation.
+
+**The parts in the core first:**
 
 1. The inverse search: the places from which a body (the sun, the moon, the galactic center) is in
    line with a target (a place with a height) at a given date, and the times for a given observer
    and target over a year. The second is `find_dates()` for any body and for a direction that
    comes from the target.
-2. The rise and the set of the moon behind the terrain: `terrain_events()` for the moon, with its
-   phase.
+2. The rise and the set of the moon behind the terrain. **Done:** `terrain_events()` with
+   `Body::moon`, in all bindings.
 3. The windows of darkness: the astronomical twilight, the moon below the horizon or nearly new,
    and the galactic center above the terrain. These give the times for the Milky Way (13.5).
 4. The line of sight between the observer and the target over the DEM: is the target visible?
 
 **The order:** the core parts first, then a prototype of the planner as a second web app next to
 the PWA (the cheapest UI to try), then a decision about a native app.
+
+### 14.2 A sky map (the third option)
+
+An app that shows the stars, the constellations, the planets, and the Milky Way in the direction
+of the phone. The core has the view, the projection, the planets, and the galactic system. It
+needs a star catalogue (for example the Hipparcos or the Yale Bright Star Catalogue, with a free
+license), the lines of the constellations, and maybe deep-sky objects. The market has strong free
+apps (Stellarium, Sky Map), so this app needs a reason to exist, for example the offline terrain
+horizon or the link to the photo planner. It comes after the photo planner.
+
+### 14.3 What this means for sunradar
+
+- The terrain horizon stays in sunradar, but it is a second feature. It matters in the mountains
+  (in Innsbruck it moves the sunrise in winter by more than one hour). In a city, buildings hide
+  the sun, the DEM has no buildings, and the camera shows the real obstruction. The download is
+  about 40–50 MB for each place in the native apps. **Open:** load the terrain only where it
+  matters (where the profile is higher than about 1°), or use the overviews of the tiles only.
+- The planets and the Milky Way do not come to sunradar. They are for the photo planner and the
+  sky map.
