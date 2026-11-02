@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -606,7 +607,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                             modifier = Modifier.widthIn(min = 40.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp),
                         ) {
-                            Text("⋮")
+                            Glyph(GlyphKind.MORE, "Menu", tint = LocalContentColor.current)
                         }
                     }
                 }

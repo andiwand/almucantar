@@ -430,18 +430,19 @@ private object PanelColors {
     val divider = Color(0x33FFFFFF)
 }
 
-private enum class GlyphKind {
+internal enum class GlyphKind {
     BACK,
     CLEAR,
     PLUS,
     MINUS,
     LOCATE,
     PIN,
+    MORE,
 }
 
 /** A small line icon of 24 dp. The app draws its few icons itself, so it needs no icon library. */
 @Composable
-private fun Glyph(kind: GlyphKind, description: String?, tint: Color = PanelColors.text) {
+internal fun Glyph(kind: GlyphKind, description: String?, tint: Color = PanelColors.text) {
     Canvas(
         Modifier.size(24.dp).semantics {
             if (description != null) contentDescription = description
@@ -474,6 +475,13 @@ private fun Glyph(kind: GlyphKind, description: String?, tint: Color = PanelColo
                 line(2f, 12f, 5f, 12f)
                 line(19f, 12f, 22f, 12f)
             }
+            // Three dots in the exact center; the text "⋮" sits on the baseline, too low.
+            GlyphKind.MORE ->
+                for (y in floatArrayOf(5f, 12f, 19f)) drawCircle(
+                    tint,
+                    2f * u,
+                    Offset(12f * u, y * u),
+                )
             GlyphKind.PIN -> {
                 drawPath(pinPath(Offset(12f * u, 21f * u), 6.5f * u), tint, style = stroke)
                 drawCircle(tint, 2f * u, Offset(12f * u, 9.5f * u))
