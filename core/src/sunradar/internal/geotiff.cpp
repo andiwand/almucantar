@@ -243,8 +243,9 @@ Georeference georeference(const Reader& reader, const Directory& directory) {
   bool pixel_is_point = false;
   const std::vector<std::uint64_t> keys = integers(reader, directory, kGeoKeyDirectory);
   if (keys.size() >= 4) {
-    const std::uint64_t count = keys[3];
-    for (std::uint64_t k = 0; k < count && (4 * k) + 7 < keys.size(); ++k) {
+    // The size of the tag limits the count, so the count fits into a size_t.
+    const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(keys[3], keys.size()));
+    for (std::size_t k = 0; k < count && (4 * k) + 7 < keys.size(); ++k) {
       const std::uint64_t key = keys[(4 * k) + 4];
       const std::uint64_t location = keys[(4 * k) + 5];
       const std::uint64_t value = keys[(4 * k) + 7];
@@ -366,7 +367,8 @@ std::vector<float> decode_chunk(const Reader& reader, const Image& image, const 
     std::memcpy(bytes.data(), raw, expected);
   } else {
     const std::size_t written = tinfl_decompress_mem_to_mem(
-        bytes.data(), expected, raw, image.byte_counts[index], TINFL_FLAG_PARSE_ZLIB_HEADER);
+        bytes.data(), expected, raw, static_cast<std::size_t>(image.byte_counts[index]),
+        TINFL_FLAG_PARSE_ZLIB_HEADER);
     if (written != expected) {
       fail("has data that does not decompress to the size of a tile or strip");
     }

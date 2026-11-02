@@ -116,6 +116,23 @@ struct ViewJs {
   }
 };
 
+struct TerrainEventOptionsJs {
+  int model = to_int(TerrainEventOptions{}.model);
+  bool refraction = TerrainEventOptions{}.refraction;
+  Atmosphere atmosphere = TerrainEventOptions{}.atmosphere;
+  double limbDeg = TerrainEventOptions{}.limb_deg;
+  double searchStepS = TerrainEventOptions{}.search_step_s;
+  double toleranceS = TerrainEventOptions{}.tolerance_s;
+  [[nodiscard]] TerrainEventOptions get() const {
+    return {.model = to_enum<SolarModel>(model, "model"),
+            .refraction = refraction,
+            .atmosphere = atmosphere,
+            .limb_deg = limbDeg,
+            .search_step_s = searchStepS,
+            .tolerance_s = toleranceS};
+  }
+};
+
 val horizontal(const Horizontal& h) {
   val o = val::object();
   o.set("azimuthDeg", h.azimuth_deg);
@@ -326,6 +343,107 @@ val heading_filter_update_magnetometer_js(const val& f, const Quaternion& q, con
   });
 }
 
+// The terrain. A grid has many heights, so they cross as a Float32Array, not as a JS array.
+
+/// Copies `values` out of the memory of the module into a new typed array.
+template <typename T>
+val typed_copy(const std::vector<T>& values) {
+  return val(emscripten::typed_memory_view(values.size(), values.data())).call<val>("slice");
+}
+
+val grid_to_js(const ElevationGrid& g) {
+  val o = val::object();
+  o.set("northLatitudeDeg", g.north_latitude_deg);
+  o.set("westLongitudeDeg", g.west_longitude_deg);
+  o.set("latitudeStepDeg", g.latitude_step_deg);
+  o.set("longitudeStepDeg", g.longitude_step_deg);
+  o.set("rows", g.rows);
+  o.set("columns", g.columns);
+  o.set("heightsM", typed_copy(g.heights_m));
+  return o;
+}
+
+ElevationGrid grid_from_js(const val& v) {
+  return {.north_latitude_deg = v["northLatitudeDeg"].as<double>(),
+          .west_longitude_deg = v["westLongitudeDeg"].as<double>(),
+          .latitude_step_deg = v["latitudeStepDeg"].as<double>(),
+          .longitude_step_deg = v["longitudeStepDeg"].as<double>(),
+          .rows = v["rows"].as<int>(),
+          .columns = v["columns"].as<int>(),
+          .heights_m = emscripten::convertJSArrayToNumberVector<float>(v["heightsM"])};
+}
+
+val profile_to_js(const HorizonProfile& p) {
+  val o = val::object();
+  o.set("azimuthStepDeg", p.azimuth_step_deg);
+  o.set("altitudeDeg", typed_copy(p.altitude_deg));
+  o.set("distanceM", typed_copy(p.distance_m));
+  o.set("observerElevationM", p.observer_elevation_m);
+  return o;
+}
+
+HorizonProfile profile_from_js(const val& v) {
+  return {.azimuth_step_deg = v["azimuthStepDeg"].as<double>(),
+          .altitude_deg = emscripten::convertJSArrayToNumberVector<double>(v["altitudeDeg"]),
+          .distance_m = emscripten::convertJSArrayToNumberVector<double>(v["distanceM"]),
+          .observer_elevation_m = v["observerElevationM"].as<double>()};
+}
+
+val read_elevation_geotiff_js(const val& data, int level) {
+  return guarded([&] {
+    return grid_to_js(read_elevation_geotiff(
+        emscripten::convertJSArrayToNumberVector<std::uint8_t>(data), level));
+  });
+}
+
+val elevation_tiles_js(const Observer& o, double max_distance_m) {
+  return guarded([&] {
+    val result = val::array();
+    for (const ElevationTile& t : elevation_tiles(o, max_distance_m)) {
+      val x = val::object();
+      x.set("latitudeDeg", t.latitude_deg);
+      x.set("longitudeDeg", t.longitude_deg);
+      x.set("distanceM", t.distance_m);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val horizon_profile_js(const Observer& o, const val& tiles, const HorizonOptions& opt) {
+  return guarded([&] {
+    std::vector<ElevationGrid> grids;
+    const auto count = tiles["length"].as<std::size_t>();
+    grids.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      grids.push_back(grid_from_js(tiles[i]));
+    }
+    return profile_to_js(horizon_profile(o, grids, opt));
+  });
+}
+
+double terrain_altitude_deg_js(const val& profile, double azimuth_deg) {
+  return guarded([&] { return terrain_altitude_deg(profile_from_js(profile), azimuth_deg); });
+}
+
+val terrain_events_js(const Observer& o, const val& profile, double start, double end,
+                      const TerrainEventOptionsJs& opt) {
+  return guarded([&] {
+    const TerrainEvents e = terrain_events(o, profile_from_js(profile), start, end, opt.get());
+    val result = val::object();
+    result.set("kind", static_cast<int>(e.kind));
+    val crossings = val::array();
+    for (const Crossing& c : e.crossings) {
+      val x = val::object();
+      x.set("unixUtc", c.unix_utc);
+      x.set("rising", c.rising);
+      crossings.call<void>("push", x);
+    }
+    result.set("crossings", crossings);
+    return result;
+  });
+}
+
 /// The C++ defaults of the option structs, the view, and the heading filter, for index.js.
 val defaults_js() {
   val d = val::object();
@@ -334,6 +452,8 @@ val defaults_js() {
   d.set("pathOptions", PathOptionsJs{});
   d.set("searchOptions", SearchOptionsJs{});
   d.set("moonOptions", MoonOptions{});
+  d.set("horizonOptions", HorizonOptions{});
+  d.set("terrainEventOptions", TerrainEventOptionsJs{});
   d.set("magnetometerOptions", MagnetometerOptions{});
   d.set("headingEstimate", HeadingEstimate{});
   d.set("camera", Camera{});
@@ -393,6 +513,20 @@ EMSCRIPTEN_BINDINGS(sunradar) {
   value_object<MoonOptions>("MoonOptions")
       .field("refraction", &MoonOptions::refraction)
       .field("atmosphere", &MoonOptions::atmosphere);
+  value_object<HorizonOptions>("HorizonOptions")
+      .field("azimuthStepDeg", &HorizonOptions::azimuth_step_deg)
+      .field("maxDistanceM", &HorizonOptions::max_distance_m)
+      .field("eyeHeightM", &HorizonOptions::eye_height_m)
+      .field("useGridElevation", &HorizonOptions::use_grid_elevation)
+      .field("observerElevationM", &HorizonOptions::observer_elevation_m)
+      .field("refractionCoefficient", &HorizonOptions::refraction_coefficient);
+  value_object<TerrainEventOptionsJs>("TerrainEventOptions")
+      .field("model", &TerrainEventOptionsJs::model)
+      .field("refraction", &TerrainEventOptionsJs::refraction)
+      .field("atmosphere", &TerrainEventOptionsJs::atmosphere)
+      .field("limbDeg", &TerrainEventOptionsJs::limbDeg)
+      .field("searchStepS", &TerrainEventOptionsJs::searchStepS)
+      .field("toleranceS", &TerrainEventOptionsJs::toleranceS);
   value_object<Camera>("Camera")
       .field("width", &Camera::width)
       .field("height", &Camera::height)
@@ -435,6 +569,11 @@ EMSCRIPTEN_BINDINGS(sunradar) {
   function("sunPath", &sun_path_js);
   function("moonPosition", &moon_position_js);
   function("moonIlluminatedFraction", &moon_illuminated_fraction_js);
+  function("readElevationGeotiff", &read_elevation_geotiff_js);
+  function("elevationTiles", &elevation_tiles_js);
+  function("horizonProfile", &horizon_profile_js);
+  function("terrainAltitudeDeg", &terrain_altitude_deg_js);
+  function("terrainEvents", &terrain_events_js);
   function("magneticDeclinationDeg", &magnetic_declination_js);
   function("cameraFromFov", &camera_from_fov_js);
   function("project", &project_js);

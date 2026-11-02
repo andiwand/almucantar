@@ -25,6 +25,33 @@ export interface SearchOptions {
 export interface MoonOptions { refraction: boolean; atmosphere: Atmosphere }
 export interface MagnetometerOptions { sensorSigmaDeg: number }
 
+/**
+ * A DEM as a grid of heights. The sample in row r and column c is at the latitude
+ * northLatitudeDeg - r * latitudeStepDeg and the longitude westLongitudeDeg + c * longitudeStepDeg.
+ * heightsM has rows * columns values, row by row; NaN is a sample without data.
+ */
+export interface ElevationGrid {
+  northLatitudeDeg: number; westLongitudeDeg: number; latitudeStepDeg: number; longitudeStepDeg: number;
+  rows: number; columns: number; heightsM: Float32Array | number[];
+}
+/** A tile of 1° by 1°, named by its south-west corner (Copernicus N47_00_E011_00 is 47, 11). */
+export interface ElevationTile { latitudeDeg: number; longitudeDeg: number; distanceM: number }
+export interface HorizonOptions {
+  azimuthStepDeg: number; maxDistanceM: number; eyeHeightM: number; useGridElevation: boolean;
+  observerElevationM: number; refractionCoefficient: number;
+}
+/** The terrain horizon: the entry i is for the azimuth i * azimuthStepDeg. NaN without data. */
+export interface HorizonProfile {
+  azimuthStepDeg: number; altitudeDeg: Float64Array | number[]; distanceM: Float64Array | number[];
+  observerElevationM: number;
+}
+export interface TerrainEventOptions {
+  model: number; refraction: boolean; atmosphere: Atmosphere; limbDeg: number; searchStepS: number;
+  toleranceS: number;
+}
+/** The times when the sun appears (rising) or goes away behind the terrain. */
+export interface TerrainEvents { kind: number; crossings: Crossing[] }
+
 export interface Camera {
   width: number; height: number; fx: number; fy: number; cx: number; cy: number;
   k1: number; k2: number; k3: number; p1: number; p2: number;
@@ -64,6 +91,8 @@ export interface Sunradar {
     readonly pathOptions: Readonly<PathOptions>;
     readonly searchOptions: Readonly<SearchOptions>;
     readonly moonOptions: Readonly<MoonOptions>;
+    readonly horizonOptions: Readonly<HorizonOptions>;
+    readonly terrainEventOptions: Readonly<TerrainEventOptions>;
     readonly magnetometerOptions: Readonly<MagnetometerOptions>;
     readonly headingEstimate: Readonly<HeadingEstimate>;
     readonly camera: Readonly<Camera>;
@@ -78,6 +107,13 @@ export interface Sunradar {
   sunPath(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<PathOptions>): PathPoint[];
   moonPosition(unixUtc: number, observer: Observer, options?: Partial2<MoonOptions>): Horizontal;
   moonIlluminatedFraction(unixUtc: number): number;
+  /** Reads a GeoTIFF of heights, for example a Copernicus tile. level 1, 2, ... are the overviews. */
+  readElevationGeotiff(data: Uint8Array, level?: number): ElevationGrid & { heightsM: Float32Array };
+  /** The tiles of 1° that a horizon profile with maxDistanceM needs, the nearest first. */
+  elevationTiles(observer: Observer, maxDistanceM: number): ElevationTile[];
+  horizonProfile(observer: Observer, tiles: ElevationGrid[], options?: Partial<HorizonOptions>): HorizonProfile;
+  terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: number): number;
+  terrainEvents(observer: Observer, profile: HorizonProfile, startUtc: number, endUtc: number, options?: Partial2<TerrainEventOptions>): TerrainEvents;
   magneticDeclinationDeg(observer: Observer, unixUtc: number): number;
   cameraFromFov(width: number, height: number, horizontalFovDeg: number): Camera;
   project(view: Partial2<View>, direction: Horizontal): Projection;

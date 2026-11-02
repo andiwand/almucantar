@@ -48,6 +48,12 @@ export async function load(moduleOptions = {}) {
       m.sunPath(observer, startUtc, endUtc, merge(d.pathOptions, options)),
     moonPosition: (unixUtc, observer, options) => m.moonPosition(unixUtc, observer, merge(d.moonOptions, options)),
     moonIlluminatedFraction: (unixUtc) => m.moonIlluminatedFraction(unixUtc),
+    readElevationGeotiff: (data, level = 0) => m.readElevationGeotiff(data, level),
+    elevationTiles: (observer, maxDistanceM) => m.elevationTiles(observer, maxDistanceM),
+    horizonProfile: (observer, tiles, options) => m.horizonProfile(observer, tiles, merge(d.horizonOptions, options)),
+    terrainAltitudeDeg: (profile, azimuthDeg) => m.terrainAltitudeDeg(profile, azimuthDeg),
+    terrainEvents: (observer, profile, startUtc, endUtc, options) =>
+      m.terrainEvents(observer, profile, startUtc, endUtc, merge(d.terrainEventOptions, options)),
     magneticDeclinationDeg: (observer, unixUtc) => m.magneticDeclinationDeg(observer, unixUtc),
     cameraFromFov: (width, height, horizontalFovDeg) => m.cameraFromFov(width, height, horizontalFovDeg),
     project: (v, direction) => m.project(view(v), direction),

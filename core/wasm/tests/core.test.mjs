@@ -137,3 +137,42 @@ test("dates, moon, camera, lines, and magnetometer", () => {
   const m = sunradar.headingFromMagnetometer({ w: 1, x: 0, y: 0, z: 0 }, { x: 0, y: 20, z: -44 }, vienna, dayStart);
   near(m.offsetDeg, (sunradar.magneticDeclinationDeg(vienna, dayStart) + 360) % 360, 1e-6);
 });
+
+test("terrain: GeoTIFF, tiles, profile, and events", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const file = new URL("../../test/data/geotiff/float_tiles_deflate_p3.tif", import.meta.url);
+  const grid = sunradar.readElevationGeotiff(new Uint8Array(await readFile(file)));
+  assert.equal(grid.rows, 7);
+  assert.equal(grid.columns, 5);
+  assert.ok(grid.heightsM instanceof Float32Array);
+  near(grid.heightsM[0], 1000.25, 1e-6);
+  near(grid.northLatitudeDeg, 47.75, 1e-12);
+  assert.equal(sunradar.readElevationGeotiff(new Uint8Array(await readFile(file)), 1).rows, 4);
+  assert.throws(() => sunradar.readElevationGeotiff(new Uint8Array([1, 2, 3])), RangeError);
+
+  const tiles = sunradar.elevationTiles(vienna, 20000);
+  assert.deepEqual([tiles[0].latitudeDeg, tiles[0].longitudeDeg, tiles[0].distanceM], [48, 16, 0]);
+
+  // A flat grid of 150 m around Vienna: the horizon is a little below 0° in all directions.
+  const rows = 61, columns = 91;
+  const flat = {
+    northLatitudeDeg: vienna.latitudeDeg + 0.25, westLongitudeDeg: vienna.longitudeDeg - 0.375,
+    latitudeStepDeg: 1 / 120, longitudeStepDeg: 1 / 120, rows, columns,
+    heightsM: new Float32Array(rows * columns).fill(150),
+  };
+  const profile = sunradar.horizonProfile(vienna, [flat], { azimuthStepDeg: 10 });
+  assert.equal(profile.altitudeDeg.length, 36);
+  near(profile.observerElevationM, 150, 1e-6);
+  for (const a of profile.altitudeDeg) assert.ok(a < 0 && a > -0.1);
+  near(sunradar.terrainAltitudeDeg(profile, 5), (profile.altitudeDeg[0] + profile.altitudeDeg[1]) / 2, 1e-12);
+  assert.throws(() => sunradar.horizonProfile(vienna, []), RangeError);
+
+  const events = sunradar.terrainEvents(vienna, profile, dayStart, dayStart + day);
+  assert.equal(events.kind, DayKind.normal);
+  assert.deepEqual(events.crossings.map((c) => c.rising), [true, false]);
+  const wall = { ...profile, altitudeDeg: new Array(36).fill(80) };
+  assert.equal(sunradar.terrainEvents(vienna, wall, dayStart, dayStart + day).kind, DayKind.polarNight);
+  // The results go through postMessage.
+  structuredClone(profile);
+  structuredClone(grid);
+});
