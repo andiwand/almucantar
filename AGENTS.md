@@ -20,6 +20,7 @@ the sun is at a given place in the sky. The repository is a monorepo:
 | `ios/` | The iOS app. It uses the Swift package of `core/apple`. | yes |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
 | `scripts/` | Repository tools: `format`, `release.py`, and the pinned versions of the dev tools. | no |
+| `screenshots/` | The design of the store screenshots and the description of the pipeline (`README.md`). The scripts are in `scripts/screenshots/`, the lanes in `android/fastlane/` and `ios/fastlane/`. | no |
 | `.github/workflows/` | One workflow per project and per package, with path filters. | no |
 
 The model is the one of OpenDocument.core: one core with a small public API, one

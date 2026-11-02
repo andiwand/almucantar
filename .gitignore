@@ -24,3 +24,13 @@
 # Python
 /.venv/
 __pycache__/
+
+# Store screenshots (screenshots/README.md)
+/android/fastlane/screenshots/
+/android/fastlane/framed/
+/ios/fastlane/screenshots/
+/ios/fastlane/framed/
+/ios/fastlane/test_output/
+/ios/fastlane/report.xml
+/android/fastlane/report.xml
+/.bundle/

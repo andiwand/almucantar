@@ -1,0 +1,285 @@
+# The store screenshots (screenshots/README.md): one capture job for each device, a job that checks
+# the complete set of each platform, and an upload to the store if `upload` is set.
+#
+# The upload needs credentials. Without them, the upload job writes a notice and stops:
+# - Google Play: the secret SUPPLY_JSON_KEY_DATA, the JSON key of a service account with access to
+#   the app at.stefl.sunradar in the Play Console.
+# - App Store Connect: the secrets ASC_KEY_ID, ASC_ISSUER_ID, and ASC_KEY_CONTENT (the .p8 key,
+#   base64-encoded) of an App Store Connect API key with the role App Manager.
+name: screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: The platform
+        type: choice
+        options: [all, android, ios]
+        default: all
+      upload:
+        description: Upload the screenshots to the store
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONAN_VERSION: "2.26.1"
+
+jobs:
+  native:
+    if: inputs.platform != 'ios'
+    uses: ./.github/workflows/native-android.yml
+
+  android:
+    name: android (${{ matrix.device }})
+    if: inputs.platform != 'ios'
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [phone, tablet]
+    env:
+      SUNRADAR_ABIS: ""
+      SUNRADAR_SCREENSHOT_DEVICE: ${{ matrix.device }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          merge-multiple: true
+          path: core/android/native/prebuilt/jniLibs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Install Pillow
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install "$(grep -i '^pillow==' scripts/requirements-dev.txt)"
+
+      # The newest device profile of the runner. The phone set is a Pixel Pro, the tablet set the
+      # Pixel Tablet.
+      - name: Pick the device profile
+        id: avd
+        run: |
+          if [ "${SUNRADAR_SCREENSHOT_DEVICE}" = tablet ]; then
+            candidates="pixel_tablet pixel_c"
+          else
+            candidates="pixel_9_pro_xl pixel_8_pro pixel_7_pro pixel_6_pro"
+          fi
+          known="$("${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager" list device -c)"
+          for profile in ${candidates}; do
+            if grep -qx "${profile}" <<< "${known}"; then
+              echo "profile=${profile}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          done
+          echo "::error::The runner has none of the device profiles ${candidates}"
+          exit 1
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Capture and frame
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: ${{ steps.avd.outputs.profile }}
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          working-directory: android
+          script: bundle exec fastlane screenshots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: framed-android-${{ matrix.device }}
+          path: android/fastlane/framed
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-android-${{ matrix.device }}
+          path: android/fastlane/screenshots
+          if-no-files-found: ignore
+
+  ios:
+    name: ios (${{ matrix.device }})
+    if: inputs.platform != 'android'
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    env:
+      SUNRADAR_SCREENSHOT_DEVICE: ${{ matrix.device }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Conan, XcodeGen, and Pillow
+        run: |
+          pip install "conan==${CONAN_VERSION}"
+          conan profile detect --force
+          brew install xcodegen
+          python3 -m venv .venv
+          .venv/bin/pip install "$(grep -i '^pillow==' scripts/requirements-dev.txt)"
+
+      - name: Build the xcframework
+        run: python3 core/apple/build_xcframework.py
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Capture and frame
+        working-directory: ios
+        run: bundle exec fastlane screenshots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: framed-ios-${{ matrix.device }}
+          path: ios/fastlane/framed
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-ios-${{ matrix.device }}
+          path: |
+            ios/fastlane/screenshots
+            ~/Library/Logs/snapshot
+          if-no-files-found: ignore
+
+  # The complete set of a platform: the framed images of all devices together, checked.
+  set:
+    name: set (${{ matrix.platform }})
+    needs: [android, ios]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [android, ios]
+    steps:
+      - uses: actions/checkout@v4
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+
+      - uses: actions/download-artifact@v4
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        with:
+          pattern: framed-${{ matrix.platform }}-*
+          merge-multiple: true
+          path: ${{ matrix.platform }}/fastlane/framed
+
+      - name: Check the set
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        run: python3 scripts/screenshots/store.py --platform ${{ matrix.platform }} --screenshots ${{ matrix.platform }}/fastlane/framed
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        with:
+          name: framed-${{ matrix.platform }}
+          path: ${{ matrix.platform }}/fastlane/framed
+
+  upload-android:
+    name: upload (Google Play)
+    needs: set
+    if: inputs.upload && inputs.platform != 'ios'
+    runs-on: ubuntu-24.04
+    env:
+      SUPPLY_JSON_KEY_DATA: ${{ secrets.SUPPLY_JSON_KEY_DATA }}
+    steps:
+      - name: Check the credentials
+        id: credentials
+        run: |
+          if [ -z "${SUPPLY_JSON_KEY_DATA}" ]; then
+            echo "::notice::No SUPPLY_JSON_KEY_DATA: the upload to Google Play is skipped."
+            echo "present=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "present=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.credentials.outputs.present == 'true'
+
+      - uses: actions/download-artifact@v4
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          name: framed-android
+          path: android/fastlane/framed
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Upload
+        if: steps.credentials.outputs.present == 'true'
+        working-directory: android
+        run: bundle exec fastlane upload_listing
+
+  upload-ios:
+    name: upload (App Store)
+    needs: set
+    if: inputs.upload && inputs.platform != 'android'
+    runs-on: macos-15
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+    steps:
+      - name: Check the credentials
+        id: credentials
+        run: |
+          if [ -z "${ASC_KEY_ID}" ] || [ -z "${ASC_ISSUER_ID}" ] || [ -z "${ASC_KEY_CONTENT}" ]; then
+            echo "::notice::No App Store Connect API key: the upload to the App Store is skipped."
+            echo "present=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "present=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.credentials.outputs.present == 'true'
+
+      - uses: actions/download-artifact@v4
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          name: framed-ios
+          path: ios/fastlane/framed
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Upload
+        if: steps.credentials.outputs.present == 'true'
+        working-directory: ios
+        run: bundle exec fastlane upload_listing
