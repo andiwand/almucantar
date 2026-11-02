@@ -39,8 +39,14 @@ On `main`, that zip is a placeholder, so build the xcframework first.
 - Bind the public API only. Never include `sunradar/internal/...` headers.
 - The C API catches all C++ exceptions. A function returns `SR_OK`, `SR_INVALID_ARGUMENT`, or
   `SR_ERROR`, and `sr_last_error()` gives the message (one per thread).
-- A function that returns a list allocates it. The caller frees it with `sr_free` or
-  `sr_free_polylines`. The Swift layer does that, so a Swift user never sees C memory.
+- A function that returns a list allocates it. The caller frees it with `sr_free`,
+  `sr_free_polylines`, `sr_free_elevation_grid`, or `sr_free_horizon_profile`. The Swift layer
+  does that, so a Swift user never sees C memory. An array in an input struct is only borrowed.
+- The heights of a DEM tile are large. `ElevationHeights` keeps the C buffer of
+  `sr_read_elevation_geotiff` and does not copy it, and `horizonProfile()` gives the buffers to C
+  without a copy. C++ copies them one time per call, because its API takes a `std::vector`.
+- A C function has the name of the C++ function with `sr_`, but the name of a struct wins if they
+  are the same: `sr_calculate_horizon_profile` and `sr_find_terrain_events`.
 - The defaults of the options come from C++ (`sr_default_*()`). Do not write defaults in Swift.
 - An invalid argument becomes `SunradarError` with `kind == .invalidArgument`.
 - The field names are camelCase (`latitudeDeg`), the same as in the other bindings.

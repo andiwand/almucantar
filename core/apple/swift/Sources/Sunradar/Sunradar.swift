@@ -1,3 +1,4 @@
+import Foundation
 import SunradarC
 
 // The functions of the public C++ API. All times are Unix time in seconds (UTC), all angles in
@@ -237,4 +238,112 @@ private func checkCovariance(_ filter: HeadingFilter) throws {
     if filter.covariance.count != headingFilterSize * headingFilterSize {
         throw SunradarError(kind: .invalidArgument, message: "covariance has the wrong length")
     }
+}
+
+// MARK: - The terrain horizon
+
+/// Reads one image of a GeoTIFF of heights, for example a tile of Copernicus GLO-90. `level` 0 is
+/// the full image, and 1, 2, ... are the overviews (each has half the size of the one before).
+/// The grid keeps the heights of the C API, so the only copy is the one out of C++.
+public func readElevationGeotiff(_ data: Data, level: Int = 0) throws -> ElevationGrid {
+    guard let level = Int32(exactly: level) else {
+        throw SunradarError(kind: .invalidArgument, message: "level is not a valid value")
+    }
+    var out = sr_elevation_grid()
+    try data.withUnsafeBytes { bytes in
+        try check(
+            sr_read_elevation_geotiff(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, level, &out))
+    }
+    let heights = ElevationHeights(
+        takingCBuffer: out.heights_m, count: Int(max(out.rows, 0)) * Int(max(out.columns, 0)))
+    return ElevationGrid(
+        northLatitudeDeg: out.north_latitude_deg, westLongitudeDeg: out.west_longitude_deg,
+        latitudeStepDeg: out.latitude_step_deg, longitudeStepDeg: out.longitude_step_deg, rows: Int(out.rows),
+        columns: Int(out.columns), heightsM: heights)
+}
+
+/// Returns the tiles of 1° by 1° that a horizon profile with `maxDistanceM` needs, the nearest first.
+public func elevationTiles(observer: Observer, maxDistanceM: Double) throws -> [ElevationTile] {
+    var tiles: UnsafeMutablePointer<sr_elevation_tile>?
+    var count = 0
+    try check(sr_elevation_tiles(observer.c, maxDistanceM, &tiles, &count))
+    return take(tiles, count) {
+        ElevationTile(latitudeDeg: Int($0.latitude_deg), longitudeDeg: Int($0.longitude_deg), distanceM: $0.distance_m)
+    }
+}
+
+/// Calculates the terrain horizon of `observer` from the grids in `tiles`. The C API only reads
+/// the heights; C++ copies them one time per call.
+public func horizonProfile(
+    observer: Observer, tiles: [ElevationGrid], options: HorizonOptions = HorizonOptions()
+) throws -> HorizonProfile {
+    var grids: [sr_elevation_grid] = []
+    grids.reserveCapacity(tiles.count)
+    for tile in tiles {
+        guard let rows = Int32(exactly: tile.rows), let columns = Int32(exactly: tile.columns) else {
+            throw SunradarError(kind: .invalidArgument, message: "rows or columns is not a valid value")
+        }
+        if tile.rows > 0, tile.columns > 0, tile.heightsM.count != tile.rows * tile.columns {
+            throw SunradarError(kind: .invalidArgument, message: "heights_m does not have rows * columns values")
+        }
+        grids.append(
+            sr_elevation_grid(
+                north_latitude_deg: tile.northLatitudeDeg, west_longitude_deg: tile.westLongitudeDeg,
+                latitude_step_deg: tile.latitudeStepDeg, longitude_step_deg: tile.longitudeStepDeg, rows: rows,
+                columns: columns, heights_m: tile.heightsM.pointer))
+    }
+    var out = sr_horizon_profile()
+    try withExtendedLifetime(tiles) {
+        try grids.withUnsafeBufferPointer {
+            try check(sr_calculate_horizon_profile(observer.c, $0.baseAddress, $0.count, options.c, &out))
+        }
+    }
+    defer { sr_free_horizon_profile(&out) }
+    let count = out.count
+    return HorizonProfile(
+        azimuthStepDeg: out.azimuth_step_deg,
+        altitudeDeg: out.altitude_deg.map { Array(UnsafeBufferPointer(start: $0, count: count)) } ?? [],
+        distanceM: out.distance_m.map { Array(UnsafeBufferPointer(start: $0, count: count)) } ?? [],
+        observerElevationM: out.observer_elevation_m)
+}
+
+/// Gives the C view of a profile to `body`. The C API only reads the arrays.
+private func withCProfile<R>(_ profile: HorizonProfile, _ body: (UnsafePointer<sr_horizon_profile>) throws -> R) throws -> R {
+    if profile.altitudeDeg.count != profile.distanceM.count {
+        throw SunradarError(kind: .invalidArgument, message: "altitude_deg and distance_m have different lengths")
+    }
+    return try profile.altitudeDeg.withUnsafeBufferPointer { altitude in
+        try profile.distanceM.withUnsafeBufferPointer { distance in
+            var c = sr_horizon_profile(
+                azimuth_step_deg: profile.azimuthStepDeg, altitude_deg: UnsafeMutablePointer(mutating: altitude.baseAddress),
+                distance_m: UnsafeMutablePointer(mutating: distance.baseAddress), count: altitude.count,
+                observer_elevation_m: profile.observerElevationM)
+            return try body(&c)
+        }
+    }
+}
+
+/// Returns the altitude of the terrain horizon at `azimuthDeg`, with a linear interpolation. NaN if
+/// a neighbor has no data. Each call converts the profile, so call it once per point, not per frame.
+public func terrainAltitudeDeg(_ profile: HorizonProfile, azimuthDeg: Double) throws -> Double {
+    var out = 0.0
+    try withCProfile(profile) { try check(sr_terrain_altitude_deg($0, azimuthDeg, &out)) }
+    return out
+}
+
+/// Finds the times between `startUtc` and `endUtc` when the sun crosses the terrain horizon: the
+/// visible sunrise and sunset, and the times when a peak hides the sun during the day.
+public func terrainEvents(
+    observer: Observer, profile: HorizonProfile, startUtc: Double, endUtc: Double,
+    options: TerrainEventOptions = TerrainEventOptions()
+) throws -> TerrainEvents {
+    var out = sr_terrain_events()
+    try withCProfile(profile) { try check(sr_find_terrain_events(observer.c, $0, startUtc, endUtc, options.c, &out)) }
+    guard let kind = DayKind(rawValue: out.kind) else {
+        sr_free(out.crossings)
+        throw SunradarError(kind: .other, message: "unknown day kind \(out.kind)")
+    }
+    return TerrainEvents(
+        kind: kind,
+        crossings: take(out.crossings, out.crossing_count) { Crossing(unixUtc: $0.unix_utc, rising: $0.rising) })
 }

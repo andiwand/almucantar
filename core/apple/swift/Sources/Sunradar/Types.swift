@@ -341,6 +341,172 @@ public struct HeadingFilter: Equatable, Sendable {
     }
 }
 
+/// The heights of an ElevationGrid, row by row from the north, in meters. NaN is a sample without
+/// data. A tile has more than a million values, so this class keeps the buffer of the C API and
+/// does not copy it. The buffer does not change.
+public final class ElevationHeights: RandomAccessCollection, @unchecked Sendable {
+    let pointer: UnsafeMutablePointer<Float>?
+    public let count: Int
+    private let ownedByC: Bool
+
+    /// Takes a buffer that the C API allocated. The class frees it with sr_free().
+    init(takingCBuffer pointer: UnsafeMutablePointer<Float>?, count: Int) {
+        self.pointer = pointer
+        self.count = pointer == nil ? 0 : count
+        ownedByC = true
+    }
+
+    /// Copies the values.
+    public init(_ values: [Float]) {
+        let buffer = UnsafeMutablePointer<Float>.allocate(capacity: Swift.max(values.count, 1))
+        values.withUnsafeBufferPointer { source in
+            if let base = source.baseAddress { buffer.initialize(from: base, count: values.count) }
+        }
+        pointer = buffer
+        count = values.count
+        ownedByC = false
+    }
+
+    deinit {
+        if ownedByC { sr_free(pointer) } else { pointer?.deallocate() }
+    }
+
+    public var startIndex: Int { 0 }
+    public var endIndex: Int { count }
+    public subscript(index: Int) -> Float {
+        precondition(index >= 0 && index < count, "index out of range")
+        return pointer![index]
+    }
+}
+
+/// A digital elevation model as a plain grid of heights. The sample in row r and column c is at
+/// the latitude northLatitudeDeg - r * latitudeStepDeg and the longitude
+/// westLongitudeDeg + c * longitudeStepDeg.
+public struct ElevationGrid: Sendable {
+    public var northLatitudeDeg: Double
+    public var westLongitudeDeg: Double
+    public var latitudeStepDeg: Double
+    public var longitudeStepDeg: Double
+    public var rows: Int
+    public var columns: Int
+    /// rows * columns heights. horizonProfile() checks the count.
+    public var heightsM: ElevationHeights
+
+    public init(
+        northLatitudeDeg: Double, westLongitudeDeg: Double, latitudeStepDeg: Double, longitudeStepDeg: Double,
+        rows: Int, columns: Int, heightsM: ElevationHeights
+    ) {
+        self.northLatitudeDeg = northLatitudeDeg
+        self.westLongitudeDeg = westLongitudeDeg
+        self.latitudeStepDeg = latitudeStepDeg
+        self.longitudeStepDeg = longitudeStepDeg
+        self.rows = rows
+        self.columns = columns
+        self.heightsM = heightsM
+    }
+
+    public init(
+        northLatitudeDeg: Double, westLongitudeDeg: Double, latitudeStepDeg: Double, longitudeStepDeg: Double,
+        rows: Int, columns: Int, heightsM: [Float]
+    ) {
+        self.init(
+            northLatitudeDeg: northLatitudeDeg, westLongitudeDeg: westLongitudeDeg, latitudeStepDeg: latitudeStepDeg,
+            longitudeStepDeg: longitudeStepDeg, rows: rows, columns: columns, heightsM: ElevationHeights(heightsM))
+    }
+}
+
+/// A tile of 1° by 1° of a global DEM, named by its south-west corner. Copernicus names the tile
+/// with latitudeDeg 47 and longitudeDeg 11 N47_00_E011_00.
+public struct ElevationTile: Equatable, Hashable, Sendable {
+    public var latitudeDeg: Int
+    public var longitudeDeg: Int
+    /// The distance from the observer to the nearest point of the tile, 0 for the tile of the observer.
+    public var distanceM: Double
+    public init(latitudeDeg: Int, longitudeDeg: Int, distanceM: Double = 0) {
+        self.latitudeDeg = latitudeDeg
+        self.longitudeDeg = longitudeDeg
+        self.distanceM = distanceM
+    }
+}
+
+public struct HorizonOptions: Sendable {
+    /// The distance between two azimuths of the profile. 360 must be a multiple of it.
+    public var azimuthStepDeg: Double
+    /// The terrain farther away is not used, at most 500 km.
+    public var maxDistanceM: Double
+    /// The height of the eye above the ground.
+    public var eyeHeightM: Double
+    /// If true, the elevation of the ground at the observer comes from the tiles.
+    public var useGridElevation: Bool
+    /// Used only if useGridElevation is false.
+    public var observerElevationM: Double
+    /// The coefficient of the terrestrial refraction; 0 gives no refraction.
+    public var refractionCoefficient: Double
+    public init(
+        azimuthStepDeg: Double = HorizonOptions.c.azimuth_step_deg, maxDistanceM: Double = HorizonOptions.c.max_distance_m,
+        eyeHeightM: Double = HorizonOptions.c.eye_height_m, useGridElevation: Bool = HorizonOptions.c.use_grid_elevation,
+        observerElevationM: Double = HorizonOptions.c.observer_elevation_m,
+        refractionCoefficient: Double = HorizonOptions.c.refraction_coefficient
+    ) {
+        self.azimuthStepDeg = azimuthStepDeg
+        self.maxDistanceM = maxDistanceM
+        self.eyeHeightM = eyeHeightM
+        self.useGridElevation = useGridElevation
+        self.observerElevationM = observerElevationM
+        self.refractionCoefficient = refractionCoefficient
+    }
+    @usableFromInline static let c = sr_default_horizon_options()
+}
+
+/// The altitude of the terrain horizon for each azimuth: the entry i is for the azimuth
+/// i * azimuthStepDeg. NaN is a direction without data.
+public struct HorizonProfile: Sendable {
+    public var azimuthStepDeg: Double
+    public var altitudeDeg: [Double]
+    public var distanceM: [Double]
+    /// The elevation of the ground at the observer.
+    public var observerElevationM: Double
+    public init(azimuthStepDeg: Double, altitudeDeg: [Double], distanceM: [Double], observerElevationM: Double = 0) {
+        self.azimuthStepDeg = azimuthStepDeg
+        self.altitudeDeg = altitudeDeg
+        self.distanceM = distanceM
+        self.observerElevationM = observerElevationM
+    }
+}
+
+public struct TerrainEventOptions: Sendable {
+    public var model: SolarModel
+    public var refraction: Bool
+    public var atmosphere: Atmosphere
+    /// The sun is visible if its center plus this angle is above the terrain (the semi-diameter by default).
+    public var limbDeg: Double
+    public var searchStepS: Double
+    public var toleranceS: Double
+    public init(
+        model: SolarModel = SolarModel(rawValue: TerrainEventOptions.c.model)!,
+        refraction: Bool = TerrainEventOptions.c.refraction,
+        atmosphere: Atmosphere = Atmosphere(TerrainEventOptions.c.atmosphere),
+        limbDeg: Double = TerrainEventOptions.c.limb_deg, searchStepS: Double = TerrainEventOptions.c.search_step_s,
+        toleranceS: Double = TerrainEventOptions.c.tolerance_s
+    ) {
+        self.model = model
+        self.refraction = refraction
+        self.atmosphere = atmosphere
+        self.limbDeg = limbDeg
+        self.searchStepS = searchStepS
+        self.toleranceS = toleranceS
+    }
+    @usableFromInline static let c = sr_default_terrain_event_options()
+}
+
+/// The times when the sun appears (rising) or goes away behind the terrain.
+public struct TerrainEvents: Sendable {
+    /// normal: the sun crosses the terrain at least once. polarDay: the sun stays above the terrain.
+    /// polarNight: the sun stays behind the terrain or below the horizon.
+    public var kind: DayKind
+    public var crossings: [Crossing]
+}
+
 /// An error of the core: an invalid argument, or another error. The message names the argument.
 public struct SunradarError: Error, CustomStringConvertible, Sendable {
     public enum Kind: Sendable { case invalidArgument, other }
@@ -423,5 +589,22 @@ extension SearchOptions {
         sr_search_options(
             model: model.rawValue, step_s: stepS, tolerance_s: toleranceS, refraction: refraction,
             atmosphere: atmosphere.c, max_separation_deg: maxSeparationDeg)
+    }
+}
+
+extension HorizonOptions {
+    var c: sr_horizon_options {
+        sr_horizon_options(
+            azimuth_step_deg: azimuthStepDeg, max_distance_m: maxDistanceM, eye_height_m: eyeHeightM,
+            use_grid_elevation: useGridElevation, observer_elevation_m: observerElevationM,
+            refraction_coefficient: refractionCoefficient)
+    }
+}
+
+extension TerrainEventOptions {
+    var c: sr_terrain_event_options {
+        sr_terrain_event_options(
+            model: model.rawValue, refraction: refraction, atmosphere: atmosphere.c, limb_deg: limbDeg,
+            search_step_s: searchStepS, tolerance_s: toleranceS)
     }
 }

@@ -165,6 +165,64 @@ void to_c(const HeadingFilter& f, sr_heading_filter* out) {
   std::ranges::copy(f.covariance, std::begin(out->covariance));
 }
 
+HorizonOptions to_cpp(const sr_horizon_options& o) {
+  return {.azimuth_step_deg = o.azimuth_step_deg,
+          .max_distance_m = o.max_distance_m,
+          .eye_height_m = o.eye_height_m,
+          .use_grid_elevation = o.use_grid_elevation,
+          .observer_elevation_m = o.observer_elevation_m,
+          .refraction_coefficient = o.refraction_coefficient};
+}
+
+TerrainEventOptions to_cpp(const sr_terrain_event_options& o) {
+  return {.model = to_enum<SolarModel>(o.model, "model"),
+          .refraction = o.refraction,
+          .atmosphere = to_cpp(o.atmosphere),
+          .limb_deg = o.limb_deg,
+          .search_step_s = o.search_step_s,
+          .tolerance_s = o.tolerance_s};
+}
+
+/// Copies a grid of the caller into C++. The C++ API takes a std::vector, so this copy of the
+/// heights is necessary.
+ElevationGrid to_cpp(const sr_elevation_grid& g) {
+  const size_t size = g.rows > 0 && g.columns > 0
+                          ? static_cast<size_t>(g.rows) * static_cast<size_t>(g.columns)
+                          : 0;
+  if (g.heights_m == nullptr && size > 0) {
+    throw std::invalid_argument("heights_m is null");
+  }
+  ElevationGrid out{.north_latitude_deg = g.north_latitude_deg,
+                    .west_longitude_deg = g.west_longitude_deg,
+                    .latitude_step_deg = g.latitude_step_deg,
+                    .longitude_step_deg = g.longitude_step_deg,
+                    .rows = g.rows,
+                    .columns = g.columns,
+                    .heights_m = {}};
+  if (size > 0) {
+    out.heights_m.assign(g.heights_m, g.heights_m + size);
+  }
+  return out;
+}
+
+HorizonProfile to_cpp(const sr_horizon_profile* p) {
+  if (p == nullptr) {
+    throw std::invalid_argument("profile is null");
+  }
+  if (p->count > 0 && (p->altitude_deg == nullptr || p->distance_m == nullptr)) {
+    throw std::invalid_argument("profile has a null array");
+  }
+  HorizonProfile out{.azimuth_step_deg = p->azimuth_step_deg,
+                     .altitude_deg = {},
+                     .distance_m = {},
+                     .observer_elevation_m = p->observer_elevation_m};
+  if (p->count > 0) {
+    out.altitude_deg.assign(p->altitude_deg, p->altitude_deg + p->count);
+    out.distance_m.assign(p->distance_m, p->distance_m + p->count);
+  }
+  return out;
+}
+
 }  // namespace
 
 extern "C" {
@@ -201,6 +259,16 @@ sr_heading_filter_options sr_default_heading_filter_options(void) {
   const HeadingFilterOptions d;
   return {d.drift_deg2_per_s, d.bias_drift_ut2_per_s, d.disturbance_sigma_ut, d.disturbance_time_s,
           d.noise_sigma_ut};
+}
+sr_horizon_options sr_default_horizon_options(void) {
+  const HorizonOptions d;
+  return {d.azimuth_step_deg,   d.max_distance_m,       d.eye_height_m,
+          d.use_grid_elevation, d.observer_elevation_m, d.refraction_coefficient};
+}
+sr_terrain_event_options sr_default_terrain_event_options(void) {
+  const TerrainEventOptions d;
+  return {static_cast<int>(d.model), d.refraction, to_c(d.atmosphere), d.limb_deg,
+          d.search_step_s,           d.tolerance_s};
 }
 sr_camera sr_default_camera(void) { return to_c(Camera{}); }
 sr_view sr_default_view(void) {
@@ -456,6 +524,106 @@ sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* f, sr_q
                                             {.x = field.x, .y = field.y, .z = field.z}, to_cpp(o),
                                             t, to_cpp(opt)),
          out);
+  });
+}
+
+sr_status sr_read_elevation_geotiff(const uint8_t* data, size_t size, int level,
+                                    sr_elevation_grid* out) {
+  return guarded([&] {
+    require_out(out);
+    if (data == nullptr && size > 0) {
+      throw std::invalid_argument("data is null");
+    }
+    const std::vector<std::uint8_t> bytes =
+        size > 0 ? std::vector<std::uint8_t>(data, data + size) : std::vector<std::uint8_t>{};
+    const ElevationGrid g = read_elevation_geotiff(bytes, level);
+    *out = {g.north_latitude_deg,
+            g.west_longitude_deg,
+            g.latitude_step_deg,
+            g.longitude_step_deg,
+            g.rows,
+            g.columns,
+            copy_out(g.heights_m)};
+  });
+}
+
+void sr_free_elevation_grid(sr_elevation_grid* grid) {
+  if (grid == nullptr) {
+    return;
+  }
+  std::free(grid->heights_m);
+  *grid = {};
+}
+
+sr_status sr_elevation_tiles(sr_observer o, double max_distance, sr_elevation_tile** out,
+                             size_t* count) {
+  return guarded([&] {
+    require_out(out);
+    require_out(count);
+    std::vector<sr_elevation_tile> tiles;
+    for (const ElevationTile& t : elevation_tiles(to_cpp(o), max_distance)) {
+      tiles.push_back({t.latitude_deg, t.longitude_deg, t.distance_m});
+    }
+    *out = copy_out(tiles);
+    *count = tiles.size();
+  });
+}
+
+sr_status sr_calculate_horizon_profile(sr_observer o, const sr_elevation_grid* tiles,
+                                       size_t tile_count, sr_horizon_options opt,
+                                       sr_horizon_profile* out) {
+  return guarded([&] {
+    require_out(out);
+    if (tiles == nullptr && tile_count > 0) {
+      throw std::invalid_argument("tiles is null");
+    }
+    std::vector<ElevationGrid> grids;
+    grids.reserve(tile_count);
+    for (size_t i = 0; i < tile_count; ++i) {
+      grids.push_back(to_cpp(tiles[i]));
+    }
+    const HorizonProfile p = horizon_profile(to_cpp(o), grids, to_cpp(opt));
+    // Both arrays or none: the caller does not free the result of a failed call.
+    double* const altitude = copy_out(p.altitude_deg);
+    try {
+      out->distance_m = copy_out(p.distance_m);
+    } catch (...) {
+      std::free(altitude);
+      throw;
+    }
+    out->altitude_deg = altitude;
+    out->count = p.altitude_deg.size();
+    out->azimuth_step_deg = p.azimuth_step_deg;
+    out->observer_elevation_m = p.observer_elevation_m;
+  });
+}
+
+void sr_free_horizon_profile(sr_horizon_profile* profile) {
+  if (profile == nullptr) {
+    return;
+  }
+  std::free(profile->altitude_deg);
+  std::free(profile->distance_m);
+  *profile = {};
+}
+
+sr_status sr_terrain_altitude_deg(const sr_horizon_profile* profile, double azimuth, double* out) {
+  return guarded([&] {
+    require_out(out);
+    *out = terrain_altitude_deg(to_cpp(profile), azimuth);
+  });
+}
+
+sr_status sr_find_terrain_events(sr_observer o, const sr_horizon_profile* profile, double start,
+                                 double end, sr_terrain_event_options opt, sr_terrain_events* out) {
+  return guarded([&] {
+    require_out(out);
+    const TerrainEvents e = terrain_events(to_cpp(o), to_cpp(profile), start, end, to_cpp(opt));
+    std::vector<sr_crossing> crossings;
+    for (const Crossing& c : e.crossings) {
+      crossings.push_back({c.unix_utc, c.rising});
+    }
+    *out = {static_cast<int>(e.kind), copy_out(crossings), crossings.size()};
   });
 }
 

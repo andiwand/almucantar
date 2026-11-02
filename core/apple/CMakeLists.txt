@@ -9,6 +9,8 @@ target_link_libraries(sunradar_c PUBLIC sunradar::sunradar PRIVATE sunradar::opt
 if(SUNRADAR_TESTS)
   add_executable(sunradar_c_test test/sunradar_c_test.c)
   target_link_libraries(sunradar_c_test PRIVATE sunradar_c)
+  target_compile_definitions(sunradar_c_test
+                             PRIVATE SUNRADAR_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/test/data")
   # The test is C, so the C++ standard library must be linked explicitly.
   set_target_properties(sunradar_c_test PROPERTIES LINKER_LANGUAGE CXX)
   add_test(NAME sunradar_c_test COMMAND sunradar_c_test)

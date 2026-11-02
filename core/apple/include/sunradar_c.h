@@ -9,6 +9,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,6 +129,46 @@ typedef struct sr_heading_filter_options {
       noise_sigma_ut;
 } sr_heading_filter_options;
 
+/* The terrain horizon (sunradar/terrain.hpp). */
+typedef struct sr_elevation_grid {
+  double north_latitude_deg, west_longitude_deg, latitude_step_deg, longitude_step_deg;
+  int rows, columns;
+  /* rows * columns heights in meters, row by row from the north; NaN is a sample without data.
+     The grid of sr_read_elevation_geotiff() owns it: free it with sr_free_elevation_grid().
+     An input of sr_calculate_horizon_profile() only borrows it. */
+  float* heights_m;
+} sr_elevation_grid;
+typedef struct sr_elevation_tile {
+  int latitude_deg, longitude_deg;
+  double distance_m;
+} sr_elevation_tile;
+typedef struct sr_horizon_options {
+  double azimuth_step_deg, max_distance_m, eye_height_m;
+  bool use_grid_elevation;
+  double observer_elevation_m, refraction_coefficient;
+} sr_horizon_options;
+/* The altitude and the distance have count values each. The result of
+   sr_calculate_horizon_profile() owns them: free them with sr_free_horizon_profile(). An input only
+   borrows them. */
+typedef struct sr_horizon_profile {
+  double azimuth_step_deg;
+  double* altitude_deg;
+  double* distance_m;
+  size_t count;
+  double observer_elevation_m;
+} sr_horizon_profile;
+typedef struct sr_terrain_event_options {
+  int model;
+  bool refraction;
+  sr_atmosphere atmosphere;
+  double limb_deg, search_step_s, tolerance_s;
+} sr_terrain_event_options;
+typedef struct sr_terrain_events {
+  int kind;
+  sr_crossing* crossings; /* free with sr_free() */
+  size_t crossing_count;
+} sr_terrain_events;
+
 /* The C++ defaults. */
 sr_sun_options sr_default_sun_options(void);
 sr_event_options sr_default_event_options(void);
@@ -139,6 +180,8 @@ sr_heading_estimate sr_default_heading_estimate(void);
 sr_heading_filter_options sr_default_heading_filter_options(void);
 sr_camera sr_default_camera(void);
 sr_view sr_default_view(void);
+sr_horizon_options sr_default_horizon_options(void);
+sr_terrain_event_options sr_default_terrain_event_options(void);
 double sr_sunrise_altitude_deg(void);
 double sr_unknown_heading_variance_deg2(void);
 double sr_default_heading_drift_deg2_per_s(void);
@@ -193,6 +236,24 @@ sr_status sr_heading_filter_update_magnetometer(const sr_heading_filter* filter,
                                                 sr_observer observer, double unix_utc,
                                                 sr_heading_filter_options options,
                                                 sr_heading_filter* out);
+
+/* Reads one image of a GeoTIFF of heights (level 0 is the full image, 1, 2, ... the overviews).
+   On success, free *out with sr_free_elevation_grid(). */
+sr_status sr_read_elevation_geotiff(const uint8_t* data, size_t size, int level,
+                                    sr_elevation_grid* out);
+void sr_free_elevation_grid(sr_elevation_grid* grid);
+sr_status sr_elevation_tiles(sr_observer observer, double max_distance_m, sr_elevation_tile** out,
+                             size_t* count);
+/* The grids are only read. On success, free *out with sr_free_horizon_profile(). */
+sr_status sr_calculate_horizon_profile(sr_observer observer, const sr_elevation_grid* tiles,
+                                       size_t tile_count, sr_horizon_options options,
+                                       sr_horizon_profile* out);
+void sr_free_horizon_profile(sr_horizon_profile* profile);
+sr_status sr_terrain_altitude_deg(const sr_horizon_profile* profile, double azimuth_deg,
+                                  double* out);
+sr_status sr_find_terrain_events(sr_observer observer, const sr_horizon_profile* profile,
+                                 double start_utc, double end_utc, sr_terrain_event_options options,
+                                 sr_terrain_events* out);
 
 #ifdef __cplusplus
 }

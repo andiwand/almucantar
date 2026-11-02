@@ -128,4 +128,101 @@ final class SunradarTests: XCTestCase {
         bad.covariance = [1]
         XCTAssertThrowsError(try headingFilterPredict(bad, dtS: 1))
     }
+
+    // MARK: - The terrain horizon
+
+    /// The GeoTIFF test files of the core (core/test/data/geotiff).
+    private func geotiff(_ name: String) throws -> Data {
+        let core = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../..").standardized
+        return try Data(contentsOf: core.appendingPathComponent("test/data/geotiff/\(name)"))
+    }
+
+    private func flatGrid(height: Float) -> ElevationGrid {
+        let (rows, columns) = (61, 91)
+        return ElevationGrid(
+            northLatitudeDeg: vienna.latitudeDeg + 0.25, westLongitudeDeg: vienna.longitudeDeg - 0.375,
+            latitudeStepDeg: 1.0 / 120, longitudeStepDeg: 1.0 / 120, rows: rows, columns: columns,
+            heightsM: [Float](repeating: height, count: rows * columns))
+    }
+
+    func testReadElevationGeotiff() throws {
+        let data = try geotiff("float_tiles_deflate_p3.tif")
+        let grid = try readElevationGeotiff(data)
+        XCTAssertEqual(grid.rows, 7)
+        XCTAssertEqual(grid.columns, 5)
+        XCTAssertEqual(grid.heightsM.count, 35)
+        XCTAssertEqual(grid.northLatitudeDeg, 47.75, accuracy: 1e-9)
+        XCTAssertEqual(grid.heightsM[0], 1000.25, accuracy: 1e-3)
+        XCTAssertEqual(try readElevationGeotiff(data, level: 1).rows, 4)
+        XCTAssertThrowsError(try readElevationGeotiff(Data([0x49, 0x49, 0x2A, 0]))) { error in
+            XCTAssertEqual((error as? SunradarError)?.kind, .invalidArgument)
+        }
+        XCTAssertThrowsError(try readElevationGeotiff(Data()))
+    }
+
+    func testElevationTiles() throws {
+        let tiles = try elevationTiles(observer: vienna, maxDistanceM: 100_000)
+        XCTAssertEqual(tiles.first, ElevationTile(latitudeDeg: 48, longitudeDeg: 16, distanceM: 0))
+        XCTAssertEqual(tiles.map(\.distanceM), tiles.map(\.distanceM).sorted())
+        XCTAssertGreaterThanOrEqual(tiles.count, 4)
+        XCTAssertThrowsError(try elevationTiles(observer: vienna, maxDistanceM: -1))
+    }
+
+    func testHorizonProfileOverFlatGround() throws {
+        let profile = try horizonProfile(
+            observer: vienna, tiles: [flatGrid(height: 150)], options: HorizonOptions(azimuthStepDeg: 10))
+        XCTAssertEqual(profile.altitudeDeg.count, 36)
+        XCTAssertEqual(profile.distanceM.count, 36)
+        XCTAssertEqual(profile.observerElevationM, 150, accuracy: 1e-3)
+        for altitude in profile.altitudeDeg { XCTAssertTrue(altitude < 0 && altitude > -0.1) }
+        XCTAssertEqual(
+            try terrainAltitudeDeg(profile, azimuthDeg: 5), (profile.altitudeDeg[0] + profile.altitudeDeg[1]) / 2,
+            accuracy: 1e-12)
+        // A grid without data at the observer.
+        var empty = flatGrid(height: .nan)
+        XCTAssertThrowsError(try horizonProfile(observer: vienna, tiles: [empty])) { error in
+            XCTAssertTrue((error as? SunradarError)?.message.contains("no data at the observer") ?? false)
+        }
+        empty.heightsM = ElevationHeights([1, 2, 3])
+        XCTAssertThrowsError(try horizonProfile(observer: vienna, tiles: [empty]))
+    }
+
+    func testTerrainEvents() throws {
+        let flat = HorizonProfile(
+            azimuthStepDeg: 1, altitudeDeg: Array(repeating: 0, count: 360), distanceM: Array(repeating: 1000, count: 360))
+        let events = try terrainEvents(observer: vienna, profile: flat, startUtc: dayStart, endUtc: dayStart + day)
+        XCTAssertEqual(events.kind, .normal)
+        XCTAssertEqual(events.crossings.map(\.rising), [true, false])
+        let sun = try sunEvents(observer: vienna, startUtc: dayStart, endUtc: dayStart + day)
+        XCTAssertEqual(events.crossings[0].unixUtc, sun.crossings[0].unixUtc, accuracy: 60)
+
+        let wall = HorizonProfile(
+            azimuthStepDeg: 1, altitudeDeg: Array(repeating: 80, count: 360), distanceM: Array(repeating: 1000, count: 360))
+        let night = try terrainEvents(
+            observer: vienna, profile: wall, startUtc: dayStart, endUtc: dayStart + day,
+            options: TerrainEventOptions(limbDeg: 0))
+        XCTAssertEqual(night.kind, .polarNight)
+        XCTAssertTrue(night.crossings.isEmpty)
+
+        var bad = flat
+        bad.distanceM = [1]
+        XCTAssertThrowsError(try terrainAltitudeDeg(bad, azimuthDeg: 0))
+        XCTAssertThrowsError(try terrainEvents(observer: vienna, profile: flat, startUtc: 10, endUtc: 10))
+    }
+
+    func testTerrainDefaultsComeFromCpp() {
+        XCTAssertEqual(HorizonOptions().c.azimuth_step_deg, sr_default_horizon_options().azimuth_step_deg)
+        XCTAssertEqual(HorizonOptions().c.max_distance_m, sr_default_horizon_options().max_distance_m)
+        XCTAssertEqual(HorizonOptions().c.refraction_coefficient, sr_default_horizon_options().refraction_coefficient)
+        XCTAssertEqual(TerrainEventOptions().c.limb_deg, sr_default_terrain_event_options().limb_deg)
+        XCTAssertEqual(TerrainEventOptions().c.atmosphere.pressure_hpa, sr_default_terrain_event_options().atmosphere.pressure_hpa)
+        // Independent values, so a wrong wiring fails.
+        XCTAssertEqual(HorizonOptions().azimuthStepDeg, 0.25)
+        XCTAssertEqual(HorizonOptions().maxDistanceM, 100_000)
+        XCTAssertEqual(HorizonOptions().eyeHeightM, 1.6)
+        XCTAssertTrue(HorizonOptions().useGridElevation)
+        XCTAssertEqual(TerrainEventOptions().limbDeg, 0.2667)
+        XCTAssertEqual(TerrainEventOptions().searchStepS, 60)
+    }
 }
