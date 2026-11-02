@@ -7,4 +7,7 @@ export default defineConfig({
   // pre-bundle the package, or the URL of the .wasm file breaks.
   optimizeDeps: { exclude: ["@sunradar/core"] },
   build: { target: "es2022" },
+  // The dev server reads the WASM build of the core from the repository root. Vite allows only the
+  // project directory without this, and the sky then does not start.
+  server: { fs: { allow: [".."] } },
 });

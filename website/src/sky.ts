@@ -231,20 +231,7 @@ export class Sky {
     // The path of the sun, with the hours.
     const above = frame.path.filter((d) => d.altitudeDeg > -8);
     this.line(p, above, "rgba(255, 200, 61, 0.95)", 2.5);
-    ctx.font = "600 12px system-ui, -apple-system, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    for (const hour of frame.hours) {
-      if (hour.direction.altitudeDeg < -4) continue;
-      const x = p.x(hour.direction.azimuthDeg);
-      const y = p.y(hour.direction.altitudeDeg);
-      ctx.fillStyle = "rgba(255, 224, 138, 0.95)";
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255, 240, 210, 0.85)";
-      ctx.fillText(hour.label, x, y - 7);
-    }
+    this.hourMarks(p, frame.hours);
 
     // The moon and its path.
     if (frame.moonPath.length) this.line(p, frame.moonPath, "rgba(214, 226, 255, 0.7)", 2, [2, 6]);
@@ -274,7 +261,19 @@ export class Sky {
 
     this.skyline(p, day);
 
-    if (frame.window && frame.window.alpha > 0) this.room(p, frame.window, day);
+    if (frame.window && frame.window.alpha > 0) {
+      this.room(p, frame.window, day);
+      // The hour marks stay on top of the frame and the cross of the window, but only in the
+      // window: the wall hides the path, so a mark there would have no path.
+      ctx.save();
+      ctx.globalAlpha = frame.window.alpha;
+      ctx.beginPath();
+      const [x0, y0, x1, y1] = windowRect(p, frame.window);
+      ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.clip();
+      this.hourMarks(p, frame.hours);
+      ctx.restore();
+    }
 
     if (frame.dim > 0) {
       ctx.fillStyle = `rgba(4, 8, 18, ${frame.dim})`;
@@ -309,24 +308,55 @@ export class Sky {
     ctx.setLineDash([]);
   }
 
-  /** The area where the path can be if the heading is wrong by up to `deg`. */
+  /** The dots and the labels of the hours on the path. */
+  private hourMarks(p: Panorama, hours: HourMark[]) {
+    const ctx = this.ctx;
+    ctx.font = "600 12px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (const hour of hours) {
+      if (hour.direction.altitudeDeg < -4) continue;
+      const x = p.x(hour.direction.azimuthDeg);
+      const y = p.y(hour.direction.altitudeDeg);
+      ctx.fillStyle = "rgba(255, 224, 138, 0.95)";
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 240, 210, 0.85)";
+      ctx.fillText(hour.label, x, y - 7);
+    }
+  }
+
+  /**
+   * The area where the path can be if the heading is wrong by up to `deg`. A wrong heading turns
+   * the view around the vertical axis, so each point of the path moves left or right (in azimuth)
+   * at its altitude, not up or down. The band is the area that the path covers in this move: for
+   * each piece of the path, the parallelogram between the piece moved left and moved right.
+   */
   private band(p: Panorama, path: Horizontal[], deg: number) {
     const ctx = this.ctx;
     const shown = path.filter((d) => d.altitudeDeg > -4);
-    ctx.lineWidth = Math.max(3, 2 * deg * p.pxPerDegX);
-    ctx.strokeStyle = "rgba(127, 216, 255, 0.16)";
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    const dx = Math.max(1.5, deg * p.pxPerDegX);
+    ctx.fillStyle = "rgba(127, 216, 255, 0.16)";
+    // One path for all pieces, with the same orientation, so the overlaps fill only once.
     ctx.beginPath();
-    let last: number | null = null;
-    for (const d of shown) {
-      const x = p.x(d.azimuthDeg);
-      const y = p.y(d.altitudeDeg);
-      if (last === null || Math.abs(x - last) > this.width / 2) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-      last = x;
+    for (let i = 1; i < shown.length; i++) {
+      const ax = p.x(shown[i - 1].azimuthDeg);
+      const bx = p.x(shown[i].azimuthDeg);
+      if (Math.abs(bx - ax) > this.width / 2) continue; // across the edge of the panorama
+      const ay = p.y(shown[i - 1].altitudeDeg);
+      const by = p.y(shown[i].altitudeDeg);
+      // Clockwise on the screen: up the left side, down the right side.
+      const up = ay >= by;
+      const [lowY, highY] = up ? [ay, by] : [by, ay];
+      const [lowX, highX] = up ? [ax, bx] : [bx, ax];
+      ctx.moveTo(lowX - dx, lowY);
+      ctx.lineTo(highX - dx, highY);
+      ctx.lineTo(highX + dx, highY);
+      ctx.lineTo(lowX + dx, lowY);
+      ctx.closePath();
     }
-    ctx.stroke();
+    ctx.fill("nonzero");
   }
 
   /** The moon with its phase. The bright side faces the sun. */
@@ -408,10 +438,7 @@ export class Sky {
   /** A dark wall with a window: only the sky in the window stays visible. */
   private room(p: Panorama, win: NonNullable<Frame["window"]>, day: number) {
     const ctx = this.ctx;
-    const x0 = p.x(win.azimuth[0]);
-    const x1 = p.x(win.azimuth[1]);
-    const y0 = p.y(win.altitude[1]);
-    const y1 = p.y(win.altitude[0]);
+    const [x0, y0, x1, y1] = windowRect(p, win);
     const wall: Rgb = mix([10, 11, 16], [36, 34, 38], day);
     ctx.save();
     ctx.globalAlpha = win.alpha;
@@ -436,4 +463,12 @@ export class Sky {
     ctx.fillRect(x0 - 18, y1 + 5, x1 - x0 + 36, 10);
     ctx.restore();
   }
+}
+
+/** The window on the screen: left, top, right, and bottom. */
+function windowRect(
+  p: Panorama,
+  win: NonNullable<Frame["window"]>,
+): [number, number, number, number] {
+  return [p.x(win.azimuth[0]), p.y(win.altitude[1]), p.x(win.azimuth[1]), p.y(win.altitude[0])];
 }

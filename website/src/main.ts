@@ -468,6 +468,7 @@ function frame(ms: number) {
   const target: Target = { ...DEFAULTS, ...chapters[name](progress) };
 
   const k = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 7);
+  const kMoon = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 2);
   if (name !== lastChapter) {
     const index = (chapter: string) => sections.findIndex((s) => s.dataset.chapter === chapter);
     direction = lastChapter === "" ? 0 : Math.sign(index(name) - index(lastChapter));
@@ -492,13 +493,20 @@ function frame(ms: number) {
   const carry = direction !== 0 && Math.abs(days) === 1;
   if (Math.abs(h) < 0.02) {
     direction = 0;
-    if (carry) shown.day += nextDay(base, days) - base;
+    if (carry) {
+      shown.day += nextDay(base, days) - base;
+      // The date changes by one day in one step, so the moon jumps by about 13°: hide it.
+      shown.moon = 0;
+    }
   }
   const targetDay = days === 0 || carry ? base : nextDay(base, days);
   const targetHours = carry ? shown.hours + h : (target.time - targetDay) / 3600;
   // A jump of more than 40 days is not animated, because the paths would flicker through the year.
-  if (Math.abs(targetDay - shown.day) > 40 * DAY) shown.day = targetDay;
-  else shown.day += (targetDay - shown.day) * k;
+  // The moon is somewhere else on the new date, so it is hidden and fades in later.
+  if (Math.abs(targetDay - shown.day) > 40 * DAY) {
+    shown.day = targetDay;
+    shown.moon = 0;
+  } else shown.day += (targetDay - shown.day) * k;
   shown.hours += (targetHours - shown.hours) * k;
   // While the date moves, the moon jumps across the sky (13° per day), so it is not shown. It
   // fades in when the date stops. During a carry, the moon moves smoothly, so it fades out before
@@ -506,7 +514,11 @@ function frame(ms: number) {
   // changes the date.
   const settled = !carry && Math.abs(targetDay - shown.day) < DAY / 2;
   if (!settled && !carry) shown.moon = 0;
-  else shown.moon += ((settled && !target.hideMoon ? 1 : 0) - shown.moon) * k;
+  else {
+    // The moon fades in slower than it fades out, so it appears calmly after a change of the date.
+    const show = settled && !target.hideMoon;
+    shown.moon += ((show ? 1 : 0) - shown.moon) * (show ? kMoon : k);
+  }
   // Keep the hours in one day. The date changes by the same amount, so the time stays the same.
   const shownBase = startOfDay(shown.day + DAY / 2);
   if (shown.hours >= 24) {
