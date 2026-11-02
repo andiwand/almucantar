@@ -42,6 +42,14 @@ final class MotionTracker: ObservableObject {
 
     func stop() { manager.stopDeviceMotionUpdates() }
 
+    /// The demo mode of the store screenshots: a fixed orientation and a fixed heading, without
+    /// sensors.
+    func startDemo(deviceToFrame q: Sunradar.Quaternion, headingSigmaDeg: Double) {
+        available = true
+        deviceToFrame = q
+        estimate = HeadingEstimate(offsetDeg: 0, varianceDeg2: headingSigmaDeg * headingSigmaDeg)
+    }
+
     /// The error that is left in a field that the OS calibrated, in µT.
     private static let calibratedBiasSigmaUt = 5.0
 

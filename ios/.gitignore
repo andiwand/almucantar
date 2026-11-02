@@ -2,3 +2,7 @@
 /Sunradar.xcodeproj/
 /build/
 /DerivedData/
+# Files that fastlane writes on each run.
+/fastlane/report.xml
+/fastlane/test_output/
+/fastlane/README.md

@@ -21,12 +21,14 @@ struct SkyDay {
         let points = (try? sunPath(observer: observer, startUtc: start, endUtc: end)) ?? []
         path = points.map(\.position)
         daySegments = Self.segments(points)
-        let hourFormat = Date.FormatStyle().hour(.twoDigits(amPM: .omitted))
+        // The hour on 24 hours, as on Android: in a 12-hour locale, "07" would also mean 7 PM.
         hours =
             points
             .filter { ($0.unixUtc - day.timeIntervalSince1970).truncatingRemainder(dividingBy: 3600) == 0 }
             .filter { $0.position.altitudeDeg > -6 }
-            .map { ($0.position, Date(timeIntervalSince1970: $0.unixUtc).formatted(hourFormat)) }
+            .map {
+                ($0.position, String(format: "%02d", calendar.component(.hour, from: Date(timeIntervalSince1970: $0.unixUtc))))
+            }
         let events = try? sunEvents(observer: observer, startUtc: start, endUtc: end)
         summary =
             switch events?.kind {
@@ -94,11 +96,12 @@ struct DetectedSun {
 struct SkyScreen: SwiftUI.View {
     @StateObject private var motion = MotionTracker()
     @StateObject private var location = LocationProvider()
-    @State private var now = Date()
+    // The demo mode of the store screenshots sets the time, the time panel, and the drawn sky.
+    @State private var now = ScreenshotMode.scene?.date ?? Date()
     @State private var dayOffset = 0.0
-    @State private var minuteOfDay: Double?
-    @State private var showTime = false
-    @State private var cameraOn = false
+    @State private var minuteOfDay: Double? = ScreenshotMode.scene.map { Double($0.hour * 60 + $0.minute) }
+    @State private var showTime = ScreenshotMode.scene?.showTime ?? false
+    @State private var cameraOn = ScreenshotMode.scene != nil
     @State private var camera: Sunradar.Camera?
     @State private var aligning: AlignTarget?
     @State private var pickingLandmark = false
@@ -110,6 +113,8 @@ struct SkyScreen: SwiftUI.View {
     @State private var dragPitch = 20.0
     @State private var dragStart: (azimuth: Double, pitch: Double)?
     @State private var dates: [TimeMatch] = []
+    /// The search for the dates of the crosshair finished at least once. The demo mode is ready then.
+    @State private var datesSearched = false
 
     private let calendar = Calendar.current
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -138,7 +143,10 @@ struct SkyScreen: SwiftUI.View {
             let time = selectedTime(day: day)
             let view = makeView(size: size)
             let sun = try? sunPosition(time, observer: observer)
-            let moon = (try? moonIlluminatedFraction(time)).flatMap { $0 >= 0.02 ? try? moonPosition(time, observer: observer) : nil }
+            let moon = (try? moonIlluminatedFraction(time)).flatMap { fraction in
+                fraction >= 0.02
+                    ? (try? moonPosition(time, observer: observer)).map { MoonAt(direction: $0, fraction: fraction) } : nil
+            }
             let landmarkDirection = landmark.map {
                 Horizontal(azimuthDeg: Geo.bearingDeg(from: observer, to: $0), altitudeDeg: 0)
             }
@@ -154,7 +162,11 @@ struct SkyScreen: SwiftUI.View {
             ZStack {
                 Color(red: 0.043, green: 0.102, blue: 0.188).ignoresSafeArea()
                 if cameraOn {
-                    CameraView(detectSun: detecting, onBlobs: { blobs = $0 }) { camera = $0 }.ignoresSafeArea()
+                    if ScreenshotMode.scene != nil {
+                        DemoSky(view: view, sun: sun).ignoresSafeArea()
+                    } else {
+                        CameraView(detectSun: detecting, onBlobs: { blobs = $0 }) { camera = $0 }.ignoresSafeArea()
+                    }
                 }
                 Canvas { context, _ in
                     draw(
@@ -178,12 +190,28 @@ struct SkyScreen: SwiftUI.View {
                     .frame(maxWidth: .infinity)
                 }
                 .padding(12)
+
+                if ScreenshotMode.scene != nil && datesSearched {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.01))
+                        .frame(width: 1, height: 1)
+                        .accessibilityElement()
+                        .accessibilityLabel("Ready")
+                        .accessibilityIdentifier(ScreenshotMode.readyIdentifier)
+                }
             }
             .onAppear {
-                motion.start()
-                location.start()
+                if let scene = ScreenshotMode.scene {
+                    motion.startDemo(
+                        deviceToFrame: upright(azimuthDeg: scene.azimuthDeg, pitchDeg: scene.pitchDeg),
+                        headingSigmaDeg: scene.headingSigmaDeg)
+                    location.startDemo()
+                } else {
+                    motion.start()
+                    location.start()
+                }
             }
-            .onReceive(timer) { now = $0 }
+            .onReceive(timer) { if ScreenshotMode.scene == nil { now = $0 } }
             .onChange(of: location.observer) { motion.observer = location.observer }
             .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
@@ -205,12 +233,19 @@ struct SkyScreen: SwiftUI.View {
     // MARK: - The view
 
     private func makeView(size: CGSize) -> Sunradar.View {
-        let fov = size.width < size.height ? 60.0 : 90.0
+        var fov = size.width < size.height ? 60.0 : 90.0
+        if ScreenshotMode.scene != nil {
+            // 65° across the shorter side of the screen, as on Android.
+            let half = 32.5 * Double.pi / 180
+            fov = size.width <= size.height ? 65 : 2 * atan(tan(half) * size.width / size.height) * 180 / .pi
+        }
         let virtualCamera =
             (try? cameraFromFov(width: size.width, height: size.height, horizontalFovDeg: fov)) ?? Sunradar.Camera()
         if motion.available, let q = motion.deviceToFrame {
             return Sunradar.View(
-                deviceToEnu: q, screenRotation: screenRotation(), headingOffsetDeg: motion.estimate.offsetDeg,
+                // The scenes of the demo mode are for a device in portrait.
+                deviceToEnu: q, screenRotation: ScreenshotMode.scene != nil ? .rotation0 : screenRotation(),
+                headingOffsetDeg: motion.estimate.offsetDeg,
                 camera: cameraOn ? (camera ?? virtualCamera) : virtualCamera)
         }
         return Sunradar.View(deviceToEnu: upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)
@@ -352,16 +387,20 @@ struct SkyScreen: SwiftUI.View {
     private func searchDates(center: Horizontal?) async {
         guard let center, center.altitudeDeg >= 0 else {
             dates = []
+            datesSearched = true
             return
         }
         try? await Task.sleep(nanoseconds: 400_000_000)
         if Task.isCancelled { return }
-        let start = calendar.startOfDay(for: Date()).timeIntervalSince1970
+        let start = calendar.startOfDay(for: now).timeIntervalSince1970
         let observer = location.observer
         let found = await Task.detached {
             (try? findDates(observer: observer, direction: center, startUtc: start, endUtc: start + 365 * 86400)) ?? []
         }.value
-        if !Task.isCancelled { dates = found }
+        if !Task.isCancelled {
+            dates = found
+            datesSearched = true
+        }
     }
 
     // MARK: - Drawing
@@ -373,6 +412,29 @@ struct SkyScreen: SwiftUI.View {
             for p in line.dropFirst() { path.addLine(to: CGPoint(x: p.x, y: p.y)) }
         }
         return path
+    }
+
+    /// Draws the moon at `at` with the lit part toward the sun. The direction of the sun on the screen
+    /// comes from a point 1° from the moon toward the sun, see `MoonPhase.towardSun`.
+    private func drawMoon(
+        _ context: inout GraphicsContext, _ view: Sunradar.View, _ moon: MoonAt, sun: Horizontal?, at: CGPoint, radius: CGFloat
+    ) {
+        var u = CGPoint(x: 0, y: -1)
+        if let sun, let q = point(view, MoonPhase.towardSun(moon.direction, sun)) {
+            let length = hypot(q.x - at.x, q.y - at.y)
+            if length > 1e-3 { u = CGPoint(x: (q.x - at.x) / length, y: (q.y - at.y) / length) }
+        }
+        let v = CGPoint(x: -u.y, y: u.x)
+        let color = Color(white: 0.88)
+        let disc = CGRect(x: at.x - radius, y: at.y - radius, width: 2 * radius, height: 2 * radius)
+        context.fill(Path(ellipseIn: disc), with: .color(color.opacity(0.22)))
+        var lit = Path()
+        for (i, p) in MoonPhase.litOutline(moon.fraction).enumerated() {
+            let q = CGPoint(x: at.x + (u.x * p.x + v.x * p.y) * radius, y: at.y + (u.y * p.x + v.y * p.y) * radius)
+            if i == 0 { lit.move(to: q) } else { lit.addLine(to: q) }
+        }
+        lit.closeSubpath()
+        context.fill(lit, with: .color(color))
     }
 
     private func point(_ view: Sunradar.View, _ direction: Horizontal) -> CGPoint? {
@@ -418,7 +480,7 @@ struct SkyScreen: SwiftUI.View {
     }
 
     private func draw(
-        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, sun: Horizontal?, moon: Horizontal?,
+        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, sun: Horizontal?, moon: MoonAt?,
         landmark: Horizontal?, center: Horizontal?, crossing: AzimuthCrossing?
     ) {
         let yellow = Color(red: 1, green: 0.784, blue: 0.239)
@@ -463,9 +525,10 @@ struct SkyScreen: SwiftUI.View {
             context.stroke(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)), with: .color(.red), lineWidth: 2.5)
             label(&context, view, landmark, "landmark", gap: 16)
         }
-        if let moon, let p = point(view, moon) {
-            context.fill(Path(ellipseIn: CGRect(x: p.x - 11, y: p.y - 11, width: 22, height: 22)), with: .color(Color(white: 0.88)))
-            label(&context, view, moon, "moon", gap: 20)
+        // The moon with its phase. The faint disc shows the dark part.
+        if let moon, let p = point(view, moon.direction) {
+            drawMoon(&context, view, moon, sun: sun, at: p, radius: 11)
+            label(&context, view, moon.direction, "moon", gap: 20)
         }
         // The sun, or an arrow at the border of the screen that points to it.
         let sunColor = Color(red: 1, green: 0.878, blue: 0.541)
@@ -585,11 +648,12 @@ struct SkyScreen: SwiftUI.View {
 
     /// The align menu. Each item says what happens, or why it is not possible now.
     private var alignMenu: some SwiftUI.View {
-        let now = Date().timeIntervalSince1970
+        // The time of the timer, which is the time of the scene in the demo mode.
+        let t = now.timeIntervalSince1970
         let observer = location.observer
-        let sunUp = ((try? sunPosition(now, observer: observer))?.altitudeDeg ?? -1) > 0
-        let moonUp = ((try? moonPosition(now, observer: observer))?.altitudeDeg ?? -1) > 0
-        let moonBright = ((try? moonIlluminatedFraction(now)) ?? 0) >= Self.minMoonFraction
+        let sunUp = ((try? sunPosition(t, observer: observer))?.altitudeDeg ?? -1) > 0
+        let moonUp = ((try? moonPosition(t, observer: observer))?.altitudeDeg ?? -1) > 0
+        let moonBright = ((try? moonIlluminatedFraction(t)) ?? 0) >= Self.minMoonFraction
         let located = location.accuracyM != nil
         return Menu("Align") {
             Button {

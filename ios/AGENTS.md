@@ -14,7 +14,12 @@ features and the behavior.
 | `Sunradar/MapPicker.swift` | The MapKit map to pick a landmark. |
 | `Sunradar/SunDetector.swift` | The saturated regions of a luminance image (the same algorithm as on Android). |
 | `Sunradar/Geo.swift` | The bearing, the distance, and the angle between two directions. |
-| `SunradarTests/` | The unit tests of the detector and of `Geo`. |
+| `Sunradar/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
+| `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
+| `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
+| `SunradarTests/` | The unit tests of the detector, of `Geo`, and of `MoonPhase`. |
+| `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
+| `fastlane/` | The lanes `screenshots` and `upload_listing`. |
 | `Sunradar/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
 | `Sunradar/LocationProvider.swift` | CoreLocation, with an accuracy of a kilometer. |
 | `Sunradar/CameraView.swift` | The AVFoundation preview, the camera model in the points of the view, and the frames for the sun detection. |
@@ -49,3 +54,20 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   divided by the size of the frame, is a capture device point. `layerPointConverted` maps it to the view.
 - The camera model has no distortion, because AVFoundation gives no lens distortion for the
   preview.
+
+## Screenshots
+
+The store screenshots follow [`../screenshots/README.md`](../screenshots/README.md). The short
+version:
+
+1. Build the xcframework, and install the gems (`bundle install` at the root) and the `.venv`.
+2. Run `bundle exec fastlane screenshots` in `ios/`. Set `SUNRADAR_SCREENSHOT_DEVICE=iphone` or
+   `ipad` for one device.
+3. The lane runs `xcodegen generate`, builds the scheme `Sunradar Screenshots` one time, and runs
+   snapshot for each device on the newest runtime that has the device. Then it frames the images
+   with `scripts/screenshots/frame.py`.
+
+The UI test starts the app with `-SunradarScreenshot <screen>` and `TZ=Europe/Vienna`. The demo
+mode fixes the place, the time, the view, and the heading, and draws the sky in place of the camera.
+It sets the accessibility identifier `sunradar-screenshot-ready` when the dates of the crosshair
+are ready. A SwiftUI menu does not open from code, so the test taps "Align" for `03-align`.

@@ -57,3 +57,26 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Sunradar.app/Sunradar
         BUNDLE_LOADER: $(TEST_HOST)
         SWIFT_VERSION: "5.0"
+  # The store screenshots: a UI test that starts the app in its demo mode (screenshots/README.md).
+  SunradarUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [SunradarUITests]
+    dependencies:
+      - target: SunradarApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: SunradarApp
+        SWIFT_VERSION: "5.0"
+schemes:
+  # fastlane snapshot runs this scheme. The tests run in Debug, because only a debug build has the
+  # demo mode.
+  Sunradar Screenshots:
+    build:
+      targets:
+        SunradarApp: all
+        SunradarUITests: [test]
+    test:
+      config: Debug
+      targets: [SunradarUITests]

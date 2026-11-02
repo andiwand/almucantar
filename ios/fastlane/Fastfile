@@ -1,0 +1,255 @@
+# The lanes of the iOS app: the store screenshots and their upload. See screenshots/README.md.
+require "base64"
+require "fileutils"
+require "shellwords"
+require "tmpdir"
+
+# deliver, which upload_to_app_store uses.
+require "deliver"
+
+# deliver uploads a screenshot again if App Store Connect does not list it yet, so a slow listing
+# gives each screenshot two times. The patch waits for the listing and does not send again. It is
+# the patch of OpenDocument.ios. class_eval is necessary, because fastlane evaluates this file in
+# its own namespace.
+LOOKS = 7
+LOOK_AGAIN_AFTER = 30
+WAITS_AT_MOST = (LOOKS - 1) * LOOK_AGAIN_AFTER
+
+unless ::Deliver::UploadScreenshots.instance_method(:retry_upload_screenshots_if_needed).arity == 7
+  FastlaneCore::UI.user_error!("deliver changed the screenshot retry that this file patches: each screenshot would go up two times")
+end
+
+# Locals for the block below: a constant in the block is looked up in the scope of this file.
+looks = LOOKS
+look_again_after = LOOK_AGAIN_AFTER
+waits_at_most = WAITS_AT_MOST
+
+::Deliver::UploadScreenshots.class_eval do
+  define_method(:retry_upload_screenshots_if_needed) do |_iterator, states, _count, _tries, _timeout, localizations, screenshots_per_language|
+    failed = states.fetch("FAILED", 0)
+    FastlaneCore::UI.user_error!("App Store Connect could not process #{failed} screenshot(s)") if failed > 0
+    return if screenshots_per_language.empty?
+
+    looks.times do |look|
+      # A new iterator each time: the old one keeps the answer from before the last upload.
+      return if verify_local_screenshots_are_uploaded(::Deliver::AppScreenshotIterator.new(localizations), screenshots_per_language)
+      break if look == looks - 1
+
+      FastlaneCore::UI.message("App Store Connect does not list all screenshots yet - looking again in #{look_again_after}s")
+      sleep(look_again_after)
+    end
+
+    FastlaneCore::UI.user_error!("App Store Connect does not list all screenshots #{waits_at_most}s after the upload. Nothing went up two times, but the set can be incomplete: look at it before you submit.")
+  end
+end
+
+# The patch fails silently if it does not apply, so check that the method comes from this file now.
+patched_from, = ::Deliver::UploadScreenshots.instance_method(:retry_upload_screenshots_if_needed).source_location
+unless patched_from.to_s.end_with?("Fastfile")
+  FastlaneCore::UI.user_error!("the deliver patch did not apply (the retry comes from #{patched_from}): screenshots would go up two times")
+end
+
+default_platform(:ios)
+
+# Fastlane evaluates this file in ios/fastlane, but runs actions in ios/. Absolute paths work in both.
+IOS_DIR = File.expand_path("..").freeze
+REPO_DIR = File.expand_path("../..").freeze
+PROJECT = File.join(IOS_DIR, "Sunradar.xcodeproj").freeze
+SCHEME = "Sunradar Screenshots"
+
+FRAME_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "frame.py").freeze
+STORE_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "store.py").freeze
+
+# The raw captures and the framed set. Git ignores both.
+SCREENSHOT_DIR = File.join(IOS_DIR, "fastlane", "screenshots").freeze
+FRAMED_DIR = File.join(IOS_DIR, "fastlane", "framed").freeze
+
+# One build for all devices.
+SCREENSHOT_BUILD_DIR = File.join(IOS_DIR, "build", "screenshots").freeze
+
+# The candidates of each device, the newest first. The lane takes the newest runtime that has one.
+SCREENSHOT_DEVICES = {
+  "iphone" => ["iPhone 17 Pro Max", "iPhone 16 Pro Max", "iPhone 15 Pro Max"],
+  "ipad" => ["iPad Pro 13-inch (M5)", "iPad Pro 13-inch (M4)"],
+}.freeze
+
+NARROWING = %w[SUNRADAR_SCREENSHOT_DEVICE SUNRADAR_SCREENSHOT_DEVICES SUNRADAR_SCREENSHOT_IOS].freeze
+
+# The Python of the repository (.venv, with Pillow), else python3. SUNRADAR_PYTHON overrides it.
+def python
+  given = ENV["SUNRADAR_PYTHON"].to_s.strip
+  return given unless given.empty?
+
+  venv = File.join(REPO_DIR, ".venv", "bin", "python")
+  File.executable?(venv) ? venv : "python3"
+end
+
+# The available simulators, grouped by the version of their iOS runtime.
+def simulators_by_ios
+  runtime = nil
+  `xcrun simctl list devices available`.lines.each_with_object({}) do |line, found|
+    if (version = line[/^-- iOS ([0-9.]+) --/, 1])
+      runtime = version
+      found[runtime] ||= []
+    elsif runtime && (name = line[/^\s+(.+?) \([0-9A-F-]{36}\)/, 1])
+      found[runtime] << name
+    end
+  end
+end
+
+# The device kinds of this run: both, unless SUNRADAR_SCREENSHOT_DEVICE names one.
+def screenshot_kinds
+  given = ENV["SUNRADAR_SCREENSHOT_DEVICE"].to_s.strip.downcase
+  return SCREENSHOT_DEVICES.keys if given.empty?
+
+  UI.user_error!("no device #{given}: use one of #{SCREENSHOT_DEVICES.keys.join(', ')}") unless SCREENSHOT_DEVICES.key?(given)
+  [given]
+end
+
+# The newest runtime that has one of `names`, and the first of `names` on it.
+def newest_with(names, runtimes)
+  runtimes.sort_by { |version, _| Gem::Version.new(version) }.reverse_each do |version, available|
+    name = names.find { |candidate| available.include?(candidate) }
+    return [name, version] if name
+  end
+  nil
+end
+
+# The pairs (device, iOS version) to capture. Each device can have a different runtime, because a
+# new runtime often has new iPad simulators but no iPhone Pro Max yet.
+# SUNRADAR_SCREENSHOT_DEVICES (names, comma-separated) and SUNRADAR_SCREENSHOT_IOS override the choice.
+def screenshot_targets
+  runtimes = simulators_by_ios
+  pinned = ENV["SUNRADAR_SCREENSHOT_IOS"].to_s.strip
+  runtimes = runtimes.select { |version, _| version == pinned } unless pinned.empty?
+  UI.user_error!("no iOS simulator runtime #{pinned.empty? ? '' : pinned + ' '}is installed") if runtimes.empty?
+
+  given = ENV["SUNRADAR_SCREENSHOT_DEVICES"].to_s.strip
+  wanted = given.empty? ? screenshot_kinds.map { |kind| SCREENSHOT_DEVICES.fetch(kind) } : given.split(",").map { |name| [name.strip] }
+
+  wanted.map do |names|
+    newest_with(names, runtimes) ||
+      UI.user_error!("no runtime has #{names.join(' or ')}. Create the simulator, or set SUNRADAR_SCREENSHOT_DEVICES and SUNRADAR_SCREENSHOT_IOS.")
+  end
+end
+
+def api_key_file
+  path = File.join(Dir.mktmpdir("asc-api-key"), "AuthKey_#{ENV.fetch('ASC_KEY_ID')}.p8")
+  File.write(path, Base64.decode64(ENV.fetch("ASC_KEY_CONTENT")))
+  File.chmod(0o600, path)
+  path
+end
+
+platform :ios do
+  desc "Take the App Store screenshots of the iPhone and the iPad, and frame them"
+  lane :screenshots do
+    targets = screenshot_targets
+    UI.message("screenshots of #{targets.map { |name, ios| "#{name} (iOS #{ios})" }.join(' and ')}")
+
+    # The project is not in Git: XcodeGen writes it from project.yml. The Swift package of the core
+    # needs its xcframework (python3 core/apple/build_xcframework.py at the root).
+    sh("cd #{IOS_DIR.shellescape} && xcodegen generate")
+
+    # One build for all devices.
+    scan(
+      project: PROJECT,
+      scheme: SCHEME,
+      destination: "generic/platform=iOS Simulator",
+      derived_data_path: SCREENSHOT_BUILD_DIR,
+      build_for_testing: true,
+      skip_detect_devices: true
+    )
+
+    # A new run replaces the old captures of its devices. The captures of other devices stay, so a
+    # run for one device does not remove the other half of the set. Each device can have its own
+    # runtime, so each device gets its own run of snapshot, and snapshot does not clear the
+    # directory.
+    targets.each do |device, _|
+      FileUtils.rm_f(Dir.glob(File.join(SCREENSHOT_DIR, "*", "#{device}-*.png")))
+    end
+
+    targets.each do |device, ios|
+      # snapshot collects every file in its handoff cache, also the files of an earlier run (for
+      # example a run of the UI test from Xcode), so the cache is cleared first.
+      FileUtils.rm_rf(File.expand_path("~/Library/Caches/tools.fastlane/screenshots"))
+      capture_ios_screenshots(
+        project: PROJECT,
+        scheme: SCHEME,
+        devices: [device],
+        # Pinned, because the same name can exist on an older runtime.
+        ios_version: ios,
+        languages: ["en-US"],
+        output_directory: SCREENSHOT_DIR,
+        # The app hides the status bar. The override is for a later screen that shows it.
+        override_status_bar: true,
+        override_status_bar_arguments:
+          "--time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 " \
+          "--cellularMode active --cellularBars 4 --batteryState discharging --batteryLevel 100",
+        clear_previous_screenshots: false,
+        # Snapshots.swift does the handoff; there is no SnapshotHelper.swift to check.
+        skip_helper_version_check: true,
+        skip_open_summary: true,
+        stop_after_first_error: true,
+        # Two simulators at the same time went over the time limit of XCTest in OpenDocument.ios.
+        concurrent_simulators: false,
+        derived_data_path: SCREENSHOT_BUILD_DIR,
+        test_without_building: true,
+        localize_simulator: true,
+        # After the test, xcodebuild collects diagnostics from the simulator. On iOS 27 this waited
+        # 600 s for a timeout after each device.
+        xcargs: "-collect-test-diagnostics never"
+      )
+    end
+
+    # The framing is a separate step, so a change of the design needs no new captures.
+    sh(python, FRAME_SCREENSHOTS, "--platform", "ios")
+
+    # Only a complete set can be checked. The workflow checks the set of all devices together.
+    if NARROWING.any? { |name| !ENV[name].to_s.strip.empty? }
+      UI.important("#{targets.map(&:first).join(', ')} is not a complete set, so the lane does not check it")
+    else
+      sh(python, STORE_SCREENSHOTS, "--platform", "ios", "--screenshots", FRAMED_DIR)
+    end
+  end
+
+  desc "Upload the framed screenshots to App Store Connect (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT)"
+  lane :upload_listing do
+    if Dir.glob(File.join(FRAMED_DIR, "*", "*.png")).empty?
+      UI.user_error!("no screenshots in #{FRAMED_DIR}: run the lane screenshots first")
+    end
+
+    shots_dir = Dir.mktmpdir("sunradar-screenshots")
+    key_path = nil
+    begin
+      sh(python, STORE_SCREENSHOTS, "--platform", "ios", "--screenshots", FRAMED_DIR, "--stage", shots_dir)
+      key_path = api_key_file
+      version = ENV["SUNRADAR_VERSION"].to_s.strip
+
+      options = {
+        api_key: app_store_connect_api_key(
+          key_id: ENV.fetch("ASC_KEY_ID"),
+          issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+          key_filepath: key_path,
+          in_house: false
+        ),
+        screenshots_path: shots_dir,
+        skip_binary_upload: true,
+        skip_metadata: true,
+        skip_app_version_update: version.empty?,
+        # The set replaces the screenshots in the store.
+        overwrite_screenshots: true,
+        # deliver otherwise opens an HTML preview and waits for a confirmation.
+        force: true,
+        run_precheck_before_submit: false,
+        submit_for_review: false,
+      }
+      # The version in App Store Connect that gets the screenshots; without it, the version that
+      # can be edited.
+      options[:app_version] = version unless version.empty?
+      upload_to_app_store(options)
+    ensure
+      FileUtils.remove_entry(File.dirname(key_path), true) if key_path
+      FileUtils.remove_entry(shots_dir, true)
+    end
+  end
+end

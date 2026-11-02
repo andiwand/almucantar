@@ -5,6 +5,8 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The hour marks on the path use 24 hours in every locale, as on Android.
+- The moon shows its phase. The lit part faces the sun.
 - A camera permission reply cannot start capture after the camera view closes.
 - Dragging the sky view follows the drag distance, independent of gesture event frequency.
 - A sky view that follows the orientation of the phone. It shows the horizon, the cardinal

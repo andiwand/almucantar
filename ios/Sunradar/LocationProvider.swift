@@ -12,6 +12,13 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     private let manager = CLLocationManager()
 
+    /// The demo mode of the store screenshots: Vienna, without a request for the location.
+    func startDemo() {
+        observer = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
+        text = "Vienna"
+        accuracyM = 50
+    }
+
     func start() {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyKilometer
