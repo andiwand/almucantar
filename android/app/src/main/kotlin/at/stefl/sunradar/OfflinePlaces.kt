@@ -3,7 +3,6 @@ package at.stefl.sunradar
 import android.content.Context
 import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.elevationTiles
-import at.stefl.sunradar.core.readElevationGeotiff
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -92,9 +91,9 @@ object OfflinePlaces {
                 TerrainLoader(
                     cache,
                     tiles,
-                    read = { bytes, level -> readElevationGeotiff(bytes, level) },
-                    maxAltitudeDeg = { grids, ownTileIsSea ->
-                        maxAltitudeDeg(calculateProfile(observer, grids, ownTileIsSea))
+                    read = cache.source::readGrid,
+                    maxAltitudeDeg = { grids, ownTileIsSea, options ->
+                        maxAltitudeDeg(calculateProfile(observer, grids, ownTileIsSea, options))
                     },
                     readFull = false,
                 )

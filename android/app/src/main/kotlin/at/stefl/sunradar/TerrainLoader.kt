@@ -1,15 +1,10 @@
 package at.stefl.sunradar
 
 import at.stefl.sunradar.core.ElevationTile
+import at.stefl.sunradar.core.HorizonOptions
 import at.stefl.sunradar.core.HorizonProfile
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
-
-/**
- * The overview level of the coarse check: 300 × 300 samples per tile, about 370 m. A Copernicus
- * tile has this level in its first 300 KB, so the app downloads only this part first.
- */
-internal const val COARSE_LEVEL = 2
 
 /**
  * The app downloads the full files only if the coarse profile reaches this altitude somewhere. A
@@ -17,9 +12,6 @@ internal const val COARSE_LEVEL = 2
  * terrain does not matter, and the coarse profile is good enough.
  */
 internal const val FULL_TERRAIN_MIN_ALTITUDE_DEG = 1.0
-
-/** A tile nearer than this gets its full file (level 0) if the terrain matters. */
-internal const val FULL_RESOLUTION_DISTANCE_M = 25_000.0
 
 /** The highest altitude of [profile], NaN if it has no data. */
 internal fun maxAltitudeDeg(profile: HorizonProfile?): Double =
@@ -30,12 +22,16 @@ internal fun maxAltitudeDeg(profile: HorizonProfile?): Double =
  * 1. The coarse check: the coarse level of all [tiles] ([DemCache.loadCoarse]).
  * 2. If the coarse profile ([maxAltitudeDeg] of the coarse grids) reaches
  *    [FULL_TERRAIN_MIN_ALTITUDE_DEG], the full files of the tiles nearer than
- *    [FULL_RESOLUTION_DISTANCE_M]. Below it, the loader downloads nothing more.
+ *    [ElevationSource.fullDistanceM]. Below it, the loader downloads nothing more.
  *
- * With [readFull], the loader reads the full files at level 0 and puts them in [grids] (the terrain
- * horizon). Without it, the loader only puts the full files on the disk ("Keep offline"). The grid
- * type [G] is a parameter, so the JVM tests can use a fake grid. The functions block, so call them
- * off the main thread.
+ * The levels, the distance, and the [options] of the profile come from the source of the cache
+ * ([DemCache.source]). The coarse check and the profile of the terrain use the same [options], so
+ * the clearance of the near path of a surface model applies to both.
+ *
+ * With [readFull], the loader reads the full files at the full level and puts them in [grids] (the
+ * terrain horizon). Without it, the loader only puts the full files on the disk ("Keep offline").
+ * The grid type [G] is a parameter, so the JVM tests can use a fake grid. The functions block, so
+ * call them off the main thread.
  */
 internal class TerrainLoader<G : Any>(
     private val cache: DemCache,
@@ -43,13 +39,22 @@ internal class TerrainLoader<G : Any>(
     val tiles: List<ElevationTile>,
     /** Reads a file (a full file or a coarse part) at a level. Throws if it cannot. */
     private val read: (bytes: ByteArray, level: Int) -> G,
-    /** The highest altitude of the profile of the grids, NaN if there is no profile. */
-    private val maxAltitudeDeg: (grids: List<G>, ownTileIsSea: Boolean) -> Double,
+    /**
+     * The highest altitude of the profile of the grids with [options], NaN if there is no profile.
+     */
+    private val maxAltitudeDeg:
+        (grids: List<G>, ownTileIsSea: Boolean, options: HorizonOptions) -> Double,
     private val readFull: Boolean = true,
     /** The grids in memory, by tile name, with their level. They can stay from the place before. */
     val grids: MutableMap<String, Pair<Int, G>> = ConcurrentHashMap(),
 ) {
     val names = tiles.map { DemCache.tileName(it.latitudeDeg, it.longitudeDeg) }
+
+    /** The options of the profile for the source of the cache ([horizonOptions]). */
+    val options: HorizonOptions = horizonOptions(cache.source)
+
+    private val coarseLevel = cache.source.coarseLevel
+    private val fullLevel = cache.source.fullLevel
     private val sea = ConcurrentHashMap.newKeySet<String>()
     private val unreadable = ConcurrentHashMap.newKeySet<String>()
 
@@ -71,7 +76,7 @@ internal class TerrainLoader<G : Any>(
 
     /** The tiles that need the full file if the terrain matters. */
     val nearTiles: List<ElevationTile>
-        get() = tiles.filter { it.distanceM < FULL_RESOLUTION_DISTANCE_M }
+        get() = tiles.filter { it.distanceM < cache.source.fullDistanceM }
 
     /**
      * Loads the missing data once: the coarse check, and then the full files if they are needed.
@@ -94,10 +99,10 @@ internal class TerrainLoader<G : Any>(
             val tile = tiles[i]
             val result = safely {
                 cache.loadCoarse(tile.latitudeDeg, tile.longitudeDeg, keep) {
-                    read(it, COARSE_LEVEL)
+                    read(it, coarseLevel)
                 }
             }
-            if (accept(names[i], COARSE_LEVEL, result, onChange)) missing++
+            if (accept(names[i], coarseLevel, result, onChange)) missing++
         }
         // The decision needs the coarse level of all tiles.
         if (missing > 0) return missing
@@ -105,7 +110,7 @@ internal class TerrainLoader<G : Any>(
         // 2. The threshold, once for the place.
         val needFull =
             full
-                ?: (maxAltitudeDeg(grids.values.map { it.second }, ownTileIsSea) >=
+                ?: (maxAltitudeDeg(grids.values.map { it.second }, ownTileIsSea, options) >=
                         FULL_TERRAIN_MIN_ALTITUDE_DEG)
                     .also { full = it }
 
@@ -115,12 +120,12 @@ internal class TerrainLoader<G : Any>(
         val steps =
             tiles.indices.filter { i ->
                 val name = names[i]
-                val level = if (needFull && tiles[i] in near) 0 else COARSE_LEVEL
+                val level = if (needFull && tiles[i] in near) fullLevel else coarseLevel
                 name !in sea &&
                     name !in unreadable &&
                     // Without readFull, fetch() checks a full file that is on the disk already
                     // without a download, so the loader asks it for each near tile.
-                    (if (readFull) grids[name]?.first != level else level == 0)
+                    (if (readFull) grids[name]?.first != level else level == fullLevel)
             }
         for ((n, i) in steps.withIndex()) {
             onStep(2, n, steps.size)
@@ -129,9 +134,11 @@ internal class TerrainLoader<G : Any>(
             if (needFull && tile in near) {
                 if (readFull) {
                     val result = safely {
-                        cache.load(tile.latitudeDeg, tile.longitudeDeg, keep) { read(it, 0) }
+                        cache.load(tile.latitudeDeg, tile.longitudeDeg, keep) {
+                            read(it, fullLevel)
+                        }
                     }
-                    if (accept(name, 0, result, onChange)) missing++
+                    if (accept(name, fullLevel, result, onChange)) missing++
                 } else {
                     val result =
                         try {
@@ -144,10 +151,10 @@ internal class TerrainLoader<G : Any>(
             } else {
                 val result = safely {
                     cache.loadCoarse(tile.latitudeDeg, tile.longitudeDeg, keep) {
-                        read(it, COARSE_LEVEL)
+                        read(it, coarseLevel)
                     }
                 }
-                if (accept(name, COARSE_LEVEL, result, onChange)) missing++
+                if (accept(name, coarseLevel, result, onChange)) missing++
             }
         }
         return missing

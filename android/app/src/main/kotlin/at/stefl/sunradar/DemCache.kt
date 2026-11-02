@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.elevationGeotiffPrefixSize
+import at.stefl.sunradar.core.ElevationTile
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -110,17 +110,18 @@ data class DemEntry(
 )
 
 /**
- * A persistent cache of the elevation tiles of Copernicus GLO-90, and an index (`index.json`) with
- * the ETag, the Last-Modified value, the time of the last check, the time of the last use, the
- * size, and a flag for a sea tile. A tile can have two entries, each with its own file:
+ * A persistent cache of the elevation tiles of [source] (Copernicus GLO-90 in the app), and an
+ * index (`index.json`) with the ETag, the Last-Modified value, the time of the last check, the time
+ * of the last use, the size, and a flag for a sea tile. A tile can have two entries, each with its
+ * own file:
  * - The full file (`N47_00_E011_00.tif`, 2–5 MB), from [load] and [fetch].
  * - The coarse part (`N47_00_E011_00.l2.tif`, about 300 KB), from [loadCoarse]: the first bytes of
  *   the file, which have the directories and the overview at [coarseLevel]. The cache downloads 16
- *   KB with a Range request, gets the size of the part from [prefixSize], and downloads the rest of
- *   the part. All parts must have the ETag of the first answer. If the server ignores the Range and
- *   sends the whole file, the cache keeps only the part. A full file in the cache also serves the
- *   coarse level, so [loadCoarse] uses it and downloads no part, and the cache deletes the coarse
- *   part of a tile when it stores the full file.
+ *   KB with a Range request, gets the size of the part from [ElevationSource.prefixSize], and
+ *   downloads the rest of the part. All parts must have the ETag of the first answer. If the server
+ *   ignores the Range and sends the whole file, the cache keeps only the part. A full file in the
+ *   cache also serves the coarse level, so [loadCoarse] uses it and downloads no part, and the
+ *   cache deletes the coarse part of a tile when it stores the full file.
  *
  * The rules are the same for the two kinds of entry:
  * - An entry or a sea flag that is older than [maxAgeMs] gets a conditional request (with Range for
@@ -141,14 +142,15 @@ class DemCache(
     private val clock: () -> Long = System::currentTimeMillis,
     private val maxBytes: Long = 400L * 1024 * 1024,
     private val maxAgeMs: Long = 180L * 24 * 3600 * 1000,
-    /** The overview level of the coarse parts. */
-    private val coarseLevel: Int = COARSE_LEVEL,
     /**
-     * The number of bytes from the start of a file that the coarse level needs, from the first
-     * bytes of the file; 0 if they are too short to tell (see `elevationGeotiffPrefixSize`).
+     * The source of the tiles: the URLs, the overview level of the coarse parts
+     * ([ElevationSource.coarseLevel]), and the size of a coarse part
+     * ([ElevationSource.prefixSize]).
      */
-    private val prefixSize: (header: ByteArray, level: Int) -> Long = ::elevationGeotiffPrefixSize,
+    val source: ElevationSource = TERRAIN_SOURCE,
 ) {
+    private val coarseLevel = source.coarseLevel
+
     private val indexFile = File(dir, "index.json")
     private val entries = mutableMapOf<String, DemEntry>()
     private val kept = mutableListOf<KeptPlace>()
@@ -295,6 +297,10 @@ class DemCache(
         return if (full != null && (full.sea || fileOf(name).isFile)) name else coarseName(name)
     }
 
+    /** The URL of the tile with the south-west corner [latitudeDeg], [longitudeDeg]. */
+    private fun tileUrl(latitudeDeg: Int, longitudeDeg: Int): String =
+        source.tileUrl(ElevationTile(latitudeDeg, longitudeDeg))
+
     /** The name of the entry of the coarse part of the tile [name] (a name of [tileName]). */
     fun coarseName(name: String): String = "$name.l$coarseLevel"
 
@@ -406,12 +412,12 @@ class DemCache(
     }
 
     /**
-     * Downloads the coarse part of a file: first [HEADER_BYTES] bytes, then more if [prefixSize]
-     * cannot tell the size from them, then the rest of the part. Returns a response with the code
-     * 200 and the part (or the whole file, if the server ignores the Range), or the answer of the
-     * server to the first request if it is not 206 (for example 304 or 404). Returns null if a
-     * later request fails, or if the file changes between two requests. Throws [IOException] if the
-     * network fails.
+     * Downloads the coarse part of a file: first [HEADER_BYTES] bytes, then more if
+     * [ElevationSource.prefixSize] cannot tell the size from them, then the rest of the part.
+     * Returns a response with the code 200 and the part (or the whole file, if the server ignores
+     * the Range), or the answer of the server to the first request if it is not 206 (for example
+     * 304 or 404). Returns null if a later request fails, or if the file changes between two
+     * requests. Throws [IOException] if the network fails.
      */
     private fun downloadPrefix(url: String, etag: String?, lastModified: String?): HttpResponse? {
         val first = http.get(url, etag, lastModified, 0L until HEADER_BYTES)
@@ -440,7 +446,7 @@ class DemCache(
         while (true) {
             val needed =
                 try {
-                    prefixSize(data, coarseLevel)
+                    source.prefixSize(data, coarseLevel)
                 } catch (_: IllegalArgumentException) {
                     // Not a file that the core can read: keep it, so the read fails and the cache
                     // tries one new download.
@@ -605,7 +611,10 @@ class DemCache(
         /** The name of the tile of an entry: `N47_00_E011_00` for `N47_00_E011_00.l2`. */
         fun tileOfEntry(name: String): String = name.substringBefore('.')
 
-        /** The name of a tile in Copernicus, for example `N47_00_E011_00`. */
+        /**
+         * The name of a tile in the cache, for example `N47_00_E011_00` (the names of Copernicus).
+         * The cache uses it for all sources.
+         */
         fun tileName(latitudeDeg: Int, longitudeDeg: Int): String =
             String.format(
                 Locale.ROOT,
@@ -615,12 +624,6 @@ class DemCache(
                 if (longitudeDeg < 0) "W" else "E",
                 abs(longitudeDeg),
             )
-
-        /** The URL of a tile of Copernicus GLO-90 on AWS Open Data. */
-        fun tileUrl(latitudeDeg: Int, longitudeDeg: Int): String {
-            val id = "Copernicus_DSM_COG_30_${tileName(latitudeDeg, longitudeDeg)}_DEM"
-            return "https://copernicus-dem-90m.s3.amazonaws.com/$id/$id.tif"
-        }
     }
 }
 

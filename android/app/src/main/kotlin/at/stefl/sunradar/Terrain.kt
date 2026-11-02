@@ -19,7 +19,6 @@ import at.stefl.sunradar.core.Horizontal
 import at.stefl.sunradar.core.Observer
 import at.stefl.sunradar.core.elevationTiles
 import at.stefl.sunradar.core.horizonProfile
-import at.stefl.sunradar.core.readElevationGeotiff
 import at.stefl.sunradar.core.sunPosition
 import at.stefl.sunradar.core.terrainAltitudeDeg
 import at.stefl.sunradar.core.terrainEvents
@@ -53,17 +52,20 @@ data class TerrainState(
     val status: String? = null,
 )
 
-/** The cache of the elevation tiles, one for the process. */
+/** The cache of the elevation tiles of [TERRAIN_SOURCE], one for the process. */
 internal object TerrainStore {
     private var cache: DemCache? = null
 
     @Synchronized
     fun cache(context: Context): DemCache =
-        cache ?: DemCache(File(context.noBackupFilesDir, "dem")).also { cache = it }
+        cache
+            ?: DemCache(File(context.noBackupFilesDir, "dem"), source = TERRAIN_SOURCE).also {
+                cache = it
+            }
 }
 
 /**
- * The terrain horizon of [observer], from the tiles of Copernicus GLO-90. The download, the read of
+ * The terrain horizon of [observer], from the tiles of [TERRAIN_SOURCE]. The download, the read of
  * the tiles, and the calculation run in the background. A coarse check comes first, and the full
  * files only where the terrain matters (see [TerrainLoader]). The profile is calculated again when
  * the place moves more than 500 m, and when a new tile arrives. A null [observer] or a false
@@ -115,9 +117,9 @@ private suspend fun loadTerrain(
         TerrainLoader(
             cache,
             tiles,
-            read = { bytes, level -> readElevationGeotiff(bytes, level) },
-            maxAltitudeDeg = { g, ownTileIsSea ->
-                maxAltitudeDeg(calculateProfile(place, g, ownTileIsSea))
+            read = cache.source::readGrid,
+            maxAltitudeDeg = { g, ownTileIsSea, options ->
+                maxAltitudeDeg(calculateProfile(place, g, ownTileIsSea, options))
             },
             grids = grids,
         )
@@ -131,7 +133,12 @@ private suspend fun loadTerrain(
             if (!loader.hasOwnTile) return@collect
             val profile =
                 withContext(Dispatchers.Default) {
-                    calculateProfile(place, grids.values.map { it.second }, loader.ownTileIsSea)
+                    calculateProfile(
+                        place,
+                        grids.values.map { it.second },
+                        loader.ownTileIsSea,
+                        loader.options,
+                    )
                 }
             state.value = state.value.copy(observer = place, profile = profile)
         }
@@ -165,17 +172,18 @@ private suspend fun loadTerrain(
 }
 
 /**
- * The profile with the default options. If the tiles have no data at the observer (the sea, or a
- * coast), the observer is at 0 m.
+ * The profile with [options] (from [horizonOptions] of the source). If the tiles have no data at
+ * the observer (the sea, or a coast), the observer is at 0 m.
  */
 internal fun calculateProfile(
     place: Observer,
     grids: List<ElevationGrid>,
     ownTileIsSea: Boolean,
+    options: HorizonOptions,
 ): HorizonProfile? {
-    val atSeaLevel = HorizonOptions(useGridElevation = false, observerElevationM = 0.0)
+    val atSeaLevel = options.copy(useGridElevation = false, observerElevationM = 0.0)
     return try {
-        horizonProfile(place, grids, if (ownTileIsSea) atSeaLevel else HorizonOptions())
+        horizonProfile(place, grids, if (ownTileIsSea) atSeaLevel else options)
     } catch (_: IllegalArgumentException) {
         try {
             horizonProfile(place, grids, atSeaLevel)

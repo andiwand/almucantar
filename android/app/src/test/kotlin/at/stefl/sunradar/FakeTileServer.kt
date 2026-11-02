@@ -1,9 +1,37 @@
 package at.stefl.sunradar
 
+import at.stefl.sunradar.core.ElevationGrid
+import at.stefl.sunradar.core.ElevationTile
 import java.io.IOException
 
 /** One request to [FakeTileServer]. */
-data class TileRequest(val tile: String, val etag: String?, val range: LongRange?)
+data class TileRequest(
+    val tile: String,
+    val etag: String?,
+    val range: LongRange?,
+    val url: String = "",
+)
+
+/**
+ * A source for the tests: a bare-earth model with other URLs than Copernicus, and the files of
+ * [fakeTile]. It has no reader, because the tests read the files with [readFakeTile].
+ */
+object FakeSource : ElevationSource {
+    override val name = "Fake bare earth"
+    override val attribution = "Fake data"
+    override val isSurfaceModel = false
+    override val coarseLevel = 2
+    override val fullLevel = 0
+    override val fullDistanceM = 25_000.0
+
+    override fun tileUrl(tile: ElevationTile) =
+        "https://dem.example.org/bare/${DemCache.tileName(tile.latitudeDeg, tile.longitudeDeg)}.tif"
+
+    override fun prefixSize(header: ByteArray, level: Int) = fakePrefixSize(header, level)
+
+    override fun readGrid(bytes: ByteArray, level: Int): ElevationGrid =
+        throw UnsupportedOperationException("the tests use readFakeTile")
+}
 
 /**
  * A tile server for the tests: a file for each tile in [files], and 404 for the others (the sea).
@@ -27,9 +55,13 @@ class FakeTileServer : TileHttp {
         lastModified: String?,
         range: LongRange?,
     ): HttpResponse {
-        val name = url.substringAfterLast("/").removePrefix("Copernicus_DSM_COG_30_")
-        val tile = name.removeSuffix("_DEM.tif")
-        requests += TileRequest(tile, etag, range)
+        // The URLs of Copernicus and of FakeSource.
+        val tile =
+            url.substringAfterLast("/")
+                .removePrefix("Copernicus_DSM_COG_30_")
+                .removeSuffix(".tif")
+                .removeSuffix("_DEM")
+        requests += TileRequest(tile, etag, range, url)
         if (!online) throw IOException("offline")
         val body = files[tile] ?: return HttpResponse(404)
         val tag = nextEtags.removeFirstOrNull() ?: etags[tile] ?: "\"${body.contentHashCode()}\""

@@ -26,11 +26,6 @@ import androidx.core.content.edit
 private const val PREFERENCES = "settings"
 private const val KEY_TERRAIN = "terrain_horizon"
 
-/** The attribution that the license of Copernicus DEM asks for. */
-const val COPERNICUS_ATTRIBUTION =
-    "Terrain: Copernicus DEM GLO-90, © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH " +
-        "2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved."
-
 /** A switch of the settings. A change is stored at once. */
 class BooleanSetting(
     private val state: MutableState<Boolean>,
@@ -81,7 +76,7 @@ fun SettingsDialog(terrain: BooleanSetting, onDismiss: () -> Unit) {
                 Text("About", fontWeight = FontWeight.SemiBold)
                 Text("Landmark map: © OpenStreetMap contributors", fontSize = 12.sp)
                 Text("Place map: Natural Earth (public domain)", fontSize = 12.sp)
-                Text(COPERNICUS_ATTRIBUTION, fontSize = 12.sp)
+                Text(TERRAIN_SOURCE.attribution, fontSize = 12.sp)
             }
         },
     )

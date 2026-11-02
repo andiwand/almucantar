@@ -5,6 +5,10 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The terrain horizon ignores the terrain nearer than 2 km. The elevation data of Copernicus
+  includes buildings and forests, so a city gave a false wall of several degrees around you (5.6°
+  in the centre of Vienna). Now the centre of Vienna shows the Wienerwald in the northwest at 2.3°.
+  The check that decides about the full data and "Keep offline" use the same rule.
 - The terrain horizon downloads much less data where the terrain does not matter. First the app
   downloads only the first part of each tile (about 300 KB, with samples about 370 m apart) and
   shows this coarse terrain at once. Only if the terrain reaches 1° above the horizon somewhere, it

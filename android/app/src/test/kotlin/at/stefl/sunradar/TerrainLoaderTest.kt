@@ -1,6 +1,7 @@
 package at.stefl.sunradar
 
 import at.stefl.sunradar.core.ElevationTile
+import at.stefl.sunradar.core.HorizonOptions
 import at.stefl.sunradar.core.Observer
 import java.io.File
 import java.nio.file.Files
@@ -13,7 +14,7 @@ import org.junit.Test
 class TerrainLoaderTest {
     private val dir: File = Files.createTempDirectory("dem").toFile()
     private val server = FakeTileServer()
-    private val cache = DemCache(dir, server, maxBytes = 100_000_000, prefixSize = ::fakePrefixSize)
+    private val cache = DemCache(dir, server, maxBytes = 100_000_000, source = FakeSource)
 
     // The own tile, a near tile, a far tile, and a tile in the sea (no file on the server).
     private val own = ElevationTile(47, 11, 0.0)
@@ -34,12 +35,16 @@ class TerrainLoaderTest {
         server.files[name(near)] = fakeTile(altitudeDeg, 30_000, 100_000)
     }
 
-    private fun loader(readFull: Boolean = true) =
+    /** The options of each call of the threshold check. */
+    private val checkOptions = mutableListOf<HorizonOptions>()
+
+    private fun loader(readFull: Boolean = true, cache: DemCache = this.cache) =
         TerrainLoader(
             cache,
             tiles,
             read = ::readFakeTile,
-            maxAltitudeDeg = { grids, _ ->
+            maxAltitudeDeg = { grids, _, options ->
+                checkOptions += options
                 grids.maxOfOrNull { it.substringBefore('/').toDouble() } ?: Double.NaN
             },
             readFull = readFull,
@@ -51,6 +56,44 @@ class TerrainLoaderTest {
     @After
     fun deleteDir() {
         dir.deleteRecursively()
+    }
+
+    @Test
+    fun aSurfaceModelClearsTheNearPath() {
+        assertEquals(HorizonOptions(minDistanceM = 2_000.0), horizonOptions(Copernicus))
+        assertEquals(NEAR_CLEARANCE_M, horizonOptions(Copernicus).minDistanceM, 0.0)
+    }
+
+    @Test
+    fun aBareEarthModelUsesAllTerrain() {
+        assertEquals(HorizonOptions(minDistanceM = 0.0), horizonOptions(FakeSource))
+    }
+
+    @Test
+    fun theThresholdCheckUsesTheOptionsOfTheSource() {
+        serve("19")
+        val bare = loader()
+        assertEquals(0.0, bare.options.minDistanceM, 0.0)
+        bare.loadOnce({ _, _, _ -> }, {})
+        assertEquals(listOf(bare.options), checkOptions)
+
+        // The same files and URLs, but the source is a surface model.
+        checkOptions.clear()
+        val surface =
+            object : ElevationSource by FakeSource {
+                override val isSurfaceModel = true
+            }
+        val dir2 = Files.createTempDirectory("dem").toFile()
+        try {
+            val c = DemCache(dir2, server, maxBytes = 100_000_000, source = surface)
+            val l = loader(cache = c)
+            assertEquals(NEAR_CLEARANCE_M, l.options.minDistanceM, 0.0)
+            l.loadOnce({ _, _, _ -> }, {})
+            assertEquals(listOf(l.options), checkOptions)
+            assertEquals(true, l.full)
+        } finally {
+            dir2.deleteRecursively()
+        }
     }
 
     @Test
@@ -112,13 +155,13 @@ class TerrainLoaderTest {
                 cache,
                 tiles,
                 ::readFakeTile,
-                { _, _ -> 0.5 },
+                { _, _, _ -> 0.5 },
                 grids = first.grids,
             )
         assertEquals(0, second.loadOnce({ _, _, _ -> }, {}))
         assertEquals(false, second.full)
         assertEquals(requests, server.requests.size)
-        assertEquals(setOf(COARSE_LEVEL), second.grids.values.map { it.first }.toSet())
+        assertEquals(setOf(FakeSource.coarseLevel), second.grids.values.map { it.first }.toSet())
     }
 
     @Test

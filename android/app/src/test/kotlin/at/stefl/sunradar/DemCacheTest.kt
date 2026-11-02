@@ -1,5 +1,6 @@
 package at.stefl.sunradar
 
+import at.stefl.sunradar.core.ElevationTile
 import java.io.File
 import java.nio.file.Files
 import org.junit.After
@@ -23,7 +24,7 @@ class DemCacheTest {
             clock = { now },
             maxBytes = maxBytes,
             maxAgeMs = 180 * day,
-            prefixSize = ::fakePrefixSize,
+            source = FakeSource,
         )
 
     /** The decoder of the tests: the text of the file. "bad" is a file that cannot be read. */
@@ -43,8 +44,29 @@ class DemCacheTest {
         assertEquals(
             "https://copernicus-dem-90m.s3.amazonaws.com/Copernicus_DSM_COG_30_N47_00_E011_00_DEM/" +
                 "Copernicus_DSM_COG_30_N47_00_E011_00_DEM.tif",
-            DemCache.tileUrl(47, 11),
+            Copernicus.tileUrl(ElevationTile(47, 11)),
         )
+        assertEquals(
+            "https://dem.example.org/bare/N47_00_E011_00.tif",
+            FakeSource.tileUrl(ElevationTile(47, 11)),
+        )
+    }
+
+    @Test
+    fun theCacheUsesTheUrlsOfItsSource() {
+        server.files["N47_00_E011_00"] = fakeTile("alps", 30_000, 100_000)
+        val c = cache(maxBytes = 1_000_000)
+        assertEquals(TileLoad.Data("alps/L0"), c.load(47, 11) { readFakeTile(it, 0) })
+        server.files["N47_00_E012_00"] = fakeTile("hills", 30_000, 100_000)
+        assertEquals(TileLoad.Data("hills/L2"), c.loadCoarse(47, 12) { readFakeTile(it, 2) })
+        assertEquals(
+            setOf(
+                "https://dem.example.org/bare/N47_00_E011_00.tif",
+                "https://dem.example.org/bare/N47_00_E012_00.tif",
+            ),
+            server.requests.map { it.url }.toSet(),
+        )
+        assertEquals("N47_00_E012_00.l${FakeSource.coarseLevel}", c.coarseEntryName(47, 12))
     }
 
     @Test
@@ -310,7 +332,7 @@ class DemCacheTest {
     private val alps = "N47_00_E011_00"
 
     private fun coarse(c: DemCache, lat: Int = 47, lon: Int = 11) =
-        c.loadCoarse(lat, lon) { readFakeTile(it, COARSE_LEVEL) }
+        c.loadCoarse(lat, lon) { readFakeTile(it, FakeSource.coarseLevel) }
 
     @Test
     fun theCoarsePartComesInTwoSteps() {
