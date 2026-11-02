@@ -98,8 +98,10 @@ struct DetectedSun {
 struct SkyScreen: SwiftUI.View {
     @StateObject private var motion = MotionTracker()
     @StateObject private var location = LocationProvider()
-    // The demo mode has no terrain cache, so it never downloads a tile.
-    @StateObject private var terrain = TerrainHorizon(cache: ScreenshotMode.scene == nil ? try? DemCache.standard() : nil)
+    // The demo mode has no terrain cache, so it never downloads a tile. The terrain and the kept
+    // places use the same cache, because both write its index.
+    @StateObject private var terrain = TerrainHorizon(cache: ScreenshotMode.scene == nil ? DemCache.shared : nil)
+    @StateObject private var kept = KeptPlaces(cache: ScreenshotMode.scene == nil ? DemCache.shared : nil)
     @AppStorage(Settings.terrainHorizon) private var terrainOn = true
     @State private var terrainDayCache = TerrainDayCache()
     @State private var showSettings = false
@@ -235,7 +237,7 @@ struct SkyScreen: SwiftUI.View {
                 if let notice = location.notice { message = notice }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showPlace) { PlacePanel(location: location) }
+            .sheet(isPresented: $showPlace) { PlacePanel(location: location, kept: kept) }
             .onChange(of: detecting) { if !detecting { blobs = [] } }
             .fullScreenCover(isPresented: $pickingLandmark) {
                 MapPicker(observer: location.observer) { picked in

@@ -50,6 +50,9 @@ enum DemTile {
 /// index. A tile that is older than `maxAge` gets a conditional request. If the network fails,
 /// the old tile stays, so the app works offline. If the files are larger than `maxBytes`, the
 /// tiles that were used least recently are deleted, but not the tiles in `keep`.
+///
+/// The user can keep the tiles of a place offline (`KeptPlace`, PLAN.md 13.3). The eviction never
+/// deletes a tile of a kept place, and these tiles do not count toward `maxBytes`.
 actor DemCache {
     /// The data of one tile in the index.
     struct Entry: Codable, Equatable {
@@ -65,6 +68,33 @@ actor DemCache {
         var sea: Bool
     }
 
+    /// A place that the user keeps offline: the eviction does not delete its tiles.
+    struct KeptPlace: Codable, Equatable, Identifiable, Sendable {
+        var id: String
+        /// The name of the place, as the place panel shows it.
+        var name: String
+        var latitudeDeg: Double
+        var longitudeDeg: Double
+        /// The names of the tiles (`DemCache.name`), also of the sea tiles.
+        var tiles: [String]
+    }
+
+    /// A kept place with the tiles that the cache has now.
+    struct KeptSummary: Equatable, Identifiable, Sendable {
+        var place: KeptPlace
+        /// The tiles that the cache has: files on the disk and the sea.
+        var tiles: Int
+        /// The size of the files on the disk.
+        var bytes: Int64
+        var id: String { place.id }
+    }
+
+    /// The index file. An old index is only the dictionary of the tiles, without kept places.
+    private struct IndexFile: Codable {
+        var tiles: [String: Entry]
+        var kept: [KeptPlace]
+    }
+
     static let defaultMaxBytes: Int64 = 400 * 1024 * 1024
     static let defaultMaxAge: TimeInterval = 180 * 86400
 
@@ -74,6 +104,8 @@ actor DemCache {
     private let maxBytes: Int64
     private let maxAge: TimeInterval
     private(set) var index: [String: Entry]
+    /// The places that the user keeps offline, in the order of the "Keep offline" action.
+    private(set) var kept: [KeptPlace]
 
     init(
         directory: URL, http: HTTPClient, now: @escaping @Sendable () -> Date = { Date() },
@@ -93,8 +125,20 @@ actor DemCache {
         var url = directory
         try url.setResourceValues(values)
         let indexURL = directory.appendingPathComponent("index.json")
-        index = (try? JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: indexURL))) ?? [:]
+        let data = try? Data(contentsOf: indexURL)
+        if let data, let file = try? JSONDecoder().decode(IndexFile.self, from: data) {
+            index = file.tiles
+            kept = file.kept
+        } else {
+            // The index of an older version has no kept places.
+            index = data.flatMap { try? JSONDecoder().decode([String: Entry].self, from: $0) } ?? [:]
+            kept = []
+        }
     }
+
+    /// The cache of the app. `TerrainHorizon` and `KeptPlaces` must use the same actor, because
+    /// both write the index.
+    static let shared: DemCache? = try? standard()
 
     /// The cache in Application Support/dem.
     static func standard() throws -> DemCache {
@@ -124,6 +168,63 @@ actor DemCache {
 
     /// The total size of the files in the index.
     var totalBytes: Int64 { index.values.reduce(0) { $0 + $1.size } }
+
+    /// The names of the tiles of all kept places.
+    var keptNames: Set<String> { Set(kept.flatMap(\.tiles)) }
+
+    /// The size of the files that are not kept. The limit `maxBytes` applies to this size.
+    var cacheBytes: Int64 {
+        let keptNames = keptNames
+        return index.filter { !keptNames.contains($0.key) }.values.reduce(0) { $0 + $1.size }
+    }
+
+    // MARK: - The kept places
+
+    /// A kept place nearer than this to a new kept place is the same place: the new one replaces it.
+    static let samePlaceM = 500.0
+
+    /// Adds a kept place, or replaces the kept place at the same place. Call it before the
+    /// download of the tiles, so the eviction does not delete the first tiles during the download.
+    func keep(name: String, observer: Observer, tiles: [ElevationTile]) -> KeptPlace {
+        let names = tiles.map(Self.name)
+        let same = kept.first {
+            let other = Observer(latitudeDeg: $0.latitudeDeg, longitudeDeg: $0.longitudeDeg)
+            return Geo.distanceM(from: other, to: observer) < Self.samePlaceM
+        }
+        let id = same?.id ?? UUID().uuidString
+        let place = KeptPlace(
+            id: id, name: name, latitudeDeg: observer.latitudeDeg, longitudeDeg: observer.longitudeDeg, tiles: names)
+        if let i = kept.firstIndex(where: { $0.id == id }) {
+            kept[i] = place
+        } else {
+            kept.append(place)
+        }
+        saveIndex()
+        return place
+    }
+
+    /// Removes a kept place. Its tiles stay on the disk as normal cache tiles, so the eviction can
+    /// delete them later.
+    func release(_ id: String) {
+        kept.removeAll { $0.id == id }
+        saveIndex()
+    }
+
+    /// The kept places with the number and the size of the tiles that the cache has now.
+    func keptSummaries() -> [KeptSummary] {
+        kept.map { place in
+            var tiles = 0
+            var bytes: Int64 = 0
+            for name in place.tiles {
+                guard let entry = index[name] else { continue }
+                if entry.sea || FileManager.default.fileExists(atPath: file(name).path) {
+                    tiles += 1
+                    bytes += entry.size
+                }
+            }
+            return KeptSummary(place: place, tiles: tiles, bytes: bytes)
+        }
+    }
 
     /// Returns a tile, read at `level`. The tile comes from the cache, or from the network if the
     /// cache does not have it or if it is older than `maxAge`. The names in `keep` are the tiles
@@ -222,10 +323,12 @@ actor DemCache {
         saveIndex()
     }
 
-    /// Deletes the tiles that were used least recently until the files fit into `maxBytes`.
+    /// Deletes the tiles that were used least recently until the files that are not kept fit into
+    /// `maxBytes`. The tiles of the kept places stay and do not count.
     private func evict(keep: Set<String>) {
-        var total = totalBytes
-        let candidates = index.filter { !$0.value.sea && !keep.contains($0.key) }.sorted { $0.value.used < $1.value.used }
+        var total = cacheBytes
+        let protected = keep.union(keptNames)
+        let candidates = index.filter { !$0.value.sea && !protected.contains($0.key) }.sorted { $0.value.used < $1.value.used }
         for (name, entry) in candidates where total > maxBytes {
             try? FileManager.default.removeItem(at: file(name))
             index[name] = nil
@@ -234,7 +337,7 @@ actor DemCache {
     }
 
     private func saveIndex() {
-        guard let data = try? JSONEncoder().encode(index) else { return }
+        guard let data = try? JSONEncoder().encode(IndexFile(tiles: index, kept: kept)) else { return }
         try? data.write(to: directory.appendingPathComponent("index.json"), options: .atomic)
     }
 }

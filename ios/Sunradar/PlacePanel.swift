@@ -3,8 +3,11 @@ import SwiftUI
 
 /// The place panel: a search of the places of the base map, and the offline map (Natural Earth),
 /// where a tap drops the place. "Use my location" ends a manual place. The map needs no network.
+/// "Keep offline" downloads the terrain tiles of the place, and the list below shows the kept places.
 struct PlacePanel: SwiftUI.View {
     @ObservedObject var location: LocationProvider
+    @ObservedObject var kept: KeptPlaces
+    @AppStorage(Settings.terrainHorizon) private var terrainOn = true
     @Environment(\.dismiss) private var dismiss
     @State private var map: BaseMap?
     @State private var failed = false
@@ -14,8 +17,9 @@ struct PlacePanel: SwiftUI.View {
     @State private var zoomStart: Double?
     @FocusState private var searching: Bool
 
-    init(location: LocationProvider) {
+    init(location: LocationProvider, kept: KeptPlaces) {
         self.location = location
+        self.kept = kept
         _viewport = State(initialValue: MapViewport(center: location.observer, zoom: 5))
     }
 
@@ -58,14 +62,27 @@ struct PlacePanel: SwiftUI.View {
                             : "Tap the map to drop the place, or search a place."
                     )
                     .font(.footnote).foregroundStyle(.secondary)
-                    Button("Use my location") {
-                        location.useDeviceLocation()
-                        dismiss()
+                    HStack {
+                        Button("Use my location") {
+                            location.useDeviceLocation()
+                            dismiss()
+                        }
+                        if kept.cache != nil && location.hasPlace {
+                            Button("Keep offline") { kept.keep(name: location.text, observer: location.observer) }
+                                .disabled(kept.downloading || !terrainOn)
+                        }
                     }
                     .buttonStyle(.bordered)
+                    if kept.cache != nil && location.hasPlace && !terrainOn {
+                        Text("The terrain horizon is off in the settings.").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let text = kept.stateText {
+                        Text(text).font(.footnote)
+                    }
                 }
                 .multilineTextAlignment(.center)
                 .padding()
+                if !kept.places.isEmpty { keptList }
             }
             .navigationTitle("Place")
             .navigationBarTitleDisplayMode(.inline)
@@ -73,6 +90,7 @@ struct PlacePanel: SwiftUI.View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
+        .task { await kept.refresh() }
         .task {
             do {
                 map = try await BaseMapStore.shared.load()
@@ -80,6 +98,41 @@ struct PlacePanel: SwiftUI.View {
                 failed = true
             }
         }
+    }
+
+    /// The kept places: the name, the tiles that the cache has, the size, and "Remove".
+    private var keptList: some SwiftUI.View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Kept offline").font(.footnote.bold()).padding(.horizontal).padding(.bottom, 4)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(kept.places) { summary in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(summary.place.name).font(.footnote).lineLimit(1)
+                                Text(keptText(summary)).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Remove", role: .destructive) { Task { await kept.remove(summary.id) } }
+                                .buttonStyle(.borderless)
+                                .font(.footnote)
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                        Divider()
+                    }
+                }
+            }
+            .frame(maxHeight: 150)
+        }
+        .padding(.bottom, 8)
+    }
+
+    /// "9 tiles, 44 MB", or "7/9 tiles, 30 MB" if tiles are missing.
+    private func keptText(_ summary: DemCache.KeptSummary) -> String {
+        let total = summary.place.tiles.count
+        let tiles = summary.tiles == total ? KeptPlaces.tilesText(total) : "\(summary.tiles)/\(total) tiles"
+        return "\(tiles), \(KeptPlaces.sizeText(summary.bytes))"
     }
 
     private var mapView: some SwiftUI.View {

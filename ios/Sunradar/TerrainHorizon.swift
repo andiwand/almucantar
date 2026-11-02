@@ -41,7 +41,7 @@ final class TerrainHorizon: ObservableObject {
     private var calculating = false
     private var calculateAgain = false
 
-    init(cache: DemCache? = try? DemCache.standard()) {
+    init(cache: DemCache? = DemCache.shared) {
         self.cache = cache
     }
 

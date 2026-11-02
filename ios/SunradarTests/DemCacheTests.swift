@@ -223,6 +223,134 @@ final class DemCacheTests: XCTestCase {
         let total = await cache.totalBytes
         XCTAssertEqual(total, Int64(body.count * 2))
     }
+
+    // MARK: - The kept places
+
+    private let here = Observer(latitudeDeg: 47.26, longitudeDeg: 11.39)
+
+    func testAKeptTileSurvivesTheEviction() async throws {
+        let body = try geotiff("float_tiles_deflate_p3.tif")
+        // Space for one tile that is not kept.
+        let cache = try makeCache(maxBytes: Int64(body.count))
+        _ = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck])
+        http.enqueue(ok(body))
+        _ = await cache.tile(innsbruck, level: 0, keep: [])
+        // Innsbruck is the least recently used tile, but it is kept.
+        for tile in [munich, verona] {
+            clock.advance(days: 1)
+            http.enqueue(ok(body))
+            _ = await cache.tile(tile, level: 0, keep: [])
+        }
+        let contains = await (cache.contains(innsbruck), cache.contains(munich), cache.contains(verona))
+        XCTAssertTrue(contains.0)
+        XCTAssertFalse(contains.1)
+        XCTAssertTrue(contains.2)
+    }
+
+    func testKeptTilesDoNotCountTowardTheLimit() async throws {
+        let body = try geotiff("float_tiles_deflate_p3.tif")
+        let cache = try makeCache(maxBytes: Int64(body.count))
+        _ = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck])
+        http.enqueue(ok(body))
+        _ = await cache.tile(innsbruck, level: 0, keep: [])
+        clock.advance(days: 1)
+        http.enqueue(ok(body))
+        _ = await cache.tile(munich, level: 0, keep: [])
+        // Two files, but only Munich counts toward the limit, so both stay.
+        let contains = await (cache.contains(innsbruck), cache.contains(munich))
+        XCTAssertTrue(contains.0)
+        XCTAssertTrue(contains.1)
+        let sizes = await (cache.totalBytes, cache.cacheBytes)
+        XCTAssertEqual(sizes.0, Int64(body.count * 2))
+        XCTAssertEqual(sizes.1, Int64(body.count))
+    }
+
+    func testRemoveReleasesTheTiles() async throws {
+        let body = try geotiff("float_tiles_deflate_p3.tif")
+        let cache = try makeCache(maxBytes: Int64(body.count))
+        let place = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck])
+        http.enqueue(ok(body))
+        _ = await cache.tile(innsbruck, level: 0, keep: [])
+        await cache.release(place.id)
+        // The tile stays on the disk as a normal cache tile.
+        var contains = await cache.contains(innsbruck)
+        XCTAssertTrue(contains)
+        let kept = await cache.kept
+        XCTAssertTrue(kept.isEmpty)
+        // The next download evicts it, because it is the least recently used tile.
+        clock.advance(days: 1)
+        http.enqueue(ok(body))
+        _ = await cache.tile(munich, level: 0, keep: [])
+        contains = await cache.contains(innsbruck)
+        XCTAssertFalse(contains)
+    }
+
+    func testTheKeptPlacesSurviveARestart() async throws {
+        let body = try geotiff("float_tiles_deflate_p3.tif")
+        let cache = try makeCache()
+        let place = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck, munich])
+        http.enqueue(ok(body))
+        _ = await cache.tile(innsbruck, level: 0, keep: [])
+        http.enqueue(HTTPResponse(status: 404, body: Data()))
+        _ = await cache.tile(munich, level: 0, keep: [])
+        // The same place again replaces the record.
+        let again = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck, munich])
+        XCTAssertEqual(again.id, place.id)
+        let reopened = try makeCache()
+        let kept = await reopened.kept
+        XCTAssertEqual(kept, [place])
+        XCTAssertEqual(kept.first?.tiles, ["N47_00_E011_00", "N48_00_E011_00"])
+        // The sea counts as a tile without a size.
+        let summaries = await reopened.keptSummaries()
+        XCTAssertEqual(summaries.first?.tiles, 2)
+        XCTAssertEqual(summaries.first?.bytes, Int64(body.count))
+        let contains = await reopened.contains(innsbruck)
+        XCTAssertTrue(contains)
+    }
+
+    func testAnOldIndexWithoutKeptPlacesLoads() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let body = try geotiff("float_tiles_deflate_p3.tif")
+        try body.write(to: directory.appendingPathComponent("N47_00_E011_00.tif"))
+        // The index of the earlier version: only the dictionary of the tiles.
+        let entry = DemCache.Entry(
+            etag: "\"a\"", lastModified: nil, checked: clock.now, used: clock.now, size: Int64(body.count), sea: false)
+        try JSONEncoder().encode(["N47_00_E011_00": entry]).write(to: directory.appendingPathComponent("index.json"))
+        let cache = try makeCache()
+        let state = await (cache.index["N47_00_E011_00"], cache.kept, cache.contains(innsbruck))
+        XCTAssertEqual(state.0, entry)
+        XCTAssertTrue(state.1.isEmpty)
+        XCTAssertTrue(state.2)
+        // The next save writes the new index, and it loads again.
+        _ = await cache.keep(name: "Innsbruck", observer: here, tiles: [innsbruck])
+        let reopened = try makeCache()
+        let reloaded = await (reopened.index["N47_00_E011_00"], reopened.kept.count)
+        XCTAssertEqual(reloaded.0, entry)
+        XCTAssertEqual(reloaded.1, 1)
+    }
+
+    @MainActor
+    func testKeepOfflineCountsTheSeaAsReadyAndReportsMissingTiles() async throws {
+        let cache = try makeCache()
+        let tiles = try elevationTiles(observer: here, maxDistanceM: TerrainHorizon.maxDistanceM)
+        for _ in tiles { http.enqueue(HTTPResponse(status: 404, body: Data())) }
+        let kept = KeptPlaces(cache: cache)
+        kept.keep(name: "Innsbruck", observer: here)
+        await kept.waitForDownload()
+        XCTAssertEqual(kept.state, .ready(tiles: tiles.count, bytes: 0))
+        XCTAssertEqual(kept.stateText, "Ready offline: \(tiles.count) tiles, 0 MB")
+        XCTAssertEqual(kept.places.count, 1)
+        // A second place far away, without a network: all its tiles are missing.
+        kept.keep(name: "Verona", observer: Observer(latitudeDeg: 45.44, longitudeDeg: 10.99))
+        await kept.waitForDownload()
+        guard case .missing(let count) = kept.state else { return XCTFail("not missing") }
+        XCTAssertGreaterThan(count, 0)
+        XCTAssertEqual(kept.stateText, "\(count) tiles missing, try again online")
+        XCTAssertEqual(kept.places.count, 2)
+        await kept.remove(kept.places[0].id)
+        let remaining = await cache.kept.map(\.name)
+        XCTAssertEqual(remaining, ["Verona"])
+    }
 }
 
 final class TerrainHorizonTests: XCTestCase {

@@ -5,6 +5,12 @@ rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- Keep the terrain of a place offline, to prepare a trip. "Keep offline" in the place panel
+  downloads all elevation tiles of the place ("Downloading 3/9", then "Ready offline: 9 tiles,
+  44 MB"). The download continues when the panel closes. If tiles fail, the panel shows "2 tiles
+  missing, try again online". The list "Kept offline" shows each kept place with its tiles and
+  their size. The cache never removes the tiles of a kept place, and they do not count toward the
+  limit of 400 MB. "Remove" makes them normal cache tiles again.
 - The place works fully offline. The new button "Place" opens a search of 7342 places and a map
   (Natural Earth, in the app, no network needed). A tap on the map drops the place. The app keeps
   the last place and starts with it, also offline and without a location permission. A dropped
