@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The permissions of the shared code. The manifest merger gives them to each app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The core needs the place only to about 1 km (see PLAN.md, section 2). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- For the map tiles of the landmark alignment and for the elevation tiles of the terrain. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- For the camera preview. An app that needs no camera does not use CameraPreview. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+</manifest>

@@ -10,7 +10,7 @@ Requirements: JDK 17 or later, the Android SDK with the NDK `28.2.13676358`, Con
 CMake, and Python 3. Run in `android/`:
 
 ```sh
-./gradlew :app:assembleDebug
+./gradlew :sunradar:assembleDebug
 ```
 
 The build includes `../core/android` from source. See [`AGENTS.md`](AGENTS.md) for the

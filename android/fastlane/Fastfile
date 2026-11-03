@@ -28,7 +28,7 @@ SCREENSHOT_DEVICES = %w[phone tablet].freeze
 # Gradle copies the additionalTestOutputDir of the test to here before it uninstalls the app. The
 # directory between is the name of the emulator, so the lane globs it.
 ADDITIONAL_OUTPUT = File.join(
-  ANDROID, "app", "build", "outputs", "connected_android_test_additional_output",
+  ANDROID, "sunradar", "build", "outputs", "connected_android_test_additional_output",
   "debugAndroidTest", "connected"
 ).freeze
 
@@ -66,7 +66,7 @@ platform :android do
 
     gradle(
       project_dir: ANDROID,
-      task: ":app:connectedDebugAndroidTest",
+      task: ":sunradar:connectedDebugAndroidTest",
       properties: {
         "android.testInstrumentationRunnerArguments.class" => "at.stefl.sunradar.ScreenshotTests",
         "android.testInstrumentationRunnerArguments.device" => device,
