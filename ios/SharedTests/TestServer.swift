@@ -1,7 +1,7 @@
 import Foundation
 import Almucantar
 
-@testable import SunradarApp
+@testable import AlmucantarShared
 
 /// A fake server of the tiles, like S3: it answers Range requests with 206, If-None-Match with
 /// 304, and a missing file with 404. It records the requests.

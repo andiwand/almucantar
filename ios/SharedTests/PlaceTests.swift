@@ -2,12 +2,12 @@ import Foundation
 import Almucantar
 import XCTest
 
-@testable import SunradarApp
+@testable import AlmucantarShared
 
-/// The base map of the app bundle, decoded once for all tests.
+/// The base map of the test bundle, decoded once for all tests.
 private let baseMap: BaseMap = {
     do {
-        return try BaseMap.bundled()
+        return try BaseMap.bundled(in: Bundle(for: BaseMapTests.self))
     } catch {
         fatalError("The base map does not decode: \(error)")
     }

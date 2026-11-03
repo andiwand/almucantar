@@ -1,5 +1,5 @@
 # XcodeGen writes the project from project.yml.
-/Sunradar.xcodeproj/
+/Almucantar.xcodeproj/
 /build/
 /DerivedData/
 # Files that fastlane writes on each run.

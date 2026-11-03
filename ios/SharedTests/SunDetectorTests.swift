@@ -1,7 +1,7 @@
 import Almucantar
 import XCTest
 
-@testable import SunradarApp
+@testable import AlmucantarShared
 
 final class SunDetectorTests: XCTestCase {
     private let width = 640

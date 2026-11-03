@@ -54,7 +54,7 @@ default_platform(:ios)
 # Fastlane evaluates this file in ios/fastlane, but runs actions in ios/. Absolute paths work in both.
 IOS_DIR = File.expand_path("..").freeze
 REPO_DIR = File.expand_path("../..").freeze
-PROJECT = File.join(IOS_DIR, "Sunradar.xcodeproj").freeze
+PROJECT = File.join(IOS_DIR, "Almucantar.xcodeproj").freeze
 SCHEME = "Sunradar Screenshots"
 
 FRAME_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "frame.py").freeze

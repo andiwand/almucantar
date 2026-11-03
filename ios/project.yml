@@ -1,7 +1,11 @@
-# The Xcode project of the iOS app, for XcodeGen: `xcodegen generate` writes Sunradar.xcodeproj.
-# The app uses the Swift package of the core at the root of the repository; build its
+# The Xcode project of the iOS apps, for XcodeGen: `xcodegen generate` writes Almucantar.xcodeproj.
+# The apps use the Swift package of the core at the root of the repository; build its
 # xcframework first (python3 core/apple/build_xcframework.py).
-name: Sunradar
+#
+# The shared code is in Shared/. Each app compiles these files into its own target, so the shared
+# code needs no public access levels. The framework AlmucantarShared builds Shared/ alone: it checks
+# that the shared code does not depend on an app, and AlmucantarSharedTests tests it.
+name: Almucantar
 options:
   bundleIdPrefix: at.stefl
   deploymentTarget:
@@ -11,10 +15,41 @@ packages:
   Almucantar:
     path: ..
 targets:
+  AlmucantarShared:
+    type: framework
+    platform: iOS
+    sources: [Shared]
+    dependencies:
+      - package: Almucantar
+        product: Almucantar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.almucantar.shared
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    scheme:
+      testTargets: [AlmucantarSharedTests]
+  AlmucantarSharedTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - SharedTests
+      # BaseMapTests read the base map from the test bundle.
+      - path: ../assets/basemap/basemap.json
+        buildPhase: resources
+    dependencies:
+      - target: AlmucantarShared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: "5.0"
+
   SunradarApp:
     type: application
     platform: iOS
     sources:
+      - Shared
       - Sunradar
       # The offline base map (Natural Earth). The app reads it from the bundle; see assets/basemap/README.md.
       - path: ../assets/basemap/basemap.json
@@ -34,7 +69,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
-      testTargets: [SunradarAppTests]
+      testTargets: [AlmucantarSharedTests]
     info:
       path: Sunradar/Info.plist
       properties:
@@ -48,19 +83,6 @@ targets:
         NSCameraUsageDescription: Sunradar shows the path of the sun on the camera image.
         NSLocationWhenInUseUsageDescription: Sunradar needs your place to calculate the position of the sun.
         NSMotionUsageDescription: Sunradar uses the motion sensors to know where the phone points.
-  SunradarAppTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources: [SunradarTests]
-    dependencies:
-      - target: SunradarApp
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: true
-        # The app has the product name Sunradar, not the name of its target.
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Sunradar.app/Sunradar
-        BUNDLE_LOADER: $(TEST_HOST)
-        SWIFT_VERSION: "5.0"
   # The store screenshots: a UI test that starts the app in its demo mode (screenshots/README.md).
   SunradarUITests:
     type: bundle.ui-testing

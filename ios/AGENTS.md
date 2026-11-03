@@ -1,36 +1,48 @@
-# AGENTS.md — the iOS app
+# AGENTS.md — the iOS apps
 
-The iOS app in SwiftUI. It uses the Swift package `Sunradar` (`core/apple`, `Package.swift`
-at the root) and contains no C++. The Android app (`android/`) is the reference for the
-features and the behavior.
+One XcodeGen project (`project.yml`, `Almucantar.xcodeproj`) for all iOS apps of the repository
+(PLAN.md 14). The apps are in SwiftUI. They use the Swift package `Almucantar` (`core/apple`,
+`Package.swift` at the root) and contain no C++. The Android apps (`android/`) are the reference
+for the features and the behavior.
+
+- `Shared/` is the code that the apps share. Each app target compiles these files, so the shared
+  code needs no `public`. The framework target `AlmucantarShared` builds `Shared/` alone. It fails
+  if the shared code uses a type of an app, and `AlmucantarSharedTests` tests it with
+  `@testable import AlmucantarShared`.
+- `Sunradar/` is the app sunradar (target `SunradarApp`, bundle `at.stefl.sunradar`).
+- A new app is a new application target with `sources: [Shared, <App>]`. Code goes to `Shared/`
+  when a second app needs it, not before. `Shared/` never uses a type of an app: data that only an
+  app knows goes in as a parameter, as `LocationProvider(loadsStoredPlace:)` does.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `project.yml` | The XcodeGen project. `xcodegen generate` writes `Sunradar.xcodeproj`, which is not in Git. |
+| `project.yml` | The XcodeGen project. `xcodegen generate` writes `Almucantar.xcodeproj`, which is not in Git. |
 | `Sunradar/SunradarApp.swift` | The entry point. |
 | `Sunradar/SkyScreen.swift` | The sky view: the drawing, the readout, the time panel, the align menu, and the detected sun. |
-| `Sunradar/MapPicker.swift` | The MapKit map to pick a landmark. |
-| `Sunradar/BaseMap.swift` | The offline base map (`assets/basemap/basemap.json`, Natural Earth, a resource of the app): the decode, the search, the nearest place and its time zone, and Web Mercator (`MapViewport`). `BaseMapStore` decodes it once, off the main thread. |
-| `Sunradar/PlacePanel.swift` | The place panel: the search and the offline map, drawn with a `Canvas` (`BaseMapDrawing`), where a tap drops the place. It also has "Keep offline" and the list of the kept places. |
-| `Sunradar/KeptPlaces.swift` | "Keep offline" (`PLAN.md` 13.3): it downloads the same data as the terrain (the prefix files of the tiles of `elevationTiles(place, 100 km)`, and the full near tiles if the threshold applies) and keeps the state and the list of the kept places. `SkyScreen` owns it, so the download continues when the panel closes. |
-| `Sunradar/PlaceTime.swift` | The calendar, the day, and the text of the times in the time zone of the place. |
-| `Sunradar/SunDetector.swift` | The saturated regions of a luminance image (the same algorithm as on Android). |
-| `Sunradar/Geo.swift` | The bearing, the distance, and the angle between two directions. |
-| `Sunradar/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
+| `Shared/MapPicker.swift` | The MapKit map to pick a landmark. |
+| `Shared/BaseMap.swift` | The offline base map (`assets/basemap/basemap.json`, Natural Earth, a resource of the app): the decode, the search, the nearest place and its time zone, and Web Mercator (`MapViewport`). `BaseMapStore` decodes it once, off the main thread. |
+| `Shared/PlacePanel.swift` | The place panel: the search and the offline map, drawn with a `Canvas` (`BaseMapDrawing`), where a tap drops the place. It also has "Keep offline" and the list of the kept places. |
+| `Shared/KeptPlaces.swift` | "Keep offline" (`PLAN.md` 13.3): it downloads the same data as the terrain (the prefix files of the tiles of `elevationTiles(place, 100 km)`, and the full near tiles if the threshold applies) and keeps the state and the list of the kept places. `SkyScreen` owns it, so the download continues when the panel closes. |
+| `Shared/PlaceTime.swift` | The calendar, the day, and the text of the times in the time zone of the place. |
+| `Shared/SunDetector.swift` | The saturated regions of a luminance image (the same algorithm as on Android). |
+| `Shared/Geo.swift` | The bearing, the distance, and the angle between two directions. |
+| `Shared/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
 | `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
 | `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
-| `Sunradar/ElevationSource.swift` | The source of the elevation tiles (`ElevationSource`): the name, the attribution, `isSurfaceModel`, the URL of a tile, the coarse level, the full level, and the distance of the full tiles. `CopernicusSource` (Copernicus GLO-90) is the only source now. `horizonOptions` gives the options of the profile: `nearClearanceM` (2000 m) for a surface model, else 0. The PWA has the same idea (`pwa/src/terrain.ts`). |
-| `Sunradar/DemCache.swift` | The persistent cache of the tiles of an `ElevationSource` (`DemCache.defaultSource`, Copernicus GLO-90) in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
-| `Sunradar/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles in two steps (the coarse check, then the full near tiles if the terrain is high), calculates the profile off the main thread, and derives the hidden parts of the path and the visible sunrise and sunset (`TerrainDay`). |
+| `Shared/ElevationSource.swift` | The source of the elevation tiles (`ElevationSource`): the name, the attribution, `isSurfaceModel`, the URL of a tile, the coarse level, the full level, and the distance of the full tiles. `CopernicusSource` (Copernicus GLO-90) is the only source now. `horizonOptions` gives the options of the profile: `nearClearanceM` (2000 m) for a surface model, else 0. The PWA has the same idea (`pwa/src/terrain.ts`). |
+| `Shared/DemCache.swift` | The persistent cache of the tiles of an `ElevationSource` (`DemCache.defaultSource`, Copernicus GLO-90) in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
+| `Shared/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles in two steps (the coarse check, then the full near tiles if the terrain is high), calculates the profile off the main thread, and gives the lines of the terrain. |
+| `Sunradar/TerrainDay.swift` | The hidden parts of the sun path and the visible sunrise and sunset (`TerrainDay`, `TerrainDayCache`). |
+| `Shared/Settings.swift` | The keys of the settings in UserDefaults. |
 | `Sunradar/SettingsView.swift` | The settings (the terrain horizon) and the credits. |
-| `SunradarTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
+| `SharedTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
 | `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
 | `fastlane/` | The lanes `screenshots` and `upload_listing`. |
-| `Sunradar/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
-| `Sunradar/LocationProvider.swift` | The place: CoreLocation (an accuracy of a kilometer), a manual place, and the last place (`StoredPlace` in UserDefaults). |
-| `Sunradar/CameraView.swift` | The AVFoundation preview, the camera model in the points of the view, and the frames for the sun detection. |
+| `Shared/MotionTracker.swift` | CoreMotion (`xArbitraryCorrectedZVertical`) and the heading filter of the core, with the magnetometer at 1 Hz. |
+| `Shared/LocationProvider.swift` | The place: CoreLocation (an accuracy of a kilometer), a manual place, and the last place (`StoredPlace` in UserDefaults). |
+| `Shared/CameraView.swift` | The AVFoundation preview, the camera model in the points of the view, and the frames for the sun detection. |
 
 ## Build and run
 
@@ -39,12 +51,12 @@ features and the behavior.
 3. Build for the simulator:
 
    ```sh
-   xcodebuild -project Sunradar.xcodeproj -scheme SunradarApp \
+   xcodebuild -project Almucantar.xcodeproj -scheme SunradarApp \
      -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd build
    ```
 
-4. Run the tests: replace `build` with `test`, and give a simulator as the destination, for example
-   `-destination 'platform=iOS Simulator,name=iPhone 15'`.
+4. Run the tests: use the scheme `AlmucantarShared`, replace `build` with `test`, and give a
+   simulator as the destination, for example `-destination 'platform=iOS Simulator,name=iPhone 15'`.
 5. Install it with `xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Sunradar.app`.
 
 The simulator has no motion sensors and no camera. The app then shows a sky view that you
@@ -52,8 +64,8 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
 
 ## Rules
 
-- The module name of the app is `SunradarApp`, because the package module is `Sunradar`.
-  `View` is in both SwiftUI and `Sunradar`, so write `SwiftUI.View` and `Almucantar.View`.
+- The module name of the app sunradar is `SunradarApp`. `View` is in both SwiftUI and the package
+  `Almucantar`, so write `SwiftUI.View` and `Almucantar.View`.
 - The interface orientation gives the `ScreenRotation`: `landscapeRight` is `rotation90` (the
   top of the device is on the left), and `landscapeLeft` is `rotation270`. This is the same
   convention as `Display.getRotation()` on Android.

@@ -68,9 +68,9 @@ struct BaseMap: Sendable {
         attribution = raw["attribution"] as? String ?? "Map: Natural Earth (public domain)"
     }
 
-    /// The base map in the app bundle.
-    static func bundled() throws -> BaseMap {
-        guard let url = Bundle.main.url(forResource: "basemap", withExtension: "json") else {
+    /// The base map in a bundle: the app bundle, or the bundle of the tests.
+    static func bundled(in bundle: Bundle = .main) throws -> BaseMap {
+        guard let url = bundle.url(forResource: "basemap", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try BaseMap(data: Data(contentsOf: url))

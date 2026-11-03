@@ -2,7 +2,7 @@ import Foundation
 import Almucantar
 import XCTest
 
-@testable import SunradarApp
+@testable import AlmucantarShared
 
 /// A fake HTTP layer: it gives the next answer of a queue, or a network error if the queue is
 /// empty, and it records the requests.

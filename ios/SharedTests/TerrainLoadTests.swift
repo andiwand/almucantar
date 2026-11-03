@@ -2,7 +2,7 @@ import Foundation
 import Almucantar
 import XCTest
 
-@testable import SunradarApp
+@testable import AlmucantarShared
 
 /// The two steps of the terrain (PLAN.md 14.3): the coarse check, and the near tiles at full
 /// resolution only if the terrain is high. The tiles are small GeoTIFF files with level 1 as the

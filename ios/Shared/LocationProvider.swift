@@ -59,19 +59,21 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     /// True after "Use my location": the next device location replaces also a manual place.
     private var wantsDevice = false
 
-    init(defaults: UserDefaults = .standard) {
+    /// With `loadsStoredPlace` false (for example in a demo mode), the provider starts without the
+    /// stored place.
+    init(defaults: UserDefaults = .standard, loadsStoredPlace: Bool = true) {
         self.defaults = defaults
         super.init()
-        if ScreenshotMode.scene == nil, let place = StoredPlace.load(from: defaults) { apply(place) }
+        if loadsStoredPlace, let place = StoredPlace.load(from: defaults) { apply(place) }
     }
 
-    /// The demo mode of the store screenshots: Vienna, without a request for the location and
-    /// without the stored place.
-    func startDemo() {
+    /// A demo mode, for example of the store screenshots: Vienna in `timeZone`, without a request
+    /// for the location and without the stored place.
+    func startDemo(timeZone: TimeZone) {
         stores = false
         observer = Self.defaultObserver
         text = "Vienna"
-        timeZone = ScreenshotScene.timeZone
+        self.timeZone = timeZone
         manual = false
         hasPlace = false
         accuracyM = 50

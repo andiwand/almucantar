@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// The keys of the settings in UserDefaults.
-enum Settings {
-    /// The terrain horizon is on. It is on by default; when it is off, the app downloads nothing.
-    static let terrainHorizon = "terrainHorizon"
-}
-
 /// The settings and the credits.
 struct SettingsView: SwiftUI.View {
     @AppStorage(Settings.terrainHorizon) private var terrainHorizon = true

@@ -97,7 +97,7 @@ struct DetectedSun {
 /// Without motion sensors (the simulator), drag to look around.
 struct SkyScreen: SwiftUI.View {
     @StateObject private var motion = MotionTracker()
-    @StateObject private var location = LocationProvider()
+    @StateObject private var location = LocationProvider(loadsStoredPlace: ScreenshotMode.scene == nil)
     // The demo mode has no terrain cache, so it never downloads a tile. The terrain and the kept
     // places use the same cache, because both write its index.
     @StateObject private var terrain = TerrainHorizon(cache: ScreenshotMode.scene == nil ? DemCache.shared : nil)
@@ -219,7 +219,7 @@ struct SkyScreen: SwiftUI.View {
                     motion.startDemo(
                         deviceToFrame: upright(azimuthDeg: scene.azimuthDeg, pitchDeg: scene.pitchDeg),
                         headingSigmaDeg: scene.headingSigmaDeg)
-                    location.startDemo()
+                    location.startDemo(timeZone: ScreenshotScene.timeZone)
                 } else {
                     motion.start()
                     location.start()
