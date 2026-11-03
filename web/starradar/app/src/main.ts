@@ -689,6 +689,9 @@ function draw(view: View, s: Sky) {
     ctx.beginPath();
     ctx.arc(sun.point.x, sun.point.y, 13, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.font = "12px system-ui";
+    ctx.fillStyle = "white";
+    uprightLabel(view, s.sun, "Sun", 18);
     hits.push({ target: { kind: "sun" }, x: sun.point.x, y: sun.point.y, mag: -26 });
   }
 

@@ -237,7 +237,12 @@ export class Sky {
       ctx.fillText(planet.name, x, y - 8);
     }
 
-    if (f.moon.altitudeDeg > -1 && f.moonFraction > 0.02) this.moon(p, f, day);
+    if (f.moon.altitudeDeg > -1 && f.moonFraction > 0.02) {
+      this.moon(p, f, day);
+      ctx.font = "12px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = "rgba(230, 236, 255, 0.9)";
+      ctx.fillText("Moon", p.x(f.moon.azimuthDeg), p.y(f.moon.altitudeDeg) - 15);
+    }
     // The sun, until it goes down behind the ground (the ground is drawn after it).
     if (f.sun.altitudeDeg > -1) {
       ctx.save();
@@ -248,6 +253,9 @@ export class Sky {
       ctx.arc(p.x(f.sun.azimuthDeg), p.y(f.sun.altitudeDeg), 11, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+      ctx.font = "12px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = "rgba(255, 240, 210, 0.9)";
+      ctx.fillText("Sun", p.x(f.sun.azimuthDeg), p.y(f.sun.altitudeDeg) - 16);
     }
     if (f.alignment && f.alignment.alpha > 0.01) this.alignment(p, f, f.alignment);
 

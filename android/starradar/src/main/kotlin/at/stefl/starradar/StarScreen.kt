@@ -826,6 +826,7 @@ private fun DrawScope.drawStarSky(
     }
     screenPoint(view, sky.sun)?.let {
         drawCircle(Color(0xFFFFE08A), radius = 13 * dp, center = it)
+        drawUprightText("Sun", it, upAt(view, sky.sun, it), 18 * dp, labelPaint(12 * dp, false))
         hits += Hit(Target.Sun, it, -26.0)
     }
 
