@@ -14,8 +14,8 @@ let binary: Target =
     ? .binaryTarget(name: "SunradarC", path: localXcframework)
     : .binaryTarget(
         name: "SunradarC",
-        url: "https://github.com/andiwand/sunradar/releases/download/UNRELEASED/SunradarC.xcframework.zip",
-        checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+        url: "https://github.com/andiwand/sunradar/releases/download/core-v0.2.0/SunradarC.xcframework.zip",
+        checksum: "7c412788e48c431825105001c24cbd3d2cc580091e74ef860fcf904bd585dec2"
     )
 
 let package = Package(
