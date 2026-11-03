@@ -5,6 +5,8 @@ The changes in the Android app that a user notices. Each release has the tag
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-03
+
 - The place panel looks like a map app: a rounded search bar with a back arrow, results with the
   country, round map buttons, a pin, and a card with the place, its time zone, and "Keep offline".
 - The icons of the system bars are always light, also when the system uses its light theme.
