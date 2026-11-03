@@ -13,7 +13,8 @@ fun sunPosition(
     unixUtc: Double,
     observer: Observer,
     options: SunOptions = SunOptions(),
-): Horizontal = AlmucantarNative.sunPosition(unixUtc, observer.pack(), options.pack()).toHorizontal()
+): Horizontal =
+    AlmucantarNative.sunPosition(unixUtc, observer.pack(), options.pack()).toHorizontal()
 
 /** Finds the crossings of the threshold altitude and the culmination between the two times. */
 fun sunEvents(
@@ -172,7 +173,8 @@ fun moonPosition(
     unixUtc: Double,
     observer: Observer,
     options: MoonOptions = MoonOptions(),
-): Horizontal = AlmucantarNative.moonPosition(unixUtc, observer.pack(), options.pack()).toHorizontal()
+): Horizontal =
+    AlmucantarNative.moonPosition(unixUtc, observer.pack(), options.pack()).toHorizontal()
 
 /** Returns the illuminated fraction of the disc of the moon, 0 (new) to 1 (full). */
 fun moonIlluminatedFraction(unixUtc: Double): Double =
@@ -187,7 +189,8 @@ fun headingFilterStart(
     biasSigmaUt: Double,
     options: HeadingFilterOptions = HeadingFilterOptions(),
 ): HeadingFilter =
-    AlmucantarNative.headingFilterStart(biasUt.pack(), biasSigmaUt, options.pack()).toHeadingFilter()
+    AlmucantarNative.headingFilterStart(biasUt.pack(), biasSigmaUt, options.pack())
+        .toHeadingFilter()
 
 /** Moves the filter forward by [dtS]: the variances grow, and the disturbance decays. */
 fun headingFilterPredict(
