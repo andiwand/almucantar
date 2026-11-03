@@ -3,12 +3,14 @@ package at.stefl.starradar
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Paint
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -114,6 +116,10 @@ import kotlinx.coroutines.withContext
 private const val FOV_PORTRAIT_DEG = 70.0
 private const val FOV_LANDSCAPE_DEG = 100.0
 
+/** The field of view of a pinch in the sky view, in degrees. */
+private const val MIN_FOV_DEG = 10.0
+private const val MAX_FOV_DEG = 120.0
+
 /** The alignment takes only objects to this magnitude, because the user must see them. */
 private const val ALIGN_MAX_MAG = 2.5
 
@@ -182,6 +188,9 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
     var showSettings by remember { mutableStateOf(false) }
     var aligning by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Target?>(null) }
+    // The zoom of the sky view: a pinch changes it, a double tap resets it. The camera view has the
+    // field of view of the lens, so the zoom does not change it.
+    var zoom by remember { mutableDoubleStateOf(1.0) }
 
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -224,7 +233,8 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
         if (q == null || size.width == 0) {
             null
         } else {
-            val fov = if (size.width < size.height) FOV_PORTRAIT_DEG else FOV_LANDSCAPE_DEG
+            val base = if (size.width < size.height) FOV_PORTRAIT_DEG else FOV_LANDSCAPE_DEG
+            val fov = (base / zoom).coerceIn(MIN_FOV_DEG, MAX_FOV_DEG)
             View(
                 deviceToEnu = q,
                 screenRotation = ScreenRotation.entries[displayRotation],
@@ -293,9 +303,27 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
             }
             if (view != null) {
                 Canvas(
-                    Modifier.fillMaxSize().pointerInput(Unit) {
-                        detectTapGestures { currentOnTap(it) }
-                    }
+                    Modifier.fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = { zoom = 1.0 },
+                                onTap = { currentOnTap(it) },
+                            )
+                        }
+                        .pointerInput(cameraOn) {
+                            if (!cameraOn) {
+                                detectTransformGestures { _, _, scale, _ ->
+                                    val base =
+                                        if (size.width < size.height) FOV_PORTRAIT_DEG
+                                        else FOV_LANDSCAPE_DEG
+                                    zoom =
+                                        (zoom * scale).coerceIn(
+                                            base / MAX_FOV_DEG,
+                                            base / MIN_FOV_DEG,
+                                        )
+                                }
+                            }
+                        }
                 ) {
                     hits.clear()
                     drawStarSky(
@@ -599,6 +627,8 @@ private fun FindPanel(stars: StarData, onClose: () -> Unit, onPick: (Target) -> 
                     Triple(name, "Star · %.1f".format(stars.mag[i]), Target.Star(i) as Target)
                 }
         }
+    // The back key closes the search, not the app.
+    BackHandler(onBack = onClose)
     var query by remember { mutableStateOf("") }
     val q = fold(query.trim())
     val found =
