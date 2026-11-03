@@ -74,7 +74,7 @@ package. The apps use the packages and contain no C++.
 
 ```
 ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
-│ android/ app      │ │ pwa/ app          │ │ ios/ app (later)  │ │ scripts, notebooks│
+│ android/ app      │ │ pwa/ app          │ │ ios/ app          │ │ scripts, notebooks│
 │ Kotlin, Compose   │ │ TypeScript        │ │ Swift, SwiftUI    │ │ reference checks  │
 └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
           │ AAR                 │ npm                 │ SwiftPM             │ PyPI
@@ -122,6 +122,7 @@ sunradar/
 │   ├── apple/                 C API and Swift package (Package.swift at the root)
 │   ├── cmake/
 │   ├── conan/profiles/
+│   ├── third_party/           Astronomy Engine (a single C file)
 │   ├── conanfile.py
 │   ├── pyproject.toml         scikit-build-core, for the Python package
 │   ├── CMakeLists.txt
@@ -130,7 +131,12 @@ sunradar/
 ├── android/                   the Android app
 ├── pwa/                       the PWA
 ├── ios/                       the iOS app
+├── website/                   the website; GitHub Pages serves it with the PWA under /app/
+├── assets/                    the logo, and the offline base map (assets/basemap/)
+├── scripts/                   format, release.py, the base map, the store screenshots
+├── screenshots/               the design of the store screenshots
 ├── .github/workflows/         one workflow per project and per package
+├── Package.swift              the Swift package of the core (SwiftPM needs it at the root)
 ├── AGENTS.md                  orientation for agents; CLAUDE.md points to it
 ├── PLAN.md
 └── README.md
@@ -180,13 +186,13 @@ Implementations:
 |---|---|---|---|
 | `NoaaModel` | ≤ 0.015° (measured) | handroll, about 100 lines | default in the app (done in M1) |
 | `AstronomyEngineModel` | about 1′ (0.017°) | Astronomy Engine, MIT, single C file | second model, and the **moon** for calibration |
-| `SpaModel` | 0.0003° | NREL SPA | test oracle only; check the license before you ship it |
+| `SpaModel` | 0.0003° | NREL SPA | not done: the license does not allow it in the repository |
 
-Astronomy Engine is not in Conan Center, so we fetch it with CMake `FetchContent` at a
-fixed commit, or we write a small Conan recipe for it.
+Astronomy Engine is not in Conan Center, so the core keeps a copy at a fixed commit in
+`core/third_party/astronomy-engine/`.
 
-Reference data for tests: tables from JPL Horizons and from the NREL SPA, for some
-locations (equator, Vienna, 60° N, 70° S) and some dates (solstices, equinoxes, random).
+Reference data for tests: tables from JPL Horizons, for some locations (equator, Vienna,
+60° N, 70° S) and some dates (solstices, equinoxes, random).
 
 ### 5.2 Magnetic declination
 
@@ -207,8 +213,10 @@ declination.
 
 The platform gives the core a quaternion (device frame to East-North-Up).
 
-- Android: `TYPE_ROTATION_VECTOR`. The OS does the fusion and the hard-iron and
-  soft-iron calibration of the magnetometer.
+- Android: `TYPE_GAME_ROTATION_VECTOR` for the orientation, and the heading filter of the
+  core (5.4a) for the heading. A device without a game rotation vector uses
+  `TYPE_ROTATION_VECTOR`, where the OS does the fusion and the calibration of the
+  magnetometer.
 - PWA: `AbsoluteOrientationSensor` (Chrome on Android), or `deviceorientation` with
   `webkitCompassHeading` (iOS Safari).
 
@@ -227,7 +235,7 @@ the core later (about 150 lines).
 
 The heading indoors is the main error (section 2). The core supports these methods:
 
-1. **Sun or moon tap.** The user taps the real sun or moon on the camera image. Later (M8b)
+1. **Sun or moon tap.** The user taps the real sun or moon on the camera image. Since M8b,
    the app detects the sun itself, highlights it with a box, and the user only confirms. The core
    calculates the direction of the body, compares it with the tapped ray, and stores the
    heading offset. This method is exact to about 0.5°.
@@ -376,21 +384,25 @@ The public API is small, and its form makes every binding easy:
   emsdk support what we need.
 - One umbrella header, `sunradar/sunradar.hpp`, includes all public headers.
 
-The planned public headers:
+The public headers:
 
 | Header | Content |
 |---|---|
 | `types.hpp` | `Observer`, `Horizontal`, `Atmosphere`, `Quaternion`, `Camera`, `ScreenPoint` |
 | `sun.hpp` | `SolarModel`, `sun_position()`, `sun_events()`, `sun_path()` |
-| `search.hpp` | `SearchOptions`, `TimeMatch`, `find_time()`, `find_dates()` (done in M4) |
-| `magnetic.hpp` | `magnetic_declination_deg()` (done in M3) |
-| `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `ScreenRotation`, `Camera`, `camera_from_fov()`, `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()` (done in M3). The view direction for auto mode is `unproject()` of the screen center. |
-| `calibration.hpp` | `heading_offset_from_tap()`, `heading_offset_from_bearing()` |
+| `moon.hpp` | `moon_position()`, `moon_illuminated_fraction()` |
+| `search.hpp` | `SearchOptions`, `TimeMatch`, `find_time()`, `find_dates()` |
+| `magnetic.hpp` | `magnetic_declination_deg()` |
+| `view.hpp` | `View` (camera, orientation, screen rotation, heading offset), `ScreenRotation`, `Camera`, `camera_from_fov()`, `project()`, `unproject()`, `project_line()`, `project_path()`, `horizon_line()`. The view direction for auto mode is `unproject()` of the screen center. |
+| `heading.hpp` | `HeadingFilter` and its functions (5.4a), `heading_from_direction()`, `heading_from_magnetometer()` |
+| `terrain.hpp` | `ElevationGrid`, `horizon_profile()`, `terrain_altitude_deg()`, `terrain_events()`, `elevation_tiles()`, `read_elevation_geotiff()`, `elevation_geotiff_prefix_size()`, `map_tiles()`, `terrarium_grid()` (13.1) |
+| `sky.hpp` | `planet_position()`, `planet_magnitude()`, `galactic_position()`, `galactic_plane()` (13.4, 13.5; C++ and Python only) |
 | `version.hpp` | `version()` |
 
-That is about 7 headers and 15 functions. Everything else is internal: the model
-classes, the refraction formula, the WMM coefficients, the numerics, and the details of
-the projection. A function becomes public only if an app needs it.
+Everything else is internal: the model classes, the refraction formula, the WMM
+coefficients, the numerics, and the details of the projection. A function becomes public
+only if an app needs it. The sun detection in the camera image (M8b) is in the apps, not
+in the core.
 
 ### 5.8 Bindings and packages
 
@@ -424,24 +436,18 @@ Rules for all bindings, from OpenDocument.core:
 
 | Need | Choice | Source |
 |---|---|---|
-| Vectors, quaternions | handroll (`internal/vector.hpp`, about 60 lines) | — (Eigen only if the calibration needs least squares) |
+| Vectors, quaternions | handroll (`internal/vector.hpp`, about 60 lines) | — |
 | Tests | Catch2 | Conan Center, `catch2/3.x` |
-| Second solar model, moon | Astronomy Engine | `FetchContent` or own recipe |
+| Second solar model, moon, planets | Astronomy Engine | a copy in `core/third_party/` |
+| DEFLATE of the GeoTIFF and PNG tiles | miniz | Conan Center, `miniz/3.0.2` |
 | Magnetic oracle for tests | the official WMM2025 test values | NOAA NCEI, in the coefficient download |
-| Precise reference (optional) | SOFA | Conan Center, `sofa/20231011` |
 | NOAA solar model | handroll | — |
 | WMM2025 | handroll | — |
 | Root finding (Brent) | handroll | — |
-| Python binding | pybind11 | Conan Center, `pybind11/2.13.x` |
+| Python binding | pybind11 | Conan Center, `pybind11/3.0.x` |
 | Python build | scikit-build-core | PyPI, build dependency only |
 
-Notes:
-
-- Eigen is header-only, so it works with the NDK and with Emscripten without extra work.
-  If we use Eigen only for small fixed-size types, we can replace it with a small
-  handrolled `vec3` and `quat` later.
-- Each test oracle (GeographicLib, SPA, SOFA) is a test dependency only. The app does not
-  link it.
+A test oracle is a test dependency only. The app does not link it.
 
 ## 7. Build, release, and conventions
 
@@ -469,11 +475,12 @@ One workflow per project and per package, each with a path filter, so a change i
 |---|---|---|
 | `core.yml` | `core/**` | builds and tests the core on Linux and macOS, runs clang-tidy |
 | `python.yml` | `core/**` | builds wheels, runs pytest |
-| `core-android.yml` | `core/**` | builds the AAR (with `native-android.yml`), runs the instrumented tests on an emulator |
+| `core-android.yml` | `core/**` | builds the AAR (the native libraries come from the reusable `native-android.yml`), runs the instrumented tests on an emulator |
 | `android.yml` | `android/**`, `core/**` | builds and tests the app, runs lint and ktfmt |
 | `web.yml` | `core/**`, `pwa/**`, `website/**` | builds the npm package (`node --test`), tests and builds the PWA (prettier, vitest), deploys GitHub Pages |
 | `apple.yml` | `core/**`, `ios/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds and tests the iOS app |
 | `format.yml` | all | clang-format, black |
+| `screenshots.yml` | manual | makes the store screenshots with the demo mode (M12) |
 | `release.yml`, `publish-core.yml`, `android-release.yml` | manual, release | the release flow (see below) |
 
 ### Release
@@ -510,15 +517,17 @@ contain the same core.
 - Kotlin, Jetpack Compose, `minSdk 28` (for `LENS_DISTORTION`).
 - CameraX `PreviewView`, plus Camera2 interop to read the intrinsics.
 - The overlay is a Compose `Canvas` on top of the preview.
-- Sensors: `TYPE_ROTATION_VECTOR`, and `TYPE_GAME_ROTATION_VECTOR` for the gyro hold.
+- Sensors: `TYPE_GAME_ROTATION_VECTOR` and `TYPE_MAGNETIC_FIELD_UNCALIBRATED` for the
+  heading filter (5.4a). `TYPE_ROTATION_VECTOR` is the fallback.
 - Location: the coarse location (fused, network, or GPS provider). Without it, the main
   city of the device time zone (IANA `zone.tab`), and the app says so. The status shows
   the nearest town (geocoder) and the error as a power of ten, with its error on the sky.
-  Later also a manual pick on a map, so the user can plan a flat from home.
+  The user can also drop a place on the offline map, so they can plan a flat from home (13.3).
 - Screens:
-  1. Sky view: camera or no camera, path, horizon, sun marker, compass accuracy.
-  2. Controls: mode switch (fixed time or auto), time slider, date slider.
-  3. Calibration: sun or moon tap, map heading.
+  1. Sky view: camera or no camera, path, horizon, terrain, sun and moon, compass accuracy.
+  2. Time panel: mode switch (fixed time or auto), time slider, date slider.
+  3. Alignment: sun or moon tap, sun detection, landmark on a map.
+  4. Place panel: search, the offline map, and "Keep offline".
 
 ## 9. PWA (after Android)
 
@@ -550,9 +559,26 @@ contain the same core.
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central, Android APK | implemented: `scripts/release.py` and git cliff, the release workflow with a dry run, `publish-core.yml` (npm, wheels for Linux and macOS, sdist, AAR), `android-release.yml`. Open: the accounts and secrets of the registries, Windows wheels. |
 | M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. |
 | M12 | Moon phase in the apps; store screenshots (a demo mode in the debug builds, fastlane lanes, the workflow `screenshots.yml`) | implemented: the lit part of the moon faces the sun on Android, iOS, and the PWA. Open: the store accounts and secrets (see M10). |
+| M13 | Terrain horizon (13.1) and the offline place (13.3) in the core and in all apps | implemented: the terrain line, the visible sunrise and sunset, the moon behind the terrain, the 2 km clearance for surface models, the coarse tiles first, the Place panel with the offline map, and "Keep offline". |
 
 The user tested most features on real phones in November 2026. So the device checks of M5 to
 M11 are closed.
+
+**Releases:** all releases are pre-releases on GitHub: `core-v0.1.0` and `android-v0.1.0`
+(2026-11-01), and `core-v0.2.0`, `android-v0.2.0`, and `pwa-v0.1.0` with the work of M12 and M13
+(2026-11-03). The registries skip the core, because no credentials are set, so the packages are
+only attached to the GitHub release. iOS has no release yet.
+
+### Next
+
+1. Set up the accounts and secrets of M10 and M12: npm, PyPI, Maven Central, the Play Store,
+   and the Apple developer account. Then the iOS app can get a publish workflow.
+2. The core parts of the photo planner (14.1), in this order: the windows of darkness, the line
+   of sight over the DEM, and the inverse search.
+3. A prototype of the photo planner as a second web app (14.1).
+
+Smaller items: the terrain line as a heading calibration (13.1), the Windows wheels (M10), and
+WMM2030 before the end of 2029.
 
 The Python binding comes early (M2), because it is the easiest binding to test. It
 also checks that the public API is easy to bind before the API grows, and it gives a
@@ -561,11 +587,15 @@ fast way to plot paths and to compare models.
 ## 11. Risks
 
 - **Compass indoors.** This is the largest risk. If the calibration in M7 does not get
-  the error to about 2°, the app must make the map heading the main method.
+  the error to about 2°, the app must make the map heading the main method. Status: the
+  heading filter (5.4a) and the alignment with the sun, the moon, or a landmark are done, and
+  a landmark also works from a dropped place. Keep this risk open until field tests indoors
+  give a number for the error.
 - **Camera intrinsics.** Some devices give no intrinsics or wrong ones. The fallback from
   the focal length and the sensor size gives about 1–3° at the edges.
 - **Preview crop.** The conversion from the sensor frame to the CameraX preview frame is
-  a frequent source of offsets. Test it on two or three devices.
+  a frequent source of offsets. A JVM property test covers the conversion (M6), and the user
+  checked it on real phones in November 2026.
 - **Direction of the distortion.** Resolved in M6: the AOSP definition of
   `LENS_DISTORTION` says `correctedImage(x_i, y_i) = sample_at(x_c, y_c, inputImage)`, so
   it maps the ideal point to the distorted point, the same direction as OpenCV and the
@@ -580,7 +610,8 @@ fast way to plot paths and to compare models.
   top of a C API, not on Swift C++ interop and not on the Objective-C layer of
   OpenDocument.core. A release attaches the xcframework and tags `X.Y.Z` for SwiftPM.
 - The names of the packages: `sunradar` on PyPI and `@sunradar/core` on npm are proposals.
-  Check that the names are free (the npm scope needs an npm organization "sunradar"). The
+  On 2026-11-03 both packages do not exist yet, but this does not reserve the names. The npm
+  scope needs an npm organization "sunradar". The
   Maven group is `at.stefl.sunradar` (decided); Maven Central needs the verified namespace
   `at.stefl`.
 - Do we publish the C++ package to a Conan remote? Only if someone outside this
@@ -590,10 +621,13 @@ fast way to plot paths and to compare models.
 - Do we want a shadow mode later (for example, which wall gets the sun)? This needs a
   3D model of the room, so it is out of scope now.
 
-## 13. Future features (proposals, not planned in detail)
+## 13. Features after the milestones
 
-The order is the priority. The terrain horizon comes first, because it changes the answer to
-the main question of the app: when does the sun really appear or go away at this place?
+These started as proposals. The order was the priority. The terrain horizon came first,
+because it changes the answer to the main question of the app: when does the sun really
+appear or go away at this place? Each part has a status. 13.1 and 13.3 are done in all apps
+(M13). The core parts of 13.4 and 13.5 are done, and these features go to the photo planner
+(14.1), not to sunradar.
 
 ### 13.1 Terrain horizon (most important)
 
@@ -643,6 +677,10 @@ the sky view shows the terrain horizon (13.1) as a synthetic view. Then the user
 - From which place is the sun or the moon in line with a landmark on a given date? This is a
   search over places, the inverse of `find_dates()`. A first version: the user picks the
   landmark and the date, and the app draws the line of places on the map.
+
+**Status:** the dropped place is done (13.3), and the sky view without the camera shows the
+terrain. The search over places is part of the photo planner: it is item 1 of the core parts in
+14.1.
 
 ### 13.3 Fully offline
 
