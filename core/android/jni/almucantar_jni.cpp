@@ -33,6 +33,9 @@
 //                       altitude_deg[n], then distance_m[n]
 //   TerrainEventOptions [8]  model, refraction, pressure_hpa, temperature_c, limb_deg,
 //                       search_step_s, tolerance_s, body
+//   SkyOptions     [3]  refraction, pressure_hpa, temperature_c
+//   StarCatalog         four separate arrays: ra_deg, dec_deg, pm_ra_arcsec_per_year,
+//                       pm_dec_arcsec_per_year (the last two can be empty)
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -43,6 +46,7 @@
 //   TimeMatch  [4] unix_utc, separation_deg, azimuth_deg, altitude_deg
 //   ElevationTile [3] latitude_deg, longitude_deg, distance_m (for each tile)
 //   TerrainEvents  kind, n, then unix_utc, rising for each crossing
+//   points  [2 n]  x, y for each direction of projectPoints; NaN if it is not valid
 //
 // Booleans are 0 or 1, and enums are their ordinals. std::invalid_argument becomes
 // IllegalArgumentException.
@@ -56,6 +60,7 @@
 #include <exception>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "almucantar/almucantar.hpp"
@@ -81,6 +86,8 @@ class Doubles {
 
   [[nodiscard]] double operator[](const std::size_t i) const { return values_.at(i); }
   [[nodiscard]] std::size_t size() const { return values_.size(); }
+  /// Moves the values out, for a column of a catalogue.
+  [[nodiscard]] std::vector<double> take() { return std::move(values_); }
 
  private:
   std::vector<double> values_;
@@ -485,6 +492,91 @@ ALMUCANTAR_JNI(moonIlluminatedFraction)(JNIEnv* env, jclass, jdouble unix_utc)->
 
 namespace {
 
+SkyOptions sky_options(const Doubles& o) {
+  return {.refraction = to_bool(o[0]), .atmosphere = {.pressure_hpa = o[1], .temperature_c = o[2]}};
+}
+
+std::vector<double> flat(const std::vector<Horizontal>& directions) {
+  std::vector<double> out;
+  out.reserve(2 * directions.size());
+  for (const Horizontal& h : directions) {
+    out.push_back(h.azimuth_deg);
+    out.push_back(h.altitude_deg);
+  }
+  return out;
+}
+
+}  // namespace
+
+ALMUCANTAR_JNI(planetPosition)
+(JNIEnv* env, jclass, jdouble planet, jdouble unix_utc, jdoubleArray obs, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Horizontal h = planet_position(to_enum<Planet>(planet, "planet"), unix_utc,
+                                         observer(Doubles(env, obs, 2, "observer")),
+                                         sky_options(Doubles(env, opts, 3, "options")));
+    return to_java(env, {h.azimuth_deg, h.altitude_deg});
+  });
+}
+
+ALMUCANTAR_JNI(planetMagnitude)(JNIEnv* env, jclass, jdouble planet, jdouble unix_utc)->jdouble {
+  return guarded<jdouble>(
+      env, 0.0, [&] { return planet_magnitude(to_enum<Planet>(planet, "planet"), unix_utc); });
+}
+
+ALMUCANTAR_JNI(galacticPosition)
+(JNIEnv* env, jclass, jdouble l, jdouble b, jdouble unix_utc, jdoubleArray obs, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Horizontal h =
+        galactic_position(l, b, unix_utc, observer(Doubles(env, obs, 2, "observer")),
+                          sky_options(Doubles(env, opts, 3, "options")));
+    return to_java(env, {h.azimuth_deg, h.altitude_deg});
+  });
+}
+
+ALMUCANTAR_JNI(galacticPlane)
+(JNIEnv* env, jclass, jdouble unix_utc, jdoubleArray obs, jdouble step, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    return to_java(env, flat(galactic_plane(unix_utc, observer(Doubles(env, obs, 2, "observer")),
+                                            step, sky_options(Doubles(env, opts, 3, "options")))));
+  });
+}
+
+ALMUCANTAR_JNI(starPositions)
+(JNIEnv* env, jclass, jdoubleArray ra, jdoubleArray dec, jdoubleArray pm_ra, jdoubleArray pm_dec,
+ jdouble unix_utc, jdoubleArray obs, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const StarCatalog catalog{
+        .ra_deg = Doubles(env, ra, 0, "ra_deg").take(),
+        .dec_deg = Doubles(env, dec, 0, "dec_deg").take(),
+        .pm_ra_arcsec_per_year = Doubles(env, pm_ra, 0, "pm_ra_arcsec_per_year").take(),
+        .pm_dec_arcsec_per_year = Doubles(env, pm_dec, 0, "pm_dec_arcsec_per_year").take()};
+    return to_java(
+        env, flat(star_positions(catalog, unix_utc, observer(Doubles(env, obs, 2, "observer")),
+                                 sky_options(Doubles(env, opts, 3, "options")))));
+  });
+}
+
+ALMUCANTAR_JNI(projectPoints)
+(JNIEnv* env, jclass, jdoubleArray v, jdoubleArray directions)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const std::vector<Projection> points = project_points(
+        view(Doubles(env, v, 17, "view")), line(Doubles(env, directions, 0, "directions")));
+    std::vector<double> out;
+    out.reserve(2 * points.size());
+    for (const Projection& p : points) {
+      out.push_back(p.valid ? p.point.x : std::nan(""));
+      out.push_back(p.valid ? p.point.y : std::nan(""));
+    }
+    return to_java(env, out);
+  });
+}
+
+namespace {
+
 int to_int(const double value, const char* name) {
   // NaN fails the last comparison, because NaN is not equal to itself.
   if (value < 0 || value > 1e9 || std::floor(value) != value) {
@@ -736,6 +828,9 @@ ALMUCANTAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          t.limb_deg,
                          t.search_step_s,
                          t.tolerance_s,
-                         static_cast<double>(t.body)});
+                         static_cast<double>(t.body),
+                         SkyOptions{}.refraction ? 1.0 : 0.0,
+                         SkyOptions{}.atmosphere.pressure_hpa,
+                         SkyOptions{}.atmosphere.temperature_c});
   });
 }

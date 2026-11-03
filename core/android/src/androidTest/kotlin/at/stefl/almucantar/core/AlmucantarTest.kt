@@ -49,7 +49,8 @@ class AlmucantarTest {
                 doubleArrayOf(DEFAULT_HEADING_DRIFT_DEG2_PER_S) +
                 HeadingFilterOptions().pack() +
                 HorizonOptions().pack() +
-                TerrainEventOptions().pack()
+                TerrainEventOptions().pack() +
+                SkyOptions().pack()
         assertEquals(expected.toList(), AlmucantarNative.defaults().toList())
     }
 
@@ -371,5 +372,54 @@ class AlmucantarTest {
                 Quaternion((x[1] - y[0]) / s, (z[0] + x[2]) / s, (z[1] + y[2]) / s, s / 4)
             }
         }.also { check(abs(it.w * it.w + it.x * it.x + it.y * it.y + it.z * it.z - 1) < 1e-9) }
+    }
+
+    @Test
+    fun planetsAndTheMilkyWay() {
+        val t = 1782000000.0
+        for (planet in Planet.entries) {
+            val seen = planetPosition(planet, t, vienna)
+            val airless = planetPosition(planet, t, vienna, SkyOptions(refraction = false))
+            assertEquals(airless.azimuthDeg, seen.azimuthDeg, 0.0)
+            assertTrue(seen.altitudeDeg > airless.altitudeDeg)
+        }
+        assertTrue(planetMagnitude(Planet.VENUS, t) < -3.5)
+        val plane = galacticPlane(t, vienna, 10.0)
+        assertEquals(36, plane.size)
+        val center =
+            galacticPosition(GALACTIC_CENTER_LONGITUDE_DEG, GALACTIC_CENTER_LATITUDE_DEG, t, vienna)
+        assertEquals(center.azimuthDeg, plane[0].azimuthDeg, 1e-9)
+    }
+
+    @Test
+    fun starsAndProjectPoints() {
+        val t = 1782000000.0
+        // Sirius and Vega, J2000.
+        val catalog =
+            StarCatalog(doubleArrayOf(101.2871, 279.2346), doubleArrayOf(-16.7161, 38.7837))
+        val stars = starPositions(catalog, t, vienna)
+        assertEquals(4, stars.size)
+        val moving =
+            starPositions(
+                StarCatalog(
+                    catalog.raDeg,
+                    catalog.decDeg,
+                    doubleArrayOf(-0.553, 0.201),
+                    doubleArrayOf(-1.205, 0.286),
+                ),
+                t,
+                vienna,
+            )
+        assertTrue(moving[1] != stars[1])
+        assertThrows(IllegalArgumentException::class.java) {
+            starPositions(StarCatalog(doubleArrayOf(1.0, 2.0), doubleArrayOf(1.0)), t, vienna)
+        }
+
+        val view = View(camera = cameraFromFov(1000.0, 1000.0, 60.0))
+        val points = projectPoints(view, doubleArrayOf(0.0, 0.0, 180.0, 0.0))
+        assertEquals(4, points.size)
+        val one = project(view, Horizontal(0.0, 0.0))
+        assertEquals(one.valid, !points[0].isNaN())
+        if (one.valid) assertEquals(one.point.x, points[0], 0.0)
     }
 }

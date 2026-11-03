@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A constellation over the horizon, with a crosshair on its brightest star (assets/starradar-logo.svg). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M28,72 H80"
+        android:strokeWidth="2.5"
+        android:strokeColor="#D9FFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M34,62 L44,50 L54,46 L66,36 L76,40 M54,46 L61,60"
+        android:strokeWidth="1.6"
+        android:strokeColor="#B38FB4FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M34,62 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 M44,50 m-2.3,0 a2.3,2.3 0 1,0 4.6,0 a2.3,2.3 0 1,0 -4.6,0 M66,36 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 M76,40 m-1.8,0 a1.8,1.8 0 1,0 3.6,0 a1.8,1.8 0 1,0 -3.6,0 M61,60 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FFE8F0FF" />
+    <path
+        android:pathData="M54,46 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M54,33 v5 M54,54 v5 M41,46 h5 M62,46 h5"
+        android:strokeWidth="2"
+        android:strokeColor="#FF7FD8FF"
+        android:strokeLineCap="round" />
+</vector>

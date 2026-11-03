@@ -50,9 +50,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build, test, lint, and check the format
-        run: ./gradlew :shared:testDebugUnitTest :shared:lintDebug :sunradar:assembleDebug :sunradar:testDebugUnitTest :sunradar:lintDebug spotlessCheck
+        run: ./gradlew :shared:testDebugUnitTest :shared:lintDebug :sunradar:assembleDebug :sunradar:testDebugUnitTest :sunradar:lintDebug :starradar:assembleDebug :starradar:testDebugUnitTest :starradar:lintDebug spotlessCheck
 
       - uses: actions/upload-artifact@v4
         with:
           name: sunradar-debug-apk
           path: android/sunradar/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: starradar-debug-apk
+          path: android/starradar/build/outputs/apk/debug/*.apk

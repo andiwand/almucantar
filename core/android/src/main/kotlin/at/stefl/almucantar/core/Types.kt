@@ -310,3 +310,35 @@ data class TerrainEvents(
     /** All crossings, in time order. `rising` is an appearance. */
     val crossings: List<Crossing>,
 )
+
+/** The planets of [planetPosition] and [planetMagnitude], in the order of the C++ enum. */
+enum class Planet {
+    MERCURY,
+    VENUS,
+    MARS,
+    JUPITER,
+    SATURN,
+    URANUS,
+    NEPTUNE,
+}
+
+data class SkyOptions(val refraction: Boolean = true, val atmosphere: Atmosphere = Atmosphere())
+
+/** The galactic longitude and latitude of the center of the Milky Way (Sagittarius A*). */
+const val GALACTIC_CENTER_LONGITUDE_DEG: Double = 0.0
+const val GALACTIC_CENTER_LATITUDE_DEG: Double = 0.0
+
+/**
+ * A catalogue of stars as columns of the same length: J2000 positions at the epoch 2000.0, and the
+ * proper motions in arcseconds per year ([pmRaArcsecPerYear] is d(ra)/dt * cos(dec)). Empty proper
+ * motion columns mean 0 for all stars.
+ */
+class StarCatalog(
+    val raDeg: DoubleArray,
+    val decDeg: DoubleArray,
+    val pmRaArcsecPerYear: DoubleArray = DoubleArray(0),
+    val pmDecArcsecPerYear: DoubleArray = DoubleArray(0),
+) {
+    val size: Int
+        get() = raDeg.size
+}

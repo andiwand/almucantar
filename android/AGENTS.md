@@ -5,7 +5,8 @@ One Gradle project for all Android apps of the repository (PLAN.md 14). The modu
 | Module | What |
 |---|---|
 | `shared/` | An Android library with the code that the apps share: the place and the offline base map, the maps, the terrain and its cache, the camera, the heading tracker, the moon phase, the sun detector, and the drawing helpers. Package `at.stefl.almucantar.shared`. |
-| `sunradar/` | The app sunradar (`at.stefl.sunradar`): the sky view, the time panel, the settings, and the demo mode. |
+| `sunradar/` | The app sunradar (`at.stefl.sunradar`): the sky view, the settings, and the demo mode. |
+| `starradar/` | The app starradar (`at.stefl.starradar`, PLAN.md 14.2): the stars, the constellations, the planets, the moon, and the Milky Way over the terrain. |
 
 The modules use the AAR `at.stefl.almucantar:core-android` from source: `settings.gradle.kts`
 includes `../core/android` as a composite build. The apps contain no C++ and no JNI code. Read
@@ -47,6 +48,21 @@ second.
 | `shared/src/main/assets/tzdata/` | The IANA `zone.tab`. |
 | `shared/src/test/` | JVM unit tests of the shared code. |
 
+| `.../TimePanel.kt` | The date and time sliders of the apps. |
+
+### `starradar/`
+
+`.../` is `starradar/src/main/kotlin/at/stefl/starradar/`.
+
+| Path | What |
+|---|---|
+| `.../MainActivity.kt` | The activity: the User-Agent, the location permission, and the star data (`assets/stars/stars.json`, an assets directory in `starradar/build.gradle.kts`). |
+| `.../StarScreen.kt` | The sky view: the Milky Way, the constellation lines, the stars (size from the magnitude, color from B−V, down to the limit of the twilight), the names, the planets, the moon, the sun, the horizon, the terrain, and the selection or the arrow to it. The tap with the info card (rise and set over the terrain, in the background), Find, Align (a tap on an object to magnitude 2.5), the time panel, the place panel, and the red light. |
+| `.../Sky.kt` | `SkyAt`: the sky at one time (`starPositions` for the stars, the names of the constellations, and the Milky Way, once per second), and the targets (`Target`) with their name, direction, and rise and set (samples every 10 minutes). |
+| `.../StarData.kt` | The decoder of `stars.json`, the planets with their colors, and `StarLook` (size, color, limiting magnitude, twilight), the same rules as `web/shared/src/stars.ts`. Tested in `starradar/src/test/`. |
+| `.../MilkyWay.kt` | The points of the Milky Way in the galactic system, the same picture as `web/shared/src/milkyway.ts`. Tested in `starradar/src/test/`. |
+| `.../Settings.kt` | The settings (constellation lines, terrain, red light) and the credits of the data. |
+
 ### `sunradar/`
 
 | Path | What |
@@ -54,7 +70,6 @@ second.
 | `.../MainActivity.kt` | The activity and the location permission. |
 | `.../SkyScreen.kt` | The sky view (Compose): horizon, terrain line, cardinal points, path, hour marks, sun, crosshair with the auto-mode time, and the status text. |
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
-| `.../TimePanel.kt` | The date and time sliders. |
 | `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
 | `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sunradar/site/src/sky.ts`. |
@@ -87,7 +102,8 @@ Run these commands in `android/`. The composite build builds the native library 
 with Conan, unless `ALMUCANTAR_ABIS` is empty.
 
 ```sh
-./gradlew :shared:testDebugUnitTest :shared:lintDebug :sunradar:assembleDebug :sunradar:testDebugUnitTest :sunradar:lintDebug spotlessCheck
+./gradlew :shared:testDebugUnitTest :shared:lintDebug :sunradar:assembleDebug :sunradar:testDebugUnitTest \
+  :sunradar:lintDebug :starradar:assembleDebug :starradar:testDebugUnitTest :starradar:lintDebug spotlessCheck
 ```
 
 ## Rules

@@ -84,6 +84,18 @@ PROJECTS = {
             )
         ],
     },
+    "starradar-android": {
+        "paths": [
+            "android/starradar/**",
+            "android/shared/**",
+            "android/gradle/**",
+            "android/*.kts",
+            "android/gradle.properties",
+            "assets/stars/**",
+        ],
+        "changelog": "android/starradar/CHANGELOG.md",
+        "stamps": [],
+    },
     "starradar-pwa": {
         "paths": [
             "web/starradar/app/**",

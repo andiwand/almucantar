@@ -119,6 +119,9 @@ internal fun HeadingFilterOptions.pack() =
 internal fun MoonOptions.pack() =
     doubleArrayOf(refraction.pack(), atmosphere.pressureHpa, atmosphere.temperatureC)
 
+internal fun SkyOptions.pack() =
+    doubleArrayOf(refraction.pack(), atmosphere.pressureHpa, atmosphere.temperatureC)
+
 internal fun ElevationGrid.packHeader() =
     doubleArrayOf(
         northLatitudeDeg,

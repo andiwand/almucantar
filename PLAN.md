@@ -903,7 +903,8 @@ workspace: `web/home/`, `web/sunradar/{app,site}/`, `web/starradar/{app,site}/`,
 calculation and for the aberration and the proper motion). The PWA (`web/starradar/app`) and the
 website (`web/starradar/site`) are on GitHub Pages under `/starradar/`. The licenses of the star
 data are in `assets/stars/README.md`; the one of the Bright Star Catalogue rests on an answer of
-the ADC, not on a license text. Next: step 6, and the field test of the alignment with a star.
+the ADC, not on a license text. The Android app (`android/starradar`) is done too, with the same
+features as the PWA. Next: the iOS app, and the field test of the alignment with a star.
 
 1. The layout: the folders of the workspace, the page of the family, and sunradar under
    `/sunradar/`.

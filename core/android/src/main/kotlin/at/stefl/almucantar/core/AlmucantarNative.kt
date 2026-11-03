@@ -134,6 +134,46 @@ internal object AlmucantarNative {
 
     @JvmStatic external fun moonIlluminatedFraction(unixUtc: Double): Double
 
+    @JvmStatic
+    external fun planetPosition(
+        planet: Double,
+        unixUtc: Double,
+        observer: DoubleArray,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic external fun planetMagnitude(planet: Double, unixUtc: Double): Double
+
+    @JvmStatic
+    external fun galacticPosition(
+        longitudeDeg: Double,
+        latitudeDeg: Double,
+        unixUtc: Double,
+        observer: DoubleArray,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun galacticPlane(
+        unixUtc: Double,
+        observer: DoubleArray,
+        stepDeg: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun starPositions(
+        raDeg: DoubleArray,
+        decDeg: DoubleArray,
+        pmRaArcsecPerYear: DoubleArray,
+        pmDecArcsecPerYear: DoubleArray,
+        unixUtc: Double,
+        observer: DoubleArray,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic external fun projectPoints(view: DoubleArray, directions: DoubleArray): DoubleArray
+
     /** Returns the heights and writes the other 6 values of the grid into [header]. */
     @JvmStatic
     external fun readElevationGeotiff(data: ByteArray, level: Int, header: DoubleArray): FloatArray

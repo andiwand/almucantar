@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The permissions (location, network, camera) come from the manifest of :shared. -->
+
+    <!-- The camera is optional: without it, the app shows the sky view. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
+    <!-- Without a compass or a gyroscope, the app works with a worse heading (the alignment). -->
+    <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+        <!-- The activity handles rotations itself, so the camera and the state stay alive.
+             Compose recomposes with the new configuration. -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

@@ -180,6 +180,84 @@ fun moonPosition(
 fun moonIlluminatedFraction(unixUtc: Double): Double =
     AlmucantarNative.moonIlluminatedFraction(unixUtc)
 
+/** Returns the apparent topocentric position of the center of [planet]. */
+fun planetPosition(
+    planet: Planet,
+    unixUtc: Double,
+    observer: Observer,
+    options: SkyOptions = SkyOptions(),
+): Horizontal =
+    AlmucantarNative.planetPosition(
+            planet.ordinal.toDouble(),
+            unixUtc,
+            observer.pack(),
+            options.pack(),
+        )
+        .toHorizontal()
+
+/**
+ * Returns the visual magnitude of [planet], seen from the center of the Earth. Smaller is brighter.
+ */
+fun planetMagnitude(planet: Planet, unixUtc: Double): Double =
+    AlmucantarNative.planetMagnitude(planet.ordinal.toDouble(), unixUtc)
+
+/** Returns the position of a direction of the galactic system, for example the galactic center. */
+fun galacticPosition(
+    longitudeDeg: Double,
+    latitudeDeg: Double,
+    unixUtc: Double,
+    observer: Observer,
+    options: SkyOptions = SkyOptions(),
+): Horizontal =
+    AlmucantarNative.galacticPosition(
+            longitudeDeg,
+            latitudeDeg,
+            unixUtc,
+            observer.pack(),
+            options.pack(),
+        )
+        .toHorizontal()
+
+/**
+ * Returns the center line of the Milky Way: the point i is at the galactic longitude i * [stepDeg].
+ */
+fun galacticPlane(
+    unixUtc: Double,
+    observer: Observer,
+    stepDeg: Double = 1.0,
+    options: SkyOptions = SkyOptions(),
+): DirectionLine =
+    DirectionLine(AlmucantarNative.galacticPlane(unixUtc, observer.pack(), stepDeg, options.pack()))
+
+/**
+ * Returns the apparent positions of all stars of [catalog] as a flat array
+ * [azimuthDeg0, altitudeDeg0, azimuthDeg1, ...]. One call per second for all stars is enough; a
+ * frame projects the result with [projectPoints].
+ */
+fun starPositions(
+    catalog: StarCatalog,
+    unixUtc: Double,
+    observer: Observer,
+    options: SkyOptions = SkyOptions(),
+): DoubleArray =
+    AlmucantarNative.starPositions(
+        catalog.raDeg,
+        catalog.decDeg,
+        catalog.pmRaArcsecPerYear,
+        catalog.pmDecArcsecPerYear,
+        unixUtc,
+        observer.pack(),
+        options.pack(),
+    )
+
+/**
+ * Projects many directions, given as a flat array [azimuthDeg0, altitudeDeg0, ...] (for example the
+ * result of [starPositions]). Returns a flat array [x0, y0, x1, y1, ...] with NaN where a direction
+ * is not valid.
+ */
+fun projectPoints(view: View, directions: DoubleArray): DoubleArray =
+    AlmucantarNative.projectPoints(view.pack(), directions)
+
 /**
  * A heading filter with an unknown offset. [biasUt] is the first guess of the hard-iron bias (the
  * bias of the OS, or 0 for a calibrated field), and [biasSigmaUt] is its error.
