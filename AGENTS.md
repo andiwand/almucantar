@@ -84,7 +84,8 @@ the shared part of its platform. The flow is the one of OpenDocument.core.
 
 `scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,
 `notes`). git cliff (`.github/cliff.toml`) calculates the version from the Conventional
-Commits: `feat` gives a minor step, `fix` and the rest a patch step, `!` a major step.
+Commits: `feat` gives a minor step, `fix` and the rest a patch step, `!` a major step. Before
+1.0.0, `!` gives a minor step, so a project leaves 0.x only with an explicit version.
 
 A registry without credentials is skipped with a notice, and the files are still attached to
 the release. The credentials are described at the top of each publish workflow.

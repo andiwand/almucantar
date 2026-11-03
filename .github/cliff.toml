@@ -48,8 +48,9 @@ commit_parsers = [
 ]
 
 [bump]
-# Semantic versioning: feat! is a major step, feat a minor step, the rest a patch step.
+# Semantic versioning: feat! is a major step, feat a minor step, the rest a patch step. Before
+# 1.0.0, feat! is a minor step too, so a project leaves 0.x only with an explicit version.
 features_always_bump_minor = true
-breaking_always_bump_major = true
+breaking_always_bump_major = false
 # The first version of a project without a tag.
 initial_tag = "0.1.0"
