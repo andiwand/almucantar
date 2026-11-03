@@ -17,12 +17,12 @@ website and puts the PWA under `/app/`.
 ## Build
 
 ```sh
-npm ci
-npm run build
-npm run format:check
+npm ci                          # in web/, the workspace
+npm run build -w website
+npm run format:check -w website
 ```
 
-`npm run dev` serves the website.
+`npm run dev -w website` serves the website.
 
 ## Notes
 

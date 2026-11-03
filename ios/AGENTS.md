@@ -31,7 +31,7 @@ for the features and the behavior.
 | `Shared/MoonPhase.swift` | The lit part of the moon and its direction to the sun. |
 | `Sunradar/ScreenshotMode.swift` | The demo mode of the store screenshots (debug builds only) and its scenes. |
 | `Sunradar/DemoSky.swift` | The drawn sky of the demo mode: the sky of the website, in the projection of the app. |
-| `Shared/ElevationSource.swift` | The source of the elevation tiles (`ElevationSource`): the name, the attribution, `isSurfaceModel`, the URL of a tile, the coarse level, the full level, and the distance of the full tiles. `CopernicusSource` (Copernicus GLO-90) is the only source now. `horizonOptions` gives the options of the profile: `nearClearanceM` (2000 m) for a surface model, else 0. The PWA has the same idea (`pwa/src/terrain.ts`). |
+| `Shared/ElevationSource.swift` | The source of the elevation tiles (`ElevationSource`): the name, the attribution, `isSurfaceModel`, the URL of a tile, the coarse level, the full level, and the distance of the full tiles. `CopernicusSource` (Copernicus GLO-90) is the only source now. `horizonOptions` gives the options of the profile: `nearClearanceM` (2000 m) for a surface model, else 0. The PWA has the same idea (`web/shared/src/terrain.ts`). |
 | `Shared/DemCache.swift` | The persistent cache of the tiles of an `ElevationSource` (`DemCache.defaultSource`, Copernicus GLO-90) in Application Support/`dem`: the full files (`<tile>.tif`) and the prefix files (`<tile>.l2.tif`, HTTP Range), with the JSON index, the revalidation after 180 days, the eviction over 400 MB, and the kept places (`KeptPlace`). `HTTPClient` is the HTTP layer that the tests replace. |
 | `Shared/TerrainHorizon.swift` | The terrain horizon of the place: it loads the tiles in two steps (the coarse check, then the full near tiles if the terrain is high), calculates the profile off the main thread, and gives the lines of the terrain. |
 | `Sunradar/TerrainDay.swift` | The hidden parts of the sun path and the visible sunrise and sunset (`TerrainDay`, `TerrainDayCache`). |
@@ -79,7 +79,7 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
 - The place (`PLAN.md` 13.3) is the device location, a manual place, or the last place, in
   `LocationProvider`. A device location does not replace a manual place; "Use my location" ends it.
   The app stores the last place and starts with it. The default place (Vienna) gets no terrain;
-  every other place does. The PWA (`pwa/src/basemap.ts`) has the same behavior.
+  every other place does. The PWA (`web/shared/src/basemap.ts`) has the same behavior.
 - All days and times use the time zone of the place, not of the device: use the `calendar` of
   `SkyScreen` and the functions of `PlaceTime`, never `Calendar.current` or `Date.formatted()`
   without a time zone.

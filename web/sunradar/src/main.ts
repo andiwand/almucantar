@@ -7,70 +7,40 @@ import type {
   HeadingEstimate,
   HorizonProfile,
   Horizontal,
-  Observer,
   Polyline,
   Quaternion,
   View,
 } from "@almucantar/core";
-import { litOutline, towardSun } from "./moon";
-import type { MoonAt } from "./moon";
-import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
+import { litOutline, towardSun } from "@almucantar/web-shared/moon";
+import type { MoonAt } from "@almucantar/web-shared/moon";
+import {
+  fromDeviceOrientation,
+  screenRotation,
+  upright,
+  withCompass,
+} from "@almucantar/web-shared/orientation";
+import { DEFAULT_PLACE, gpsPlace, loadPlace } from "@almucantar/web-shared/place";
+import type { StoredPlace } from "@almucantar/web-shared/place";
+import { setupPlacePanel } from "@almucantar/web-shared/placePanel";
 import {
   Terrain,
   TileCache,
   cacheStorageStore,
   decodePng,
-  keepOffline,
   localStorageIndex,
-} from "./terrain";
-import type { TerrainState } from "./terrain";
-import { browserTimeZone, fromWallTime, startOfDay, wallTime } from "./zone";
-import {
-  decodeBaseMap,
-  drawBaseMap,
-  fromWorld,
-  nearestPlace,
-  screenToPlace,
-  searchPlaces,
-  timeZoneAt,
-  toWorld,
-} from "./basemap";
-import type { BaseMap, MapView } from "./basemap";
-import baseMapUrl from "../../assets/basemap/basemap.json?url";
+} from "@almucantar/web-shared/terrain";
+import type { TerrainState } from "@almucantar/web-shared/terrain";
+import { fromWallTime, startOfDay, wallTime } from "@almucantar/web-shared/zone";
+import baseMapUrl from "../../../assets/basemap/basemap.json?url";
 
 const almucantar = await load();
 
 // --- State --------------------------------------------------------------------------------------
 
-// The place: the location of the device, a place that the user dropped on the map, or Vienna.
-// The app keeps the last place, so it starts at that place also offline and without a location.
-// The times are in the time zone of the place, because a dropped place can be in another zone.
-interface StoredPlace {
-  observer: Observer;
-  name: string;
-  timeZone: string;
-  manual: boolean;
-}
+// The place: the location of the device, a place that the user dropped on the map, or Vienna
+// (@almucantar/web-shared/place).
 const PLACE_KEY = "sunradar-place";
-const DEFAULT_PLACE: StoredPlace = {
-  observer: { latitudeDeg: 48.2082, longitudeDeg: 16.3738 },
-  name: "Vienna · no location",
-  timeZone: "Europe/Vienna",
-  manual: false,
-};
-function loadPlace(): StoredPlace {
-  try {
-    const stored = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null") as StoredPlace | null;
-    if (stored && Number.isFinite(stored.observer?.latitudeDeg)) {
-      new Intl.DateTimeFormat("en-US", { timeZone: stored.timeZone }); // throws if not valid
-      return stored;
-    }
-  } catch {
-    // A damaged or old entry: use the default.
-  }
-  return DEFAULT_PLACE;
-}
-let place = loadPlace();
+let place = loadPlace(PLACE_KEY);
 let observer = place.observer;
 let placeText = place.name;
 let zone = place.timeZone;
@@ -638,16 +608,6 @@ async function startSensors() {
   $("start").classList.add("hidden");
 }
 
-function gpsPlace(position: GeolocationPosition): StoredPlace {
-  const { latitude, longitude, accuracy } = position.coords;
-  return {
-    observer: { latitudeDeg: latitude, longitudeDeg: longitude },
-    name: `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}° · ±${Math.round(accuracy)} m`,
-    timeZone: browserTimeZone(),
-    manual: false,
-  };
-}
-
 /** Changes the place: the day, the terrain, and the declination follow. */
 function setPlace(next: StoredPlace) {
   place = next;
@@ -657,13 +617,11 @@ function setPlace(next: StoredPlace) {
   localStorage.setItem(PLACE_KEY, JSON.stringify(next));
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
-  renderPlaceCard();
+  placePanel.refresh();
   // Only the declination changes, so an alignment before stays.
   const old = declination;
   declination = almucantar.magneticDeclinationDeg(observer, Date.now() / 1000);
   heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
-  // The place panel can be open, and "Keep offline" needs a place.
-  renderKept();
 }
 
 /** The browser heading is magnetic, so the offset is the declination until the user aligns. */
@@ -787,251 +745,20 @@ if (!("DeviceOrientationEvent" in window)) $("start").textContent = "Use locatio
 
 requestAnimationFrame(frame);
 
-// --- The place panel: the offline map (Natural Earth) and the search ------------------------------
-
-let baseMap: BaseMap | null = null;
-let mapView: MapView = { lon: observer.longitudeDeg, lat: observer.latitudeDeg, zoom: 5 };
-const mapCanvas = $<HTMLCanvasElement>("place-map");
-const searchInput = $<HTMLInputElement>("place-search");
-const results = $("place-results");
-
-async function loadBaseMap(): Promise<BaseMap | null> {
-  if (!baseMap) {
-    try {
-      baseMap = decodeBaseMap(await (await fetch(baseMapUrl)).json());
-    } catch {
-      showMessage("The map is not available.");
-    }
-  }
-  return baseMap;
-}
-
-function drawMap() {
-  if (!baseMap || mapCanvas.clientWidth === 0) return;
-  const dpr = window.devicePixelRatio || 1;
-  const width = mapCanvas.clientWidth;
-  const height = mapCanvas.clientHeight;
-  mapCanvas.width = Math.round(width * dpr);
-  mapCanvas.height = Math.round(height * dpr);
-  const c = mapCanvas.getContext("2d")!;
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawBaseMap(c, baseMap, mapView, width, height, observer);
-}
-
-/** Drops the place at `at`, with the name of the nearest place and its time zone. */
-function dropPlace(at: Observer, name?: string) {
-  if (!baseMap) return;
-  const near = nearestPlace(baseMap.places, at);
-  const coordinates = `${at.latitudeDeg.toFixed(3)}°, ${at.longitudeDeg.toFixed(3)}°`;
-  setPlace({
-    observer: at,
-    name: `${name ?? (near ? `near ${near.name}` : coordinates)} · ${coordinates}`,
-    timeZone: timeZoneAt(baseMap.places, at, browserTimeZone()),
-    manual: true,
-  });
-  drawMap();
-}
-
-/** The card at the bottom of the panel: the name of the place, its coordinates, and its zone. */
-function renderPlaceCard() {
-  // A dropped place has the name "near X · coordinates": the card shows the coordinates below.
-  $("place-title").textContent = placeText.split(" · ")[0] || "Your location";
-  // The readable name of the zone ("Central European Standard Time"), not the IANA ID.
-  const zoneName =
-    new Intl.DateTimeFormat(undefined, { timeZone: zone, timeZoneName: "long" })
-      .formatToParts(new Date())
-      .find((part) => part.type === "timeZoneName")?.value ?? zone;
-  $("place-subtitle").textContent =
-    `${observer.latitudeDeg.toFixed(3)}°, ${observer.longitudeDeg.toFixed(3)}° · ${zoneName}`;
-}
-
-function centerMap() {
-  mapView = { ...mapView, lon: observer.longitudeDeg, lat: observer.latitudeDeg };
-  drawMap();
-}
-
-$("place-button").addEventListener("click", async () => {
-  $("place-panel").classList.remove("hidden");
-  renderPlaceCard();
-  mapView = { ...mapView, zoom: 7 };
-  centerMap();
-  if (await loadBaseMap()) drawMap();
+// The place panel (@almucantar/web-shared/placePanel).
+const placePanel = setupPlacePanel({
+  almucantar,
+  tileCache,
+  baseMapUrl,
+  current: () => ({ observer, name: placeText, zone }),
+  hasPlace: () => hasLocation,
+  terrainState: () => terrain.state,
+  setPlace,
+  showMessage,
 });
-$("place-close").addEventListener("click", () => $("place-panel").classList.add("hidden"));
-$("place-here").addEventListener("click", () => {
-  navigator.geolocation?.getCurrentPosition(
-    (position) => {
-      setPlace(gpsPlace(position));
-      centerMap();
-    },
-    () => showMessage("No location: the place stays."),
-    { enableHighAccuracy: false, timeout: 20000 },
-  );
-});
-window.addEventListener("resize", () => {
-  if (!$("place-panel").classList.contains("hidden")) drawMap();
-});
-for (const [id, step] of [
-  ["place-zoom-in", 1],
-  ["place-zoom-out", -1],
-] as const) {
-  $(id).addEventListener("click", () => {
-    mapView = { ...mapView, zoom: Math.max(1, Math.min(12, mapView.zoom + step)) };
-    drawMap();
-  });
-}
-const PIN_ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4-5-6.5-8.4-6.5-11.5a6.5 6.5 0 0 1 13 0C18.5 12.6 16 16 12 21z" /><circle cx="12" cy="9.5" r="2" class="fill" /></svg>';
-
-function showResults() {
-  results.replaceChildren();
-  $("place-clear").classList.toggle("hidden", searchInput.value === "");
-  const found = baseMap ? searchPlaces(baseMap.places, searchInput.value) : [];
-  results.classList.toggle("hidden", found.length === 0);
-  for (const p of found) {
-    const item = document.createElement("button");
-    item.innerHTML = PIN_ICON;
-    const text = document.createElement("span");
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = p.name;
-    const country = document.createElement("span");
-    country.className = "country";
-    country.textContent = p.country;
-    text.append(name, country);
-    item.append(text);
-    item.addEventListener("click", () => {
-      mapView = { lon: p.lon, lat: p.lat, zoom: Math.max(mapView.zoom, 9) };
-      dropPlace({ latitudeDeg: p.lat, longitudeDeg: p.lon }, p.name);
-      searchInput.value = "";
-      searchInput.blur();
-      showResults();
-    });
-    results.append(item);
-  }
-}
-searchInput.addEventListener("input", showResults);
-$("place-clear").addEventListener("click", () => {
-  searchInput.value = "";
-  showResults();
-  searchInput.focus();
-});
-
-// Drag to move the map, tap to drop the place, and the wheel to zoom.
-let mapDrag: { x: number; y: number; moved: boolean } | null = null;
-mapCanvas.addEventListener("pointerdown", (e) => {
-  mapDrag = { x: e.clientX, y: e.clientY, moved: false };
-  mapCanvas.setPointerCapture(e.pointerId);
-});
-mapCanvas.addEventListener("pointermove", (e) => {
-  if (!mapDrag) return;
-  const dx = e.clientX - mapDrag.x;
-  const dy = e.clientY - mapDrag.y;
-  if (!mapDrag.moved && Math.hypot(dx, dy) < 5) return;
-  const [x, y] = toWorld(mapView.lon, mapView.lat, mapView.zoom);
-  const [lon, lat] = fromWorld(x - dx, y - dy, mapView.zoom);
-  mapView = { ...mapView, lon, lat };
-  mapDrag = { x: e.clientX, y: e.clientY, moved: true };
-  drawMap();
-});
-mapCanvas.addEventListener("pointerup", (e) => {
-  if (mapDrag && !mapDrag.moved) {
-    const rect = mapCanvas.getBoundingClientRect();
-    dropPlace(
-      screenToPlace(mapView, rect.width, rect.height, e.clientX - rect.left, e.clientY - rect.top),
-    );
-  }
-  mapDrag = null;
-});
-// Without this, a cancelled touch leaves the drag on, and the mouse then moves the map.
-mapCanvas.addEventListener("pointercancel", () => (mapDrag = null));
-mapCanvas.addEventListener(
-  "wheel",
-  (e) => {
-    e.preventDefault();
-    mapView = {
-      ...mapView,
-      zoom: Math.max(1, Math.min(12, mapView.zoom - Math.sign(e.deltaY) * 0.5)),
-    };
-    drawMap();
-  },
-  { passive: false },
-);
 
 // The last place starts the terrain also before the location arrives.
 if (place !== DEFAULT_PLACE) {
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
 }
-
-// --- Keep the terrain of a place offline (for a trip) ----------------------------------------------
-
-const keepButton = $<HTMLButtonElement>("place-keep");
-const keepStatus = $("place-keep-status");
-const keptList = $("place-kept");
-let keeping = false;
-
-// 1 MB is 1024 × 1024 bytes, as in the apps and in MAX_CACHE_BYTES.
-const megabytes = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
-
-function renderKept() {
-  keptList.replaceChildren();
-  for (const kept of tileCache.kept) {
-    const row = document.createElement("div");
-    row.className = "kept";
-    const text = document.createElement("span");
-    text.textContent = kept.name;
-    const size = document.createElement("small");
-    size.textContent = `${kept.urls.length} tiles, ${megabytes(tileCache.bytesOf(kept.urls))}`;
-    text.append(size);
-    const remove = document.createElement("button");
-    remove.textContent = "Remove";
-    remove.addEventListener("click", () => {
-      tileCache.release(kept.id);
-      renderKept();
-    });
-    row.append(text, remove);
-    keptList.append(row);
-  }
-  keepButton.disabled = keeping || !hasLocation;
-}
-
-keepButton.addEventListener("click", async () => {
-  if (keeping || !hasLocation) return;
-  keeping = true;
-  renderKept();
-  // Ask the browser not to clear the storage of the app when the disk gets full.
-  void navigator.storage?.persist?.();
-  const name = placeText.split(" · ")[0];
-  try {
-    // The fine tiles only where the terrain matters, as the terrain of this place decided.
-    // Without a decision (the terrain is off or not ready), keep all of them.
-    const state = terrain.state;
-    const fine =
-      state.kind === "ready" &&
-      state.observer.latitudeDeg === observer.latitudeDeg &&
-      state.observer.longitudeDeg === observer.longitudeDeg
-        ? state.fine
-        : true;
-    const result = await keepOffline(
-      almucantar,
-      tileCache,
-      observer,
-      name,
-      (done, total) => {
-        keepStatus.textContent = `Downloading ${done}/${total}`;
-      },
-      fine,
-    );
-    keepStatus.textContent = result.missing
-      ? `${result.missing} tiles missing, try again online`
-      : `Ready offline: ${result.tiles} tiles, ${megabytes(result.bytes)}`;
-  } catch (e) {
-    // For example, the storage is full.
-    keepStatus.textContent = `Download stopped: ${e instanceof Error ? e.message : String(e)}`;
-  } finally {
-    keeping = false;
-    renderKept();
-  }
-});
-$("place-button").addEventListener("click", renderKept);

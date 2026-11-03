@@ -14,7 +14,7 @@ import kotlin.math.tan
 
 // The offline base map (`assets/basemap/basemap.json`, Natural Earth, public domain): the decode,
 // the search of the places, and the time zone of a dropped place. The format is in the docstring
-// of `scripts/basemap/build_basemap.py`. The PWA has the same functions in `pwa/src/basemap.ts`.
+// of `scripts/basemap/build_basemap.py`. The PWA has the same functions in `web/shared/src/basemap.ts`.
 
 private const val MAX_MAP_LATITUDE_DEG = 85.0511287798066
 

@@ -13,7 +13,9 @@ import {
 import { fromWallTime, offsetMs, startOfDay, wallTime } from "../src/zone";
 
 const map = decodeBaseMap(
-  JSON.parse(readFileSync(new URL("../../assets/basemap/basemap.json", import.meta.url), "utf8")),
+  JSON.parse(
+    readFileSync(new URL("../../../assets/basemap/basemap.json", import.meta.url), "utf8"),
+  ),
 );
 
 describe("zone", () => {

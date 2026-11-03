@@ -1,0 +1,17 @@
+{
+  "name": "almucantar-web",
+  "private": true,
+  "description": "The web apps and the website: one npm workspace with the shared code",
+  "license": "MPL-2.0",
+  "workspaces": [
+    "shared",
+    "sunradar",
+    "website"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "format:check": "npm run format:check --workspaces --if-present"
+  }
+}

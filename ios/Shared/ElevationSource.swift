@@ -4,7 +4,7 @@ import Almucantar
 /// A source of elevation tiles of 1° (`ElevationTile`), as Cloud Optimized GeoTIFF files with
 /// overviews. The terrain and the cache use only this description, so another source (for example
 /// a bare-earth model without buildings) can replace Copernicus without changes in the terrain
-/// logic. The PWA has the same idea in `pwa/src/terrain.ts` (`ElevationSource`).
+/// logic. The PWA has the same idea in `web/shared/src/terrain.ts` (`ElevationSource`).
 ///
 /// The cache keeps the tiles by their name (`DemCache.name`), not by their source. A new source
 /// must use a new directory of the cache, or the cache gives the files of the old source.

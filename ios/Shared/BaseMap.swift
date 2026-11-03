@@ -5,7 +5,7 @@ import Almucantar
 /// The offline base map (assets/basemap/basemap.json, Natural Earth): the decode, the search of
 /// the places, the time zone of a dropped place, and the Web Mercator projection. The format is in
 /// the docstring of scripts/basemap/build_basemap.py. The PWA has the same logic in
-/// pwa/src/basemap.ts.
+/// web/shared/src/basemap.ts.
 struct BaseMap: Sendable {
     /// The line layers, in the order of the drawing.
     enum Layer: String, CaseIterable, Sendable {

@@ -50,7 +50,7 @@ data class ScreenshotScene(
 /**
  * A device held upright in its natural orientation, with the back camera to [azimuthDeg] and
  * pitched up by [pitchDeg], as a quaternion from the device frame to ENU. The PWA has the same
- * function (`upright` in `pwa/src/orientation.ts`).
+ * function (`upright` in `web/shared/src/orientation.ts`).
  */
 fun upright(azimuthDeg: Double, pitchDeg: Double): Quaternion {
     val a = Math.toRadians(azimuthDeg)

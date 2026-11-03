@@ -10,7 +10,7 @@ import at.stefl.almucantar.core.readElevationGeotiff
  * A source of elevation tiles of 1° × 1°. The terrain logic ([DemCache], [TerrainLoader], the
  * profile) needs only this description. So another source (for example a bare-earth model without
  * buildings) can replace Copernicus without changes in the terrain logic. The PWA has the same idea
- * in `pwa/src/terrain.ts`.
+ * in `web/shared/src/terrain.ts`.
  */
 interface ElevationSource {
     /** The name of the data, for example "Copernicus DEM GLO-90". */

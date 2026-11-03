@@ -1,5 +1,6 @@
-# The WebAssembly package, the PWA, and the website. The website uses the package for its sky.
-# On main, the website and the PWA (under /app/) go to GitHub Pages.
+# The WebAssembly package and the npm workspace web/: the shared code, the PWA of sunradar, and the
+# website. The website uses the package for its sky. On main, the website and the PWA (under
+# /app/) go to GitHub Pages.
 name: web
 
 on:
@@ -7,15 +8,13 @@ on:
     branches: [main]
     paths:
       - "core/**"
-      - "pwa/**"
-      - "website/**"
+      - "web/**"
       - "assets/**"
       - ".github/workflows/web.yml"
   pull_request:
     paths:
       - "core/**"
-      - "pwa/**"
-      - "website/**"
+      - "web/**"
       - "assets/**"
       - ".github/workflows/web.yml"
   workflow_dispatch:
@@ -72,13 +71,13 @@ jobs:
           name: npm-package
           path: ${{ env.WASM_DIST }}
 
-  pwa:
-    name: PWA
+  web:
+    name: Web apps and website
     needs: wasm
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: pwa
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
@@ -106,47 +105,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: pwa
-          path: pwa/dist
-
-  website:
-    name: Website
-    needs: wasm
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: website
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: ${{ env.WASM_DIST }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install
-        run: npm ci
-
-      - name: Check the format
-        run: npm run format:check
-
-      - name: Build
-        run: npm run build
+          path: web/sunradar/dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: website
-          path: website/dist
+          path: web/website/dist
 
   # Runs only if GitHub Pages is enabled for the repository (source: GitHub Actions) and the
   # repository variable PAGES_ENABLED is "true".
   pages:
     name: GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
-    needs: [pwa, website]
+    needs: web
     runs-on: ubuntu-24.04
     permissions:
       pages: write
