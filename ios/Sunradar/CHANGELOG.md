@@ -1,7 +1,7 @@
 # Changelog
 
-The changes in the iOS app that a user notices. Each release has the tag `ios-vX.Y.Z`. The
-rules are the same as in `core/CHANGELOG.md`.
+The changes in the iOS app sunradar that a user notices. Each release has the tag
+`sunradar-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 

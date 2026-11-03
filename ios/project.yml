@@ -50,7 +50,8 @@ targets:
     platform: iOS
     sources:
       - Shared
-      - Sunradar
+      - path: Sunradar
+        excludes: [CHANGELOG.md]
       # The offline base map (Natural Earth). The app reads it from the bundle; see assets/basemap/README.md.
       - path: ../assets/basemap/basemap.json
         buildPhase: resources

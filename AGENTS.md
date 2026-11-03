@@ -7,21 +7,28 @@ user documentation is in [`README.md`](README.md). A module with its own
 
 ## What this is
 
-sunradar shows the path of the sun on top of the camera image, so you can see when
-the sun is at a given place in the sky. The repository is a monorepo:
+almucantar is one C++ core that calculates the sky, and the apps that use it (PLAN.md 14). The
+first app is sunradar: it shows the path of the sun on top of the camera image, so you can see
+when the sun is at a given place in the sky. The sky map and the photo planner come later.
+
+The repository is a monorepo. The apps are grouped by platform: each platform is one build, with
+a shared part and one part for each app.
 
 | Path | What | Has `AGENTS.md` |
 |---|---|---|
-| `core/` | The C++ library with all its bindings (Python, Android, WASM, and Apple). | yes |
-| `android/` | The Android app. It uses `core/android` as a composite build, and contains no C++. | yes |
-| `pwa/` | The PWA. It uses `core/wasm`. | yes |
-| `website/` | The website. It uses `core/wasm` for its sky. The workflow `web.yml` deploys it with the PWA (under `/app/`) to GitHub Pages. | yes |
-| `assets/` | The logo. | no |
-| `ios/` | The iOS app. It uses the Swift package of `core/apple`. | yes |
+| `core/` | The C++ library almucantar with all its bindings (Python, Android, WASM, and Apple). There is one core for all apps. | yes |
+| `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
+| `ios/` | The iOS apps: one XcodeGen project with `Shared/` and one folder per app (`Sunradar/`). It uses the Swift package of `core/apple`. | yes |
+| `web/` | One npm workspace: `shared/` (`@almucantar/web-shared`), the PWA of sunradar (`sunradar/`), and the website (`website/`). It uses `core/wasm`. The workflow `web.yml` deploys the website with the PWA (under `/app/`) to GitHub Pages. | yes |
+| `assets/` | The logo and the offline base map (`assets/basemap/`). | no |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
-| `scripts/` | Repository tools: `format`, `release.py`, and the pinned versions of the dev tools. | no |
+| `scripts/` | Repository tools: `format`, `release.py`, the base map, the store screenshots, and the pinned versions of the dev tools. | no |
 | `screenshots/` | The design of the store screenshots and the description of the pipeline (`README.md`). The scripts are in `scripts/screenshots/`, the lanes in `android/fastlane/` and `ios/fastlane/`. | no |
-| `.github/workflows/` | One workflow per project and per package, with path filters. | no |
+| `.github/workflows/` | One workflow per platform and per package, with path filters. | no |
+
+A new app gets a module or a folder on each platform next to `sunradar`, and uses the shared part
+of the platform. The shared part never depends on an app. Code moves to the shared part when a
+second app needs it.
 
 The model is the one of OpenDocument.core: one core with a small public API, one
 binding per language, and one package per binding. The apps use the packages and
@@ -45,10 +52,11 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 
 - Format before each commit: `scripts/format`. CI runs `scripts/format --check`.
 - Commit messages follow Conventional Commits. The scope is the project or the
-  binding: `feat(core): ...`, `fix(python): ...`, `ci: ...`, `docs: ...`. The release
+  binding: `feat(core): ...`, `fix(python): ...`, `feat(android): ...`, `ci: ...`, `docs: ...`. The release
   calculates the next version from the commit messages, so write them carefully.
 - A change that a user of a project notices gets an entry under `## Unreleased` in
-  the `CHANGELOG.md` of that project, in the same commit or pull request.
+  the `CHANGELOG.md` of that project (`core/`, or the folder of the app, for example
+  `android/sunradar/`), in the same commit or pull request.
 - Commit messages, code comments, and documentation use Simplified Technical
   English: one idea per sentence, the active voice, the present tense, one word for
   one meaning, and short common words. Identifiers and error strings stay as they are.
@@ -58,8 +66,10 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 
 ## Releasing
 
-Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages),
-`android-vX.Y.Z`, `pwa-vX.Y.Z`, and `ios-vX.Y.Z`. The flow is the one of OpenDocument.core.
+Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages), and one
+project for each app on each platform: `sunradar-android-vX.Y.Z`, `sunradar-ios-vX.Y.Z`, and
+`sunradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app and
+the shared part of its platform. The flow is the one of OpenDocument.core.
 
 1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that
    makes them. An empty `## Unreleased` stops the release.

@@ -1,4 +1,4 @@
-# Builds the Android app when an android-v* release is published, and attaches the APK to the
+# Builds the Android app sunradar when a sunradar-android-v* release is published, and attaches the APK to the
 # release. With the signing secrets, the APK is signed for release:
 #   SUNRADAR_KEYSTORE (base64 of the keystore), SUNRADAR_KEYSTORE_PASSWORD, SUNRADAR_KEY_ALIAS,
 #   SUNRADAR_KEY_PASSWORD.
@@ -17,7 +17,7 @@ on:
 
 jobs:
   native:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'android-v')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'sunradar-android-v')
     uses: ./.github/workflows/native-android.yml
 
   apk:
@@ -54,7 +54,7 @@ jobs:
           SUNRADAR_KEY_ALIAS: ${{ secrets.SUNRADAR_KEY_ALIAS }}
           SUNRADAR_KEY_PASSWORD: ${{ secrets.SUNRADAR_KEY_PASSWORD }}
         run: |
-          version="${SUNRADAR_VERSION#android-v}"
+          version="${SUNRADAR_VERSION#sunradar-android-v}"
           mkdir -p out
           if [ -n "${KEYSTORE_BASE64}" ]; then
             echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.keystore"

@@ -1,68 +1,73 @@
+# almucantar
+
+An almucantar is a circle of equal altitude in the sky. This repository has one C++ core that
+calculates the sky (the sun, the moon, the planets, the Milky Way, the terrain horizon, and the
+projection on a camera image), and the apps that use it. See [PLAN.md](PLAN.md) for the design,
+the milestones, and the plan of the apps (section 14).
+
+| App | What | Status |
+|---|---|---|
+| **sunradar** | The path of the sun on the camera image: when is the sun at this place in the sky? | pre-release |
+| sky map | The stars, the planets, and the Milky Way in the direction of the phone. | planned |
+| photo planner | From where and when is the sun, the moon, or the Milky Way at a given place in a photo? | planned |
+
+## sunradar
+
 <p align="center">
   <img src="assets/logo.svg" alt="Sunradar" width="128" height="128">
 </p>
 
-# sunradar
-
 **Website and web app: <https://andiwand.github.io/almucantar/>**
 
-sunradar shows the path of the sun on top of the camera image. You can see when the
-sun is at a given place in the sky, for example when you visit a flat. See
-[PLAN.md](PLAN.md) for the design and the milestones.
+sunradar shows the path of the sun on top of the camera image. You can see when the sun is at a
+given place in the sky, for example when you visit a flat.
 
-## Features
-
-- The path of the sun with the hours, the horizon, and the summer and winter paths, on
-  the camera image or on a sky view.
-- Point the crosshair at a window or a gap between roofs: the app shows the time when
-  the sun is in that direction, and the days of the year when the sun is in the crosshair.
-- Any date and time, with sunrise and sunset.
-- A heading filter for indoor use. Align the heading with the sun, the moon, or a
-  landmark on a map. The Android and iOS apps find the sun in the camera image.
+- The path of the sun with the hours, the horizon, the terrain, and the summer and winter paths,
+  on the camera image or on a sky view.
+- Point the crosshair at a window or a gap between roofs: the app shows the time when the sun is
+  in that direction, and the days of the year when the sun is in the crosshair.
+- Any date, time, and place, also offline, with the sunrise and the sunset, also behind the
+  terrain.
+- A heading filter for indoor use. Align the heading with the sun, the moon, or a landmark on a
+  map. The Android and iOS apps find the sun in the camera image.
 - The sun to 0.015° or better, measured against NASA JPL Horizons.
 
-## Download
+### Download
 
-The first pre-release is 0.1.0. It is not ready for all users yet.
+sunradar is a pre-release. It is not ready for all users yet.
 
 | What | Where |
 |---|---|
-| Android app | the APK of [android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/android-v0.2.0) (a debug build: allow the installation from this source) |
+| Android app | the APK of [sunradar-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sunradar-android-v0.2.0) (a debug build: allow the installation from this source) |
 | Web app | <https://andiwand.github.io/almucantar/app/> (also offline after the first visit) |
 | iOS app | build it from `ios/` (see [`ios/AGENTS.md`](ios/AGENTS.md)); it is not in the App Store |
-| Core packages | the wheels, the npm package, the Android AAR, and the xcframework of [core-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/core-v0.2.0) |
 
-The packages are not on PyPI, npm, or Maven Central yet. Install them from the release:
+## The core packages
+
+The packages are not on PyPI, npm, or Maven Central yet. The release
+[core-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/core-v0.2.0) has the wheels, the
+npm package, the Android AAR, and the xcframework, still with the old name `sunradar`. The next
+release of the core has the name `almucantar`: the Python package `almucantar`, the npm package
+`@almucantar/core`, the AAR `at.stefl.almucantar:core-android`, and the Swift package
+`Almucantar`.
 
 ```sh
-# Wheels for Linux x86_64 and macOS arm64, Python 3.10 to 3.14.
+# Wheels for Linux x86_64 and macOS arm64, Python 3.10 to 3.14 (core-v0.2.0, old name).
 pip install sunradar --find-links https://github.com/andiwand/almucantar/releases/expanded_assets/core-v0.2.0
-npm install https://github.com/andiwand/almucantar/releases/download/core-v0.2.0/sunradar-core-0.1.0.tgz
-```
-
-For Swift, add the package with the tag `0.1.0`:
-
-```swift
-.package(url: "https://github.com/andiwand/almucantar.git", from: "0.1.0")
 ```
 
 ## Repository layout
 
-This repository is a monorepo. Each directory is a self-contained project.
+This repository is a monorepo. The core is one library with one binding per language. The apps
+are grouped by platform: each platform is one build with a shared part and one part per app.
 
 | Path | Content |
 |---|---|
-| `core/` | the C++20 core: solar models, projection, search |
-| `core/python/` | the Python package `sunradar` |
-| `core/android/` | the Android AAR `at.stefl.almucantar:core-android` |
-| `android/` | the Android app (Kotlin, Jetpack Compose) |
-| `core/apple/` | the Swift package `Sunradar` (`Package.swift` at the root) |
-| `core/wasm/` | the npm package `@almucantar/core` (WebAssembly) |
-| `pwa/` | the PWA (TypeScript, the core as WebAssembly) |
-| `website/` | the website on GitHub Pages; the PWA is under `/app/` |
-| `ios/` | the iOS app (SwiftUI) |
-
-Agents: read [`AGENTS.md`](AGENTS.md) first.
+| `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
+| `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/` and `sunradar/` |
+| `ios/` | the iOS apps (SwiftUI): `Shared/` and `Sunradar/` |
+| `web/` | one npm workspace: `shared/`, `sunradar/` (the PWA), and `website/` (GitHub Pages; the PWA is under `/app/`) |
+| `assets/` | the logo and the offline base map |
 
 ## License
 
@@ -70,6 +75,6 @@ Agents: read [`AGENTS.md`](AGENTS.md) first.
 
 ## Development
 
-[`AGENTS.md`](AGENTS.md) has the setup, the layout, the conventions, and the release flow.
-Each project has its own build and test steps, for example
-[`core/AGENTS.md`](core/AGENTS.md) for the C++ core.
+[`AGENTS.md`](AGENTS.md) has the setup, the layout, the conventions, and the release flow. Each
+project has its own build and test steps, for example [`core/AGENTS.md`](core/AGENTS.md) for the
+C++ core.

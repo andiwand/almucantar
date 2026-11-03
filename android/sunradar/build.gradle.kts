@@ -16,13 +16,13 @@ spotless {
 }
 
 // The release gives the version (sunradar.version or SUNRADAR_VERSION, for example 0.2.0 or
-// android-v0.2.0). The version code has two digits for each part: 1.2.3 is 10203.
+// sunradar-android-v0.2.0). The version code has two digits for each part: 1.2.3 is 10203.
 val appVersion =
     providers
         .gradleProperty("sunradar.version")
         .orElse(providers.environmentVariable("SUNRADAR_VERSION"))
         .filter { it.isNotEmpty() }
-        .map { it.removePrefix("android-v").removePrefix("v") }
+        .map { it.removePrefix("sunradar-android-v").removePrefix("v") }
         .getOrElse("0.1.0")
 val appVersionCode =
     appVersion

@@ -1,7 +1,7 @@
 # Changelog
 
-The changes in the PWA that a user notices. Each release has the tag `pwa-vX.Y.Z`. The rules
-are the same as in `core/CHANGELOG.md`.
+The changes in the PWA of sunradar that a user notices. Each release has the tag
+`sunradar-pwa-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 

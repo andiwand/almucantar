@@ -36,14 +36,30 @@ PROJECTS = {
             ("core/conanfile.py", r'(version = ")[^"]*(")', r"\g<1>{version}\g<2>"),
         ],
     },
-    "android": {
-        "paths": ["android/**"],
-        "changelog": "android/CHANGELOG.md",
+    # An app on one platform: its own paths and the shared code of the platform. The paths of
+    # another app on the same platform do not change the version of this app.
+    "sunradar-android": {
+        "paths": [
+            "android/sunradar/**",
+            "android/shared/**",
+            "android/gradle/**",
+            "android/*.kts",
+            "android/gradle.properties",
+            "android/fastlane/**",
+        ],
+        "changelog": "android/sunradar/CHANGELOG.md",
         "stamps": [],
     },
-    "ios": {
-        "paths": ["ios/**"],
-        "changelog": "ios/CHANGELOG.md",
+    "sunradar-ios": {
+        "paths": [
+            "ios/Sunradar/**",
+            "ios/SunradarUITests/**",
+            "ios/Shared/**",
+            "ios/SharedTests/**",
+            "ios/project.yml",
+            "ios/fastlane/**",
+        ],
+        "changelog": "ios/Sunradar/CHANGELOG.md",
         "stamps": [
             (
                 "ios/project.yml",
@@ -52,11 +68,20 @@ PROJECTS = {
             )
         ],
     },
-    "pwa": {
-        "paths": ["pwa/**"],
-        "changelog": "pwa/CHANGELOG.md",
+    "sunradar-pwa": {
+        "paths": [
+            "web/sunradar/**",
+            "web/shared/**",
+            "web/package.json",
+            "web/package-lock.json",
+        ],
+        "changelog": "web/sunradar/CHANGELOG.md",
         "stamps": [
-            ("pwa/package.json", r'("version": ")[^"]*(")', r"\g<1>{version}\g<2>")
+            (
+                "web/sunradar/package.json",
+                r'("version": ")[^"]*(")',
+                r"\g<1>{version}\g<2>",
+            )
         ],
     },
 }

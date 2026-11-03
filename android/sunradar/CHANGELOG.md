@@ -1,7 +1,7 @@
 # Changelog
 
-The changes in the Android app that a user notices. Each release has the tag
-`android-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
+The changes in the Android app sunradar that a user notices. Each release has the tag
+`sunradar-android-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 

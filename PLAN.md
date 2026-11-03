@@ -74,7 +74,7 @@ package. The apps use the packages and contain no C++.
 
 ```
 ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
-│ android/ app      │ │ pwa/ app          │ │ ios/ app          │ │ scripts, notebooks│
+│ android/ apps     │ │ web/ apps         │ │ ios/ apps         │ │ scripts, notebooks│
 │ Kotlin, Compose   │ │ TypeScript        │ │ Swift, SwiftUI    │ │ reference checks  │
 └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
           │ AAR                 │ npm                 │ SwiftPM             │ PyPI
@@ -94,7 +94,7 @@ package. The apps use the packages and contain no C++.
 ### Rules for the boundary
 
 - Every binding wraps the public API only. A binding never includes
-  `sunradar/internal/...`.
+  `almucantar/internal/...`.
 - The core uses UTC only, as Unix time in seconds (`double`). The platform converts
   local time and time zones, because `java.time`, `Intl`, and `Foundation` do this well.
   The support for `std::chrono` time zones in the libc++ of the NDK is not reliable.
@@ -106,17 +106,19 @@ package. The apps use the packages and contain no C++.
 
 ## 4. Repository layout
 
-The repository is a monorepo. `core/` is the library with all its bindings, the same
-as OpenDocument.core. Each app has its own directory. Each directory is a
-self-contained project with its own build system.
+The repository is a monorepo with the name of the core, almucantar (decided 2026-11-03), because
+it holds more than one app (section 14). `core/` is the library with all its bindings, the same as
+OpenDocument.core. The apps are grouped by platform: each platform is one build with a shared part
+and one part for each app, because the apps on one platform share much code (the place, the maps,
+the terrain, the camera, the heading). The shared part never depends on an app.
 
 ```
-sunradar/
+almucantar/
 ├── core/
-│   ├── src/sunradar/          public API (*.hpp), installed
-│   ├── src/sunradar/internal/ everything else, not installed
+│   ├── src/almucantar/        public API (*.hpp), installed
+│   ├── src/almucantar/internal/ everything else, not installed
 │   ├── test/                  Catch2 tests, reference data, and the scripts that make it
-│   ├── python/                pybind11 binding, Python package `sunradar`
+│   ├── python/                pybind11 binding, Python package `almucantar`
 │   ├── android/               JNI binding and Kotlin API, AAR
 │   ├── wasm/                  embind binding and JS API, npm package
 │   ├── apple/                 C API and Swift package (Package.swift at the root)
@@ -128,10 +130,9 @@ sunradar/
 │   ├── CMakeLists.txt
 │   ├── CHANGELOG.md
 │   └── AGENTS.md
-├── android/                   the Android app
-├── pwa/                       the PWA
-├── ios/                       the iOS app
-├── website/                   the website; GitHub Pages serves it with the PWA under /app/
+├── android/                   the Android apps: shared/, sunradar/ (one Gradle project)
+├── ios/                       the iOS apps: Shared/, Sunradar/ (one XcodeGen project)
+├── web/                       one npm workspace: shared/, sunradar/ (the PWA), website/
 ├── assets/                    the logo, and the offline base map (assets/basemap/)
 ├── scripts/                   format, release.py, the base map, the store screenshots
 ├── screenshots/               the design of the store screenshots
@@ -149,7 +150,7 @@ Two differences from OpenDocument.core, because the situation is different:
   JVM only on Android, so `core/android/` contains the JNI code and a Kotlin API
   directly.
 - **Only the public headers are installed.** OpenDocument.core installs the internal
-  headers too. sunradar installs only `src/sunradar/*.hpp`, so a consumer cannot depend
+  headers too. almucantar installs only `src/almucantar/*.hpp`, so a consumer cannot depend
   on an internal header.
 
 In the monorepo, an app uses the binding from source: the Android app includes
@@ -167,10 +168,10 @@ compare the models with each other and with external reference data. The public 
 selects a model with an enum, so the bindings do not have to wrap a virtual class.
 
 ```cpp
-// public: src/sunradar/sun.hpp
+// public: src/almucantar/sun.hpp
 enum class SolarModel { noaa, astronomy_engine };
 
-// internal: src/sunradar/internal/solar_model.hpp
+// internal: src/almucantar/internal/solar_model.hpp
 class SolarModelImpl {
  public:
   virtual ~SolarModelImpl() = default;
@@ -408,11 +409,11 @@ in the core.
 
 | Binding | Directory | Technology | Package | Registry |
 |---|---|---|---|---|
-| Python | `core/python/` | pybind11, scikit-build-core | `sunradar` | PyPI |
+| Python | `core/python/` | pybind11, scikit-build-core | `almucantar` | PyPI |
 | Android | `core/android/` | JNI by hand, Kotlin API | `at.stefl.almucantar:core-android` (AAR) | Maven Central |
 | Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@almucantar/core` | npm |
-| Apple | `core/apple/` | C API and Swift package with a prebuilt xcframework | `Sunradar` | SwiftPM (GitHub release) |
-| C++ | `core/` | Conan recipe | `sunradar` | own Conan remote, if anyone needs it |
+| Apple | `core/apple/` | C API and Swift package with a prebuilt xcframework | `Almucantar` | SwiftPM (GitHub release) |
+| C++ | `core/` | Conan recipe | `almucantar` | own Conan remote, if anyone needs it |
 
 Rules for all bindings, from OpenDocument.core:
 
@@ -455,8 +456,8 @@ A test oracle is a test dependency only. The app does not link it.
 
 - CMake ≥ 3.24, C++20, Conan 2.
 - CMake options, one per binding, the same as `ODR_*` in OpenDocument.core:
-  `SUNRADAR_TESTS`, `SUNRADAR_PYTHON`, `SUNRADAR_JNI`, `SUNRADAR_WASM`,
-  `SUNRADAR_APPLE`. `conanfile.py` has the matching options (`with_python`, ...).
+  `ALMUCANTAR_TESTS`, `ALMUCANTAR_PYTHON`, `ALMUCANTAR_JNI`, `ALMUCANTAR_WASM`,
+  `ALMUCANTAR_APPLE`. `conanfile.py` has the matching options (`with_python`, ...).
 - Conan profiles in `core/conan/profiles/`: `android-armv8`, `android-x86_64`, and
   `emscripten`, and `apple-*` for the xcframework slices.
 - The AAR: `core/android/build_native.py` runs Conan and CMake for each ABI into
@@ -469,16 +470,16 @@ A test oracle is a test dependency only. The app does not link it.
 ### CI
 
 One workflow per project and per package, each with a path filter, so a change in
-`pwa/` does not build the AAR:
+`web/` does not build the AAR:
 
 | Workflow | Paths | Does |
 |---|---|---|
 | `core.yml` | `core/**` | builds and tests the core on Linux and macOS, runs clang-tidy |
 | `python.yml` | `core/**` | builds wheels, runs pytest |
 | `core-android.yml` | `core/**` | builds the AAR (the native libraries come from the reusable `native-android.yml`), runs the instrumented tests on an emulator |
-| `android.yml` | `android/**`, `core/**` | builds and tests the app, runs lint and ktfmt |
-| `web.yml` | `core/**`, `pwa/**`, `website/**` | builds the npm package (`node --test`), tests and builds the PWA (prettier, vitest), deploys GitHub Pages |
-| `apple.yml` | `core/**`, `ios/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds and tests the iOS app |
+| `android.yml` | `android/**`, `core/**` | builds and tests the shared module and the apps, runs lint and ktfmt |
+| `web.yml` | `core/**`, `web/**` | builds the npm package (`node --test`), tests and builds the workspace `web/` (prettier, vitest), deploys GitHub Pages |
+| `apple.yml` | `core/**`, `ios/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds the shared framework alone and tests it, builds the iOS apps |
 | `format.yml` | all | clang-format, black |
 | `screenshots.yml` | manual | makes the store screenshots with the demo mode (M12) |
 | `release.yml`, `publish-core.yml`, `android-release.yml` | manual, release | the release flow (see below) |
@@ -497,7 +498,8 @@ The same flow as OpenDocument.core:
    (with provenance), Maven Central, and the xcframework for SwiftPM (with a tag `X.Y.Z`).
 
 A monorepo has more than one version, so the tags have a prefix: `core-v1.2.0` for
-the core and all its packages, and `android-v1.0.0`, `pwa-v1.0.0`, and `ios-v1.0.0` for the apps.
+the core and all its packages, and one prefix for each app on each platform, for example
+`sunradar-android-v1.0.0`, `sunradar-pwa-v1.0.0`, and `sunradar-ios-v1.0.0`.
 The core packages share one version, so the AAR, the npm package, and the wheel always
 contain the same core.
 
@@ -534,7 +536,7 @@ contain the same core.
 - TypeScript, Vite. Uses `@almucantar/core` (`core/wasm`) from the WASM build output (a
   `file:` dependency). The core runs on the main thread, because a frame needs less than
   1 ms; the values are plain objects, so a Web Worker is possible later.
-- GitHub Pages serves the website (`website/`) and the PWA under `/app/`.
+- GitHub Pages serves the website (`web/website/`) and the PWA (`web/sunradar/`) under `/app/`.
 - Camera: `getUserMedia`. Orientation: `AbsoluteOrientationSensor`, with
   `deviceorientation` as a fallback. iOS needs a permission prompt for the sensors.
 - FOV: a slider, or calibration with two sun or moon taps.
@@ -564,18 +566,22 @@ contain the same core.
 The user tested most features on real phones in November 2026. So the device checks of M5 to
 M11 are closed.
 
-**Releases:** all releases are pre-releases on GitHub: `core-v0.1.0` and `android-v0.1.0`
-(2026-11-01), and `core-v0.2.0`, `android-v0.2.0`, and `pwa-v0.1.0` with the work of M12 and M13
-(2026-11-03). The registries skip the core, because no credentials are set, so the packages are
+**Releases:** all releases are pre-releases on GitHub: `core-v0.1.0` and
+`sunradar-android-v0.1.0` (2026-11-01), and `core-v0.2.0`, `sunradar-android-v0.2.0`, and
+`sunradar-pwa-v0.1.0` with the work of M12 and M13 (2026-11-03). These releases still use the old
+name of the core (`sunradar`), and the tags of the apps had no app name before the split
+(`android-v*`, `pwa-v*`); they were renamed on 2026-11-03. The registries skip the core, because no credentials are set, so the packages are
 only attached to the GitHub release. iOS has no release yet.
 
 ### Next
 
-1. Set up the accounts and secrets of M10 and M12: npm, PyPI, Maven Central, the Play Store,
-   and the Apple developer account. Then the iOS app can get a publish workflow.
-2. The core parts of the photo planner (14.1), in this order: the windows of darkness, the line
+1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
+   (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
+   can get a publish workflow.
+2. The sky map (14.2): the star catalogue in the core, then the app, first on the web.
+3. The core parts of the photo planner (14.1), in this order: the windows of darkness, the line
    of sight over the DEM, and the inverse search.
-3. A prototype of the photo planner as a second web app (14.1).
+4. A prototype of the photo planner as a web app (14.1).
 
 Smaller items: the terrain line as a heading calibration (13.1), the Windows wheels (M10), and
 WMM2030 before the end of 2029.
@@ -609,7 +615,8 @@ fast way to plot paths and to compare models.
 - iOS (M11): decided. `Package.swift` is at the root of the monorepo. The Swift API is on
   top of a C API, not on Swift C++ interop and not on the Objective-C layer of
   OpenDocument.core. A release attaches the xcframework and tags `X.Y.Z` for SwiftPM.
-- The names of the packages: `sunradar` on PyPI and `@almucantar/core` on npm are proposals.
+- The names of the packages: decided (2026-11-03). The core is almucantar: `almucantar` on PyPI
+  and `@almucantar/core` on npm.
   On 2026-11-03 both packages do not exist yet, but this does not reserve the names. The npm
   scope needs an npm organization "sunradar". The
   Maven group is `at.stefl.sunradar` (decided); Maven Central needs the verified namespace
@@ -749,18 +756,20 @@ it after 13.1 and 13.2.
 galactic center and `galactic_plane()` for the center line. The Milky Way is for the photo planner
 and the sky map (14), not for sunradar.
 
-## 14. The family of apps: sunradar, the photo planner, and a sky map
+## 14. The family of apps: sunradar, a sky map, and the photo planner
 
-**Decided (2026-11-02):** the core gives more than one app, and a new app is mostly a new UI. The
-order of the apps:
+**Decided (2026-11-02, order changed 2026-11-03):** the core gives more than one app, and a new
+app is mostly a new UI. The core has the name almucantar, and the repository holds all apps
+(section 4). The order of the apps:
 
 1. **sunradar** (this app) stays simple: "when is the sun at this place?", for a flat, a garden,
    or a window. It starts from the camera and from the place where the user is.
-2. **The photo planner** is the second app, and it comes next.
-3. **A sky map** (an app like Sky Map or Stellarium) is a third option. It comes after the photo
-   planner.
+2. **A sky map** (an app like Sky Map or Stellarium) is the second app, and it comes next. It is
+   the nearest to sunradar: the same camera view, heading filter, and projection, and the core
+   already has the planets and the Milky Way (14.2).
+3. **The photo planner** is the third app. It comes after the sky map.
 
-### 14.1 The photo planner (the second app)
+### 14.1 The photo planner (the third app)
 
 A friend of the user proposed the idea: photographers point at a place on a map and look for the
 times when the sun, the moon, or the Milky Way is at a given place in the picture, for example the
@@ -795,14 +804,24 @@ calendar of results, the phases of the twilight and of the moon, and the darknes
 **The order:** the core parts first, then a prototype of the planner as a second web app next to
 the PWA (the cheapest UI to try), then a decision about a native app.
 
-### 14.2 A sky map (the third option)
+### 14.2 A sky map (the second app)
 
 An app that shows the stars, the constellations, the planets, and the Milky Way in the direction
 of the phone. The core has the view, the projection, the planets, and the galactic system. It
 needs a star catalogue (for example the Hipparcos or the Yale Bright Star Catalogue, with a free
 license), the lines of the constellations, and maybe deep-sky objects. The market has strong free
 apps (Stellarium, Sky Map), so this app needs a reason to exist, for example the offline terrain
-horizon or the link to the photo planner. It comes after the photo planner.
+horizon or the link to the photo planner.
+
+The parts:
+
+1. In the core: a star catalogue as data in the core (a few thousand stars down to a magnitude of
+   about 6), their positions with the precession and the aberration (Astronomy Engine), and the
+   lines of the constellations.
+2. In the apps: a new app `skymap` on each platform next to `sunradar`, with the shared parts (the
+   camera, the heading, the place, the terrain).
+3. The first version: the stars, the planets, the moon, the Milky Way, and the terrain horizon in
+   the direction of the phone, also offline.
 
 ### 14.3 What this means for sunradar
 
