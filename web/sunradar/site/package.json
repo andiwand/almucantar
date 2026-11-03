@@ -13,7 +13,8 @@
     "format:check": "prettier --check src *.ts *.json index.html"
   },
   "dependencies": {
-    "@almucantar/core": "file:../../../core/build/emscripten-wasm-release/wasm/dist"
+    "@almucantar/core": "file:../../../core/build/emscripten-wasm-release/wasm/dist",
+    "@almucantar/web-shared": "*"
   },
   "devDependencies": {
     "prettier": "^3.3.0",

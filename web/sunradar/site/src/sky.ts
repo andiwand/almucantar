@@ -3,6 +3,8 @@
 // screen. The core calculates all positions; this file only draws them.
 
 import type { Horizontal } from "@almucantar/core";
+import { Panorama, css, mix, random, skyColors } from "@almucantar/web-shared/panorama";
+import type { Rgb } from "@almucantar/web-shared/panorama";
 
 export interface HourMark {
   direction: Horizontal;
@@ -36,53 +38,7 @@ export interface Frame {
   centerAzimuthDeg: number;
 }
 
-type Rgb = [number, number, number];
-
 const DEG = Math.PI / 180;
-
-/** The colors of the sky at the top and at the horizon, for a sun altitude. */
-const SKY: [number, Rgb, Rgb][] = [
-  [-18, [3, 6, 15], [10, 18, 38]],
-  [-8, [10, 20, 46], [52, 40, 86]],
-  [-2, [24, 42, 86], [196, 104, 92]],
-  [3, [34, 70, 132], [242, 160, 96]],
-  [12, [44, 96, 168], [236, 200, 150]],
-  [30, [40, 106, 190], [150, 202, 238]],
-];
-
-function mix(a: Rgb, b: Rgb, t: number): Rgb {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-}
-
-function css([r, g, b]: Rgb, alpha = 1): string {
-  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha})`;
-}
-
-function skyColors(altitudeDeg: number): [Rgb, Rgb] {
-  if (altitudeDeg <= SKY[0][0]) return [SKY[0][1], SKY[0][2]];
-  for (let i = 1; i < SKY.length; i++) {
-    const [a1, top1, low1] = SKY[i];
-    const [a0, top0, low0] = SKY[i - 1];
-    if (altitudeDeg <= a1) {
-      const t = (altitudeDeg - a0) / (a1 - a0);
-      return [mix(top0, top1, t), mix(low0, low1, t)];
-    }
-  }
-  const last = SKY[SKY.length - 1];
-  return [last[1], last[2]];
-}
-
-/** A small random generator with a seed, so the stars and the buildings stay the same. */
-function random(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const STARS = (() => {
   const next = random(7);
@@ -121,33 +77,6 @@ const BUILDINGS: Building[] = (() => {
   }
   return result;
 })();
-
-/** The panorama: the mapping from a direction in the sky to a point on the screen. */
-class Panorama {
-  readonly pxPerDegX: number;
-  readonly pxPerDegY: number;
-  readonly horizonY: number;
-
-  constructor(
-    readonly width: number,
-    readonly height: number,
-    readonly centerAzimuthDeg: number,
-  ) {
-    const span = width < 700 ? 170 : 250;
-    this.pxPerDegX = width / span;
-    this.horizonY = height * (width < 700 ? 0.5 : 0.74);
-    this.pxPerDegY = Math.min((this.horizonY * 0.86) / 68, this.pxPerDegX * 2.4);
-  }
-
-  x(azimuthDeg: number): number {
-    const d = ((((azimuthDeg - this.centerAzimuthDeg) % 360) + 540) % 360) - 180;
-    return this.width / 2 + d * this.pxPerDegX;
-  }
-
-  y(altitudeDeg: number): number {
-    return this.horizonY - altitudeDeg * this.pxPerDegY;
-  }
-}
 
 export class Sky {
   private readonly ctx: CanvasRenderingContext2D;

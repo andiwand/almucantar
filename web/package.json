@@ -8,7 +8,8 @@
     "home",
     "sunradar/app",
     "sunradar/site",
-    "starradar/app"
+    "starradar/app",
+    "starradar/site"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",

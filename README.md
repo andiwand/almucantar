@@ -8,7 +8,7 @@ the milestones, and the plan of the apps (section 14).
 | App | What | Status |
 |---|---|---|
 | **sunradar** | The path of the sun on the camera image: when is the sun at this place in the sky? | pre-release |
-| sky map | The stars, the planets, and the Milky Way in the direction of the phone. | planned |
+| **starradar** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | web app: <https://andiwand.github.io/almucantar/starradar/> |
 | photo planner | From where and when is the sun, the moon, or the Milky Way at a given place in a photo? | planned |
 
 ## sunradar
@@ -66,7 +66,7 @@ are grouped by platform: each platform is one build with a shared part and one p
 | `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
 | `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/` and `sunradar/` |
 | `ios/` | the iOS apps (SwiftUI): `Shared/` and `Sunradar/` |
-| `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and `sunradar/app/` and `sunradar/site/` (on GitHub Pages under `/sunradar/`) |
+| `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and for each app `app/` and `site/` (on GitHub Pages under `/sunradar/` and `/starradar/`) |
 | `assets/` | the logo and the offline base map |
 
 ## License

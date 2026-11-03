@@ -9,7 +9,8 @@ user documentation is in [`README.md`](README.md). A module with its own
 
 almucantar is one C++ core that calculates the sky, and the apps that use it (PLAN.md 14). The
 first app is sunradar: it shows the path of the sun on top of the camera image, so you can see
-when the sun is at a given place in the sky. The sky map and the photo planner come later.
+when the sun is at a given place in the sky. The second app is starradar, the sky map (on the web
+first). The photo planner comes later.
 
 The repository is a monorepo. The apps are grouped by platform: each platform is one build, with
 a shared part and one part for each app.
@@ -19,10 +20,10 @@ a shared part and one part for each app.
 | `core/` | The C++ library almucantar with all its bindings (Python, Android, WASM, and Apple). There is one core for all apps. | yes |
 | `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
 | `ios/` | The iOS apps: one XcodeGen project with `Shared/` and one folder per app (`Sunradar/`). It uses the Swift package of `core/apple`. | yes |
-| `web/` | One npm workspace: `shared/` (`@almucantar/web-shared`), the page of the family (`home/`), and for each app its PWA and its website (`sunradar/app/`, `sunradar/site/`). It uses `core/wasm`. The workflow `web.yml` deploys them to GitHub Pages: `/`, `/sunradar/`, and `/sunradar/app/`. | yes |
-| `assets/` | The logo and the offline base map (`assets/basemap/`). | no |
+| `web/` | One npm workspace: `shared/` (`@almucantar/web-shared`), the page of the family (`home/`), and for each app its PWA and its website (`sunradar/app/`, `sunradar/site/`, `starradar/app/`, `starradar/site/`). It uses `core/wasm`. The workflow `web.yml` deploys them to GitHub Pages: `/`, `/sunradar/`, `/sunradar/app/`, `/starradar/`, and `/starradar/app/`. | yes |
+| `assets/` | The logos, the offline base map (`assets/basemap/`), and the star data (`assets/stars/`). | no |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
-| `scripts/` | Repository tools: `format`, `release.py`, the base map, the store screenshots, and the pinned versions of the dev tools. | no |
+| `scripts/` | Repository tools: `format`, `release.py`, the base map, the star data, the horizon of a website chapter (`site/`), the store screenshots, and the pinned versions of the dev tools. | no |
 | `screenshots/` | The design of the store screenshots and the description of the pipeline (`README.md`). The scripts are in `scripts/screenshots/`, the lanes in `android/fastlane/` and `ios/fastlane/`. | no |
 | `.github/workflows/` | One workflow per platform and per package, with path filters. | no |
 

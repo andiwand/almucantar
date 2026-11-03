@@ -3,7 +3,7 @@
 // its size from the magnitude, its color from the B-V color index, and the faintest magnitude that
 // the eye sees in a sky of a given darkness. The app and the website of starradar use this module.
 
-import type { StarCatalog } from "@almucantar/core";
+import type { Planet, StarCatalog } from "@almucantar/core";
 
 /** The format of stars.json, version 1. */
 export interface StarsJson {
@@ -125,3 +125,14 @@ export function darkness(sunAltitudeDeg: number): string {
   if (sunAltitudeDeg >= -18) return "Astronomical twilight";
   return "Night";
 }
+
+/** The planets with their names and colors. The numbers are the values of `Planet` of the core. */
+export const PLANETS: readonly { planet: Planet; name: string; color: string }[] = [
+  { planet: 0, name: "Mercury", color: "255, 236, 210" },
+  { planet: 1, name: "Venus", color: "255, 252, 236" },
+  { planet: 2, name: "Mars", color: "255, 170, 120" },
+  { planet: 3, name: "Jupiter", color: "255, 240, 214" },
+  { planet: 4, name: "Saturn", color: "255, 230, 170" },
+  { planet: 5, name: "Uranus", color: "200, 240, 255" },
+  { planet: 6, name: "Neptune", color: "170, 200, 255" },
+];

@@ -112,6 +112,7 @@ jobs:
           cp -r sunradar/site/dist/. ../site/sunradar/
           cp -r sunradar/app/dist ../site/sunradar/app
           mkdir -p ../site/starradar
+          cp -r starradar/site/dist/. ../site/starradar/
           cp -r starradar/app/dist ../site/starradar/app
 
       - uses: actions/upload-artifact@v4

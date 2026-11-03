@@ -3,7 +3,8 @@
 // @almucantar/core (WebAssembly); the place, the terrain, and the orientation come from
 // @almucantar/web-shared.
 
-import { GALACTIC_CENTER, Planet, load } from "@almucantar/core";
+import { GALACTIC_CENTER, load } from "@almucantar/core";
+import type { Planet } from "@almucantar/core";
 import type {
   HeadingEstimate,
   HorizonProfile,
@@ -23,6 +24,7 @@ import { DEFAULT_PLACE, gpsPlace, loadPlace } from "@almucantar/web-shared/place
 import type { StoredPlace } from "@almucantar/web-shared/place";
 import { setupPlacePanel } from "@almucantar/web-shared/placePanel";
 import {
+  PLANETS,
   darkness,
   decodeStars,
   limitingMagnitude,
@@ -68,16 +70,6 @@ const labelCatalog = {
   raDeg: stars.constellations.map((c) => c.labelRaDeg),
   decDeg: stars.constellations.map((c) => c.labelDecDeg),
 };
-
-const PLANETS: { planet: Planet; name: string; color: string }[] = [
-  { planet: Planet.mercury, name: "Mercury", color: "255, 236, 210" },
-  { planet: Planet.venus, name: "Venus", color: "255, 252, 236" },
-  { planet: Planet.mars, name: "Mars", color: "255, 170, 120" },
-  { planet: Planet.jupiter, name: "Jupiter", color: "255, 240, 214" },
-  { planet: Planet.saturn, name: "Saturn", color: "255, 230, 170" },
-  { planet: Planet.uranus, name: "Uranus", color: "200, 240, 255" },
-  { planet: Planet.neptune, name: "Neptune", color: "170, 200, 255" },
-];
 
 // --- State --------------------------------------------------------------------------------------
 
