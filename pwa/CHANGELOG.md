@@ -5,6 +5,8 @@ are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-03
+
 - The Place panel looks like a map app: a full-screen map, a rounded search bar with a back arrow,
   results with the country, round map buttons, a pin, and a card with the place, its time zone, and
   "Keep offline".
