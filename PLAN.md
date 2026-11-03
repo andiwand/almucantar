@@ -578,7 +578,8 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. The sky map (14.2): the star catalogue in the core, then the app, first on the web.
+2. starradar (14.2): the layout of the sites, the star data, the core, then the PWA and the
+   website together.
 3. The core parts of the photo planner (14.1), in this order: the windows of darkness, the line
    of sight over the DEM, and the inverse search.
 4. A prototype of the photo planner as a web app (14.1).
@@ -764,9 +765,9 @@ app is mostly a new UI. The core has the name almucantar, and the repository hol
 
 1. **sunradar** (this app) stays simple: "when is the sun at this place?", for a flat, a garden,
    or a window. It starts from the camera and from the place where the user is.
-2. **A sky map** (an app like Sky Map or Stellarium) is the second app, and it comes next. It is
-   the nearest to sunradar: the same camera view, heading filter, and projection, and the core
-   already has the planets and the Milky Way (14.2).
+2. **starradar**, a sky map (an app like Sky Map or Stellarium), is the second app, and it comes
+   next. It is the nearest to sunradar: the same camera view, heading filter, and projection, and
+   the core already has the planets and the Milky Way (14.2).
 3. **The photo planner** is the third app. It comes after the sky map.
 
 ### 14.1 The photo planner (the third app)
@@ -804,24 +805,108 @@ calendar of results, the phases of the twilight and of the moon, and the darknes
 **The order:** the core parts first, then a prototype of the planner as a second web app next to
 the PWA (the cheapest UI to try), then a decision about a native app.
 
-### 14.2 A sky map (the second app)
+### 14.2 starradar: the sky map (the second app)
 
-An app that shows the stars, the constellations, the planets, and the Milky Way in the direction
-of the phone. The core has the view, the projection, the planets, and the galactic system. It
-needs a star catalogue (for example the Hipparcos or the Yale Bright Star Catalogue, with a free
-license), the lines of the constellations, and maybe deep-sky objects. The market has strong free
-apps (Stellarium, Sky Map), so this app needs a reason to exist, for example the offline terrain
-horizon or the link to the photo planner.
+**Decided (2026-11-03):** the name is **starradar**, the pair of sunradar. A web search found no
+app with this name. The PWA and the website come first and together, the native apps later.
 
-The parts:
+**The promise:** point the phone at the night sky and see what is there: the stars, the
+constellations, the planets, the moon, and the Milky Way. The market has strong free apps
+(Stellarium, Sky Map, Star Walk), so starradar needs reasons to exist. These are the strengths of
+the core and of sunradar:
 
-1. In the core: a star catalogue as data in the core (a few thousand stars down to a magnitude of
-   about 6), their positions with the precession and the aberration (Astronomy Engine), and the
-   lines of the constellations.
-2. In the apps: a new app `skymap` on each platform next to `sunradar`, with the shared parts (the
-   camera, the heading, the place, the terrain).
-3. The first version: the stars, the planets, the moon, the Milky Way, and the terrain horizon in
-   the direction of the phone, also offline.
+- **The real horizon.** The terrain horizon (13.1) shows when a star, a planet, or the Milky Way
+  really rises behind the mountain, not at 0°.
+- **Offline.** The catalogue, the base map, and the terrain of a kept place are in the app, so it
+  works on a mountain without a network (13.3).
+- **An honest heading.** The heading filter shows its error, and the user aligns it with a bright
+  star or a planet, as sunradar does with the sun.
+- **No ads, open source, and a PWA without an installation.**
+
+#### The data
+
+| Data | Source | License | Size |
+|---|---|---|---|
+| Stars to magnitude 6.0 (about 5000) | Yale Bright Star Catalogue, 5th edition (VizieR V/50): position J2000, proper motion, V magnitude, B−V color | free use with the acknowledgement of the ADC and of Hoffleit & Warren (1991); **check** the ReadMe of V/50 before the first release | about 100 KB with gzip |
+| Names of the bright stars | the IAU Catalog of Star Names (WGSN) | **check** | small |
+| Lines of the 88 constellations | the stick figures of d3-celestial (BSD-3, Olaf Frohn), matched to the HR numbers of the catalogue | BSD-3 with attribution; **check** the sources that it names | small |
+| Names of the constellations | IAU | public | small |
+
+`scripts/stars/build_stars.py` makes `assets/stars/stars.json` from the sources, the same way as
+`scripts/basemap/` makes the base map. The apps load it like the base map. The core gets the
+catalogue as plain arrays, so the bindings stay simple.
+
+#### The core
+
+- `star_positions(observer, unix_utc, stars)`: the horizontal directions of many stars at once,
+  from J2000 with the proper motion, the precession, the nutation, the aberration, and the
+  refraction (Astronomy Engine). The input and the output are flat arrays (one call per second
+  for all stars), and a frame only projects.
+- `project_points(view, directions)`: the screen points of many directions in one call, for the
+  per-frame path.
+- The planets (`planet_position`, `planet_magnitude`) and the Milky Way (`galactic_plane`) exist in
+  C++ and Python. They and the new functions get the WASM binding first, and the AAR and the Swift
+  package when the native apps need them. This is a deviation from the rule "every binding",
+  the same as for `sky.hpp` now.
+- Precision: 0.01° is sufficient, because a star on the screen is several pixels large. Test
+  against JPL Horizons for some bright stars, as for the sun.
+
+#### The PWA (`web/starradar/app`)
+
+1. **The sky view:** the stars as points (size from the magnitude, color from B−V), the
+   constellation lines and names, the planets with their names, the moon with its phase, the
+   Milky Way (the center line and the galactic center), the terrain horizon, and the cardinal
+   points. The camera image is optional, the same as in sunradar.
+2. **Tap an object:** its name, magnitude, altitude, and the time of its rise and set, also behind
+   the terrain.
+3. **Search:** "Saturn", "Polaris", "Orion": an arrow at the screen border leads to the object.
+4. **The time panel:** another night or hour. The status shows the darkness: the twilight phases
+   and the moon.
+5. **The alignment:** tap a bright star or a planet, as the sun tap in sunradar.
+6. **A red night mode**, so the eyes stay adapted to the dark.
+7. From the shared package: the place panel, the terrain, the orientation, and the time zone.
+
+#### The website (`web/starradar/site`)
+
+The same form as the sunradar website: a scroll story with a sticky card for each chapter over a
+sky that the core calculates, then a playground, then the facts.
+
+| Chapter | Card | The sky |
+|---|---|---|
+| Hero | "Starradar: point your phone at the night sky." | the sky of now over Vienna; drag to change the time |
+| Dusk | "The first stars" | the sky gets dark from sunset to the astronomical night; the planets and the brightest stars appear first |
+| Constellations | "Lines between the stars" | the lines and the names fade in; Orion or the Big Dipper is highlighted |
+| The sky turns | "Everything turns around one point" | hours in seconds: the stars turn around Polaris, rise in the east, and set in the west |
+| Planets | "Wanderers" | weeks in seconds: the planets move against the stars, along the ecliptic |
+| Behind the mountain | "The real horizon" | Innsbruck: the terrain line, and the Milky Way that rises late behind the Nordkette |
+| Milky Way | "When the Milky Way is best" | the band and the center, and the dark hours without the moon |
+| Compass | "Align with a star" | a tap on a bright star corrects the heading, the same story as in sunradar |
+| Play | "Your sky" | the place, the date, and the time of the user |
+| Rest | precise, offline, open source, and a link to sunradar | dim |
+
+The drawing of the sky of the sunradar website (`web/website/src/sky.ts`) is a panorama. The
+star sky needs the same panorama plus the stars, so the common parts (the colors of the sky, the
+projection of the panorama, the horizon, the terrain) move to `web/shared`.
+
+#### The layout of the sites
+
+**Decided (2026-11-03):** one folder for each app on GitHub Pages: `/` is a short page of the
+family, `/sunradar/` and `/sunradar/app/` are sunradar, and `/starradar/` and `/starradar/app/`
+are starradar. Each PWA has its own scope, so the two apps install and cache apart. In the
+workspace: `web/home/`, `web/sunradar/{app,site}/`, `web/starradar/{app,site}/`, and
+`web/shared/`.
+
+#### The order of the work
+
+1. The layout: the folders of the workspace, the page of the family, and sunradar under
+   `/sunradar/`.
+2. The data: `scripts/stars/`, `assets/stars/`, and the licenses.
+3. The core: `star_positions()` and `project_points()` in C++, Python, and WASM, with tests
+   against JPL Horizons.
+4. The PWA: the sky view first (stars, constellations, planets, moon, terrain), then tap, search,
+   alignment, and the night mode.
+5. The website, with the shared panorama.
+6. The native apps (`android/starradar/`, `ios/Starradar/`), when the PWA is stable.
 
 ### 14.3 What this means for sunradar
 
