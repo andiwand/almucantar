@@ -3,17 +3,19 @@
 // package as the app) calculates the stars, the planets, the moon, and the Milky Way.
 
 import { GALACTIC_CENTER, load } from "@almucantar/core";
-import type { Horizontal, Observer } from "@almucantar/core";
+import type { Horizontal, Observer, Planet } from "@almucantar/core";
+import { milkyWayDust } from "@almucantar/web-shared/milkyway";
 import { PLANETS, decodeStars, limitingMagnitude } from "@almucantar/web-shared/stars";
 import type { StarsJson } from "@almucantar/web-shared/stars";
 import { fromWallTime, startOfDay, wallTime } from "@almucantar/web-shared/zone";
 import starsUrl from "../../../../assets/stars/stars.json?url";
 import innsbruck from "./horizon-innsbruck.json";
 import { Sky } from "./sky";
-import type { Frame } from "./sky";
+import type { Alignment, Frame, Ground } from "./sky";
 
 const almucantar = await load();
 const stars = decodeStars((await (await fetch(starsUrl)).json()) as StarsJson);
+const dust = milkyWayDust();
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -41,7 +43,25 @@ const INNSBRUCK: Place = {
   observer: { latitudeDeg: innsbruck.latitude_deg, longitudeDeg: innsbruck.longitude_deg },
   zone: "Europe/Vienna",
 };
-const TERRAIN = { stepDeg: innsbruck.azimuth_step_deg, altitudeDeg: innsbruck.altitude_deg };
+const TERRAIN: Ground = {
+  stepDeg: innsbruck.azimuth_step_deg,
+  altitudeDeg: innsbruck.altitude_deg,
+};
+
+/** Low hills for a place without terrain data: a few waves of 0.2° to 2.5°, the same each time. */
+const HILLS: Ground = {
+  stepDeg: 1,
+  altitudeDeg: Array.from({ length: 360 }, (_, az) => {
+    const a = (az * Math.PI) / 180;
+    const h =
+      1.0 +
+      0.55 * Math.sin(3 * a + 0.7) +
+      0.4 * Math.sin(7 * a + 2.1) +
+      0.22 * Math.sin(17 * a + 4.0) +
+      0.1 * Math.sin(41 * a + 1.3);
+    return Math.max(0.2, h);
+  }),
+};
 
 /** The place of the page; "Use my location" changes it. */
 let home: Place = VIENNA;
@@ -132,9 +152,13 @@ interface Target {
   /** The sky is dark whatever the time: for a time lapse over weeks. */
   forceNight: boolean;
   starTracks: { from: number; to: number } | null;
-  planetTracks: { from: number; to: number } | null;
-  ghost: number;
-  tap: { direction: Horizontal; progress: number } | null;
+  /**
+   * The planets over weeks: at `from` plus `nights` sidereal days. The stars stay at `from`, and
+   * a planet moves smoothly between its places of two whole nights.
+   */
+  planetNights: { from: number; nights: number } | null;
+  hideMoon: boolean;
+  alignment: Omit<Alignment, "alpha"> | null;
   dim: number;
 }
 
@@ -147,9 +171,9 @@ const DEFAULTS: Omit<Target, "place" | "time" | "center"> = {
   terrain: false,
   forceNight: false,
   starTracks: null,
-  planetTracks: null,
-  ghost: 0,
-  tap: null,
+  planetNights: null,
+  hideMoon: false,
+  alignment: null,
   dim: 0,
 };
 
@@ -315,8 +339,6 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
   planets: (p) => {
     // The same sidereal time every night, so the stars stay and the planets move.
     const from = tonight(home);
-    const nights = Math.round(150 * p);
-    const time = from + nights * SIDEREAL_DAY;
     const bright = PLANETS.slice(0, 5)
       .map((x) => ({ x, d: almucantar.planetPosition(x.planet, from, home.observer) }))
       .filter((y) => y.d.altitudeDeg > 5)
@@ -326,11 +348,12 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
           almucantar.planetMagnitude(b.x.planet, from),
       );
     return {
-      time,
+      time: from,
       center: bright[0]?.d.azimuthDeg ?? 180,
       forceNight: true,
+      hideMoon: true,
       lines: 0.5,
-      planetTracks: { from, to: time },
+      planetNights: { from, nights: 150 * p },
     };
   },
   mountain: (p) => {
@@ -354,28 +377,48 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
   },
   compass: (p) => {
     const time = tonight(home);
+    const scene = alignmentScene(time);
     const aligned = ease(clamp((p - 0.45) / 0.12));
-    const bright = brightestNear(time, 180);
     return {
       time,
-      center: 180,
-      lines: 0.8,
-      ghost: 12 - 11.7 * aligned,
-      tap: bright ? { direction: bright, progress: clamp((p - 0.45) / 0.1) } : null,
+      center: scene ? starDirection(scene.star, time, home.observer).azimuthDeg : 180,
+      lines: 0.2,
+      names: 0.2,
+      milkyWay: 0.5,
+      alignment: scene
+        ? { ...scene, offsetDeg: 12 - 12 * aligned, tap: clamp((p - 0.45) / 0.1) }
+        : null,
     };
   },
   play: () => ({ time: playTime(), center: playCenter }),
   rest: () => ({ time: tonight(home), center: 180, dim: 0.62 }),
 };
 
-/** The brightest star near an azimuth that is up at `t`, for the tap of the compass chapter. */
-function brightestNear(t: number, azimuth: number): Horizontal | null {
-  for (let i = 0; i < 60; i++) {
-    const d = starDirection(i, t, home.observer);
-    const off = Math.abs(((((d.azimuthDeg - azimuth) % 360) + 540) % 360) - 180);
-    if (d.altitudeDeg > 10 && d.altitudeDeg < 60 && off < 60) return d;
+/**
+ * The star and the constellation of the compass chapter: a large, famous constellation whose
+ * brightest star is between 20° and 55° high tonight, so the phone shows a clear figure.
+ */
+let sceneCache: { key: string; value: { star: number; constellation: number } | null } = {
+  key: "",
+  value: null,
+};
+
+function alignmentScene(t: number): { star: number; constellation: number } | null {
+  const key = `${Math.round(t / 3600)}:${home.observer.latitudeDeg}:${home.observer.longitudeDeg}`;
+  if (sceneCache.key === key) return sceneCache.value;
+  let value = null;
+  for (const id of ["Cyg", "Ori", "UMa", "Leo", "Sco", "Cas", "Gem", "Tau", "Peg", "Lyr"]) {
+    const constellation = constellationIndex(id);
+    // The brightest star of the lines: the smallest index, because the stars are sorted.
+    const star = Math.min(...stars.constellations[constellation].lines.flat());
+    const d = starDirection(star, t, home.observer);
+    if (d.altitudeDeg >= 20 && d.altitudeDeg <= 55) {
+      value = { star, constellation };
+      break;
+    }
   }
-  return null;
+  sceneCache = { key, value };
+  return value;
 }
 
 // --- The playground -----------------------------------------------------------------------------
@@ -451,10 +494,43 @@ function scrollState(): { name: string; progress: number } {
   return { name: "rest", progress: 0 };
 }
 
+// --- The rail: one star for each chapter, a click scrolls to it ------------------------------------
+
+const rail = $("rail");
+const railStops = sections
+  .filter((section) => section.dataset.chapter !== "rest")
+  .map((section) => {
+    const step = section.querySelector(".step");
+    const label =
+      section.dataset.chapter === "hero" ? "Starradar" : (step?.lastChild?.textContent ?? "");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", label);
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.append(text);
+    button.addEventListener("click", () => {
+      const top = section.getBoundingClientRect().top + scrollY;
+      // The middle of a chapter: there its card and its sky are in place.
+      const travel = Math.max(0, section.offsetHeight - innerHeight);
+      scrollTo({ top: top + travel * 0.5, behavior: reducedMotion.matches ? "auto" : "smooth" });
+    });
+    rail.append(button);
+    return { name: section.dataset.chapter!, button };
+  });
+
+function updateRail(name: string) {
+  const active = railStops.findIndex((stop) => stop.name === name);
+  railStops.forEach((stop, i) => {
+    stop.button.classList.toggle("active", i === active);
+    stop.button.classList.toggle("done", active >= 0 && i < active);
+  });
+}
+
 // --- The input: drag the sky in the hero to change the time ----------------------------------------
 
 const canvas = $<HTMLCanvasElement>("sky");
-const sky = new Sky(canvas, stars);
+const sky = new Sky(canvas, stars, dust);
 let drag: { x: number; hours: number } | null = null;
 canvas.addEventListener("pointerdown", (e) => {
   if (scrollState().name !== "hero") return;
@@ -509,7 +585,9 @@ function readouts(name: string, t: number, target: Target, limit: number) {
     setText("dusk-time", hhmm(t));
     setText(
       "dusk-detail",
-      `The sun is ${Math.max(0, -sun).toFixed(0)}° below the horizon: ${phase(sun)}.`,
+      sun >= 0
+        ? `The sun is ${sun.toFixed(0)}° above the horizon.`
+        : `The sun is ${(-sun).toFixed(0)}° below the horizon: ${phase(sun)}.`,
     );
     setText(
       "dusk-stars",
@@ -528,8 +606,10 @@ function readouts(name: string, t: number, target: Target, limit: number) {
       "The sky turns 15° in an hour around the celestial pole, near Polaris.",
     );
   } else if (name === "planets") {
-    setText("planets-date", dayMonth(t));
-    const planets = visiblePlanets(t, place);
+    const nights = target.planetNights;
+    const date = nights ? nights.from + Math.round(nights.nights) * SIDEREAL_DAY : t;
+    setText("planets-date", dayMonth(date));
+    const planets = visiblePlanets(date, place);
     setText(
       "planets-detail",
       planets.length ? `Up at this sidereal time: ${planets.join(", ")}` : "",
@@ -551,12 +631,16 @@ function readouts(name: string, t: number, target: Target, limit: number) {
       `The best night of the next year in ${place.name}: the center of the Milky Way is ${best.altitude.toFixed(0)}° high, the sky is dark, and the moon is down.`,
     );
   } else if (name === "compass") {
-    setText("compass-heading", `±${target.ghost.toFixed(target.ghost < 2 ? 1 : 0)}°`);
+    const a = target.alignment;
+    const error = a?.offsetDeg ?? 0;
+    setText("compass-heading", error > 0.05 ? `${error.toFixed(0)}° off` : "Aligned");
     setText(
       "compass-detail",
-      target.ghost > 6
-        ? "The compass of a phone: the constellations can be anywhere between the two ghosts."
-        : "Aligned with one tap on a bright star.",
+      !a
+        ? ""
+        : error > 6
+          ? `The compass of the phone draws ${stars.constellations[a.constellation].name} in the wrong place (dashed).`
+          : `One tap on ${stars.names.get(a.star) ?? "a bright star"}, and the phone draws the sky where it is.`,
     );
   } else if (name === "play") {
     const planets = visiblePlanets(t, place);
@@ -578,10 +662,13 @@ const shown = {
   names: 0,
   milkyWay: 1,
   highlight: 0,
-  ghost: 0,
+  alignment: 0,
   dim: 0,
   fade: 0,
+  /** The scroll progress of the chapter, smoothed, so the wheel does not move the sky in steps. */
+  progress: 0,
 };
+let shownChapter = "";
 let shownPlace: Place = home;
 let lastMs = performance.now();
 
@@ -615,13 +702,28 @@ function starTracks(place: Place, from: number, to: number): Horizontal[][] {
   return tracks;
 }
 
-function planetTracks(place: Place, from: number, to: number): Horizontal[][] {
+/** The direction of a planet `nights` sidereal days after `from`, between two whole nights. */
+function planetAfter(planet: Planet, from: number, nights: number, observer: Observer): Horizontal {
+  const n = Math.floor(nights);
+  const a = almucantar.planetPosition(planet, from + n * SIDEREAL_DAY, observer);
+  const b = almucantar.planetPosition(planet, from + (n + 1) * SIDEREAL_DAY, observer);
+  const t = nights - n;
+  const daz = ((((b.azimuthDeg - a.azimuthDeg) % 360) + 540) % 360) - 180;
+  return {
+    azimuthDeg: a.azimuthDeg + daz * t,
+    altitudeDeg: a.altitudeDeg + (b.altitudeDeg - a.altitudeDeg) * t,
+  };
+}
+
+/** The tracks of the bright planets from `from` over `nights` sidereal days. */
+function planetTracks(place: Place, from: number, nights: number): Horizontal[][] {
   const tracks: Horizontal[][] = [];
   for (const p of PLANETS.slice(0, 5)) {
     const track: Horizontal[] = [];
-    for (let t = from; t <= to + 1; t += 3 * SIDEREAL_DAY) {
-      track.push(almucantar.planetPosition(p.planet, t, place.observer));
+    for (let n = 0; n < nights; n += 3) {
+      track.push(almucantar.planetPosition(p.planet, from + n * SIDEREAL_DAY, place.observer));
     }
+    track.push(planetAfter(p.planet, from, nights, place.observer));
     if (track.length > 1) tracks.push(track);
   }
   return tracks;
@@ -631,16 +733,22 @@ function frame(ms: number) {
   const dt = Math.min(0.1, (ms - lastMs) / 1000);
   lastMs = ms;
   const { name, progress } = scrollState();
+  if (document.body.dataset.chapter !== name) updateRail(name);
   document.body.dataset.chapter = name;
+  const k = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 6);
+  // Inside a chapter the progress moves smoothly; a new chapter starts at its own progress.
+  if (name !== shownChapter) {
+    shownChapter = name;
+    shown.progress = progress;
+  } else shown.progress += (progress - shown.progress) * Math.min(1, k * 1.5);
   const target: Target = {
     place: home,
     ...DEFAULTS,
     time: tonight(home),
     center: 180,
-    ...chapters[name](progress),
+    ...chapters[name](shown.progress),
   } as Target;
 
-  const k = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 6);
   // A new place or a jump of more than three hours fades: the sky would turn too far.
   if (target.place !== shownPlace || Math.abs(target.time - shown.time) > 3 * HOUR) {
     if (shown.fade >= 0.98 || reducedMotion.matches) {
@@ -659,7 +767,7 @@ function frame(ms: number) {
   shown.names += (target.names - shown.names) * k;
   shown.milkyWay += (target.milkyWay - shown.milkyWay) * k;
   shown.highlight += (target.highlightAlpha - shown.highlight) * k;
-  shown.ghost += (target.ghost - shown.ghost) * k;
+  shown.alignment += ((target.alignment ? 1 : 0) - shown.alignment) * k;
   shown.dim += (target.dim - shown.dim) * k;
 
   const place = shownPlace;
@@ -667,10 +775,11 @@ function frame(ms: number) {
   const sun = almucantar.sunPosition(t, place.observer);
   const skySun = target.forceNight ? { ...sun, altitudeDeg: -30 } : sun;
   const limit = limitingMagnitude(skySun.altitudeDeg);
+  const nights = target.planetNights;
   const frameData: Frame = {
     sun: skySun,
     moon: almucantar.moonPosition(t, place.observer),
-    moonFraction: almucantar.moonIlluminatedFraction(t),
+    moonFraction: target.hideMoon ? 0 : almucantar.moonIlluminatedFraction(t),
     stars: almucantar.starPositions(stars.catalog, t, place.observer),
     limitMag: limit,
     labels: almucantar.starPositions(
@@ -688,17 +797,18 @@ function frame(ms: number) {
     planets: PLANETS.map((p) => ({
       name: p.name,
       color: p.color,
-      direction: almucantar.planetPosition(p.planet, t, place.observer),
+      direction: nights
+        ? planetAfter(p.planet, nights.from, nights.nights, place.observer)
+        : almucantar.planetPosition(p.planet, t, place.observer),
       mag: almucantar.planetMagnitude(p.planet, t),
     })),
-    planetTracks: target.planetTracks ? planetTracks(place, target.planetTracks.from, t) : [],
+    planetTracks: nights ? planetTracks(place, nights.from, nights.nights) : [],
     starTracks: target.starTracks ? starTracks(place, target.starTracks.from, t) : [],
-    milkyWay: almucantar.galacticPlane(t, place.observer, 2),
+    dust: almucantar.starPositions(dust.catalog, t, place.observer),
     milkyWayAlpha: shown.milkyWay * clamp((limit - 3.5) / 2.5),
-    galacticCenter: almucantar.galacticPosition(0, 0, t, place.observer),
-    terrain: target.terrain && place === INNSBRUCK ? TERRAIN : null,
-    ghostDeg: shown.ghost,
-    tap: target.tap,
+    ground: target.terrain && place === INNSBRUCK ? TERRAIN : HILLS,
+    realTerrain: target.terrain && place === INNSBRUCK,
+    alignment: target.alignment ? { ...target.alignment, alpha: shown.alignment } : null,
     dim: Math.max(shown.dim, shown.fade * 0.95),
     centerAzimuthDeg: shown.center,
   };

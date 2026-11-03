@@ -47,6 +47,7 @@ compile them. `npm run build -w shared` only type-checks it.
 | `shared/src/zone.ts` | The times in the time zone of the place (Intl), not of the browser. |
 | `shared/src/orientation.ts` | The W3C device orientation (alpha, beta, gamma) and the desktop view as quaternions (device to ENU), and the screen rotation. |
 | `shared/src/moon.ts` | The lit part of the moon and its direction to the sun. |
+| `shared/src/milkyway.ts` | A picture of the Milky Way as soft points in the galactic system (brighter to the center, the star clouds, the Great Rift), as J2000 directions for `starPositions()`. A picture for the eye, not a measurement. |
 | `shared/src/panorama.ts` | The panorama of the websites (azimuth to x, altitude to y, with a layout for each site) and the colors of the sky for an altitude of the sun. |
 | `shared/src/stars.ts` | The star data of starradar (`assets/stars/stars.json`) as typed columns, and how a star looks: the size from the magnitude, the color from B−V, and the faintest magnitude of a sky (`limitingMagnitude`). |
 | `shared/test/` | The Vitest tests of the shared code. |

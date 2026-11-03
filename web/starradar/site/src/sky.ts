@@ -1,8 +1,9 @@
 // The sky in the background of the website: a panorama of the night sky (azimuth to x, altitude
-// to y) with the stars, the constellations, the planets, the moon, the Milky Way, and the ground or
-// the terrain. The core calculates all positions; this file only draws them.
+// to y) with the stars, the constellations, the planets, the moon, the Milky Way, and the ground
+// with its hills or mountains. The core calculates all positions; this file only draws them.
 
 import type { Horizontal } from "@almucantar/core";
+import type { MilkyWayDust } from "@almucantar/web-shared/milkyway";
 import { Panorama, css, mix, skyColors } from "@almucantar/web-shared/panorama";
 import type { PanoramaOptions, Rgb } from "@almucantar/web-shared/panorama";
 import { starColor, starRadius } from "@almucantar/web-shared/stars";
@@ -15,10 +16,29 @@ export interface PlanetAt {
   mag: number;
 }
 
+/** The altitude of the ground for each azimuth step from 0: hills, or the terrain of a place. */
+export interface Ground {
+  stepDeg: number;
+  altitudeDeg: number[];
+}
+
+/** The scene of the compass chapter: a phone sees one constellation at a wrong heading. */
+export interface Alignment {
+  /** The constellation and its brightest star, as indices of the star data. */
+  constellation: number;
+  star: number;
+  /** The error of the heading: the phone draws the constellation this far off, in degrees. */
+  offsetDeg: number;
+  /** The visibility of the phone frame, from 0 to 1. */
+  alpha: number;
+  /** A ring that shows the tap on the star, from 0 to 1. */
+  tap: number;
+}
+
 export interface Frame {
   sun: Horizontal;
   moon: Horizontal;
-  /** The illuminated fraction of the moon, from 0 to 1. */
+  /** The illuminated fraction of the moon, from 0 to 1. 0 hides the moon. */
   moonFraction: number;
   /** The directions of all stars: [azimuth0, altitude0, ...] (starPositions of the core). */
   stars: Float64Array;
@@ -36,15 +56,13 @@ export interface Frame {
   planetTracks: Horizontal[][];
   /** The tracks of the bright stars over hours. */
   starTracks: Horizontal[][];
-  milkyWay: Horizontal[];
+  /** The directions of the points of the Milky Way: [azimuth0, altitude0, ...]. */
+  dust: Float64Array;
   milkyWayAlpha: number;
-  galacticCenter: Horizontal;
-  /** The altitude of the terrain for each azimuth step from 0, or null for a flat horizon. */
-  terrain: { stepDeg: number; altitudeDeg: number[] } | null;
-  /** The heading error of a compass: a ghost of the constellation lines at this offset. */
-  ghostDeg: number;
-  /** A ring that shows a tap on this direction, from 0 to 1. */
-  tap: { direction: Horizontal; progress: number } | null;
+  ground: Ground;
+  /** The ground is the terrain of a real place: a brighter line along the crest. */
+  realTerrain: boolean;
+  alignment: Alignment | null;
   /** A dark layer that makes the text easier to read, from 0 to 1. */
   dim: number;
   /** The azimuth in the center of the screen. */
@@ -54,18 +72,37 @@ export interface Frame {
 /** The layout of the starradar website: higher than the one of sunradar, for the stars. */
 function starPanorama(width: number): PanoramaOptions {
   return width < 700
-    ? { spanDeg: 130, horizonFraction: 0.66, topAltitudeDeg: 62 }
+    ? { spanDeg: 130, horizonFraction: 0.68, topAltitudeDeg: 62 }
     : { spanDeg: 200, horizonFraction: 0.8, topAltitudeDeg: 72 };
+}
+
+const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+
+/** A soft round sprite for the clouds of the Milky Way, drawn once. */
+function cloudSprite(): HTMLCanvasElement {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext("2d")!;
+  const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(214, 220, 255, 1)");
+  g.addColorStop(0.35, "rgba(190, 200, 245, 0.45)");
+  g.addColorStop(1, "rgba(170, 180, 240, 0)");
+  c.fillStyle = g;
+  c.fillRect(0, 0, size, size);
+  return canvas;
 }
 
 export class Sky {
   private readonly ctx: CanvasRenderingContext2D;
   private width = 0;
   private height = 0;
+  private readonly sprite = cloudSprite();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly stars: Stars,
+    private readonly milkyWay: MilkyWayDust,
   ) {
     this.ctx = canvas.getContext("2d")!;
   }
@@ -83,19 +120,13 @@ export class Sky {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  /** The point of a direction on the screen, for the input of the user. */
-  panorama(centerAzimuthDeg: number): Panorama {
-    const w = this.canvas.clientWidth;
-    return new Panorama(w, this.canvas.clientHeight, centerAzimuthDeg, starPanorama(w));
-  }
-
   draw(f: Frame, nowMs: number) {
     this.fit();
     const ctx = this.ctx;
     const p = new Panorama(this.width, this.height, f.centerAzimuthDeg, starPanorama(this.width));
-    const day = Math.min(1, Math.max(0, (f.sun.altitudeDeg + 6) / 12));
+    const day = clamp((f.sun.altitudeDeg + 6) / 12);
 
-    // The sky, and the glow of the sun in the twilight.
+    // The sky, the glow of the sun in the twilight, and the airglow above the horizon.
     const [top, low] = skyColors(f.sun.altitudeDeg);
     const gradient = ctx.createLinearGradient(0, 0, 0, p.horizonY);
     gradient.addColorStop(0, css(top));
@@ -105,7 +136,7 @@ export class Sky {
     if (f.sun.altitudeDeg > -16) {
       const sx = p.x(f.sun.azimuthDeg);
       const sy = p.y(Math.max(f.sun.altitudeDeg, -6));
-      const strength = Math.min(1, (f.sun.altitudeDeg + 16) / 16);
+      const strength = clamp((f.sun.altitudeDeg + 16) / 16);
       const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, this.height * 0.8);
       glow.addColorStop(0, `rgba(255, 170, 100, ${0.35 * strength})`);
       glow.addColorStop(0.4, `rgba(200, 110, 120, ${0.1 * strength})`);
@@ -113,62 +144,49 @@ export class Sky {
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, this.width, this.height);
     }
+    const night = 1 - day;
+    const airglow = ctx.createLinearGradient(0, p.y(14), 0, p.horizonY);
+    airglow.addColorStop(0, "rgba(90, 110, 170, 0)");
+    airglow.addColorStop(1, `rgba(90, 110, 170, ${0.22 * night})`);
+    ctx.fillStyle = airglow;
+    ctx.fillRect(0, p.y(14), this.width, p.horizonY - p.y(14) + 1);
 
-    // The Milky Way: wide soft strokes on top of each other, so the edges fade.
-    if (f.milkyWayAlpha > 0.01) {
-      for (const [width, alpha] of [
-        [90, 0.035],
-        [56, 0.045],
-        [28, 0.06],
-      ]) {
-        this.line(p, f.milkyWay, `rgba(200, 210, 245, ${alpha * f.milkyWayAlpha})`, width);
-      }
-      const gx = p.x(f.galacticCenter.azimuthDeg);
-      const gy = p.y(f.galacticCenter.altitudeDeg);
-      const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, 70);
-      glow.addColorStop(0, `rgba(230, 220, 200, ${0.22 * f.milkyWayAlpha})`);
-      glow.addColorStop(1, "rgba(230, 220, 200, 0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(gx - 70, gy - 70, 140, 140);
-    }
+    this.milkyWayDust(p, f);
 
     // The tracks of the stars (the sky turns) and of the planets (they wander).
-    for (const track of f.starTracks) this.line(p, track, "rgba(200, 215, 255, 0.35)", 1.2);
-    for (const track of f.planetTracks)
-      this.line(p, track, "rgba(255, 210, 150, 0.6)", 1.5, [3, 4]);
+    for (const track of f.starTracks) this.line(p, track, "rgba(200, 215, 255, 0.32)", 1.2);
+    for (const track of f.planetTracks) {
+      this.line(p, track, "rgba(255, 210, 150, 0.65)", 1.5, [2, 5]);
+    }
 
-    // The constellation lines, and a ghost of them if the compass is wrong.
+    // The constellation lines.
     if (f.linesAlpha > 0.01) {
-      this.constellationLines(p, f, 0, `rgba(127, 170, 255, ${0.4 * f.linesAlpha})`, 1);
+      this.constellationLines(p, f, 0, `rgba(150, 175, 255, ${0.38 * f.linesAlpha})`, 1);
       if (f.highlight >= 0 && f.highlightAlpha > 0.01) {
         this.constellationLines(
           p,
           f,
           0,
-          `rgba(170, 205, 255, ${0.85 * f.highlightAlpha})`,
+          `rgba(190, 210, 255, ${0.9 * f.highlightAlpha})`,
           2,
           f.highlight,
         );
       }
-      if (f.ghostDeg > 0.05) {
-        this.constellationLines(p, f, f.ghostDeg, `rgba(127, 216, 255, 0.45)`, 1);
-        this.constellationLines(p, f, -f.ghostDeg, `rgba(127, 216, 255, 0.45)`, 1);
-      }
     }
 
-    // The stars, the faintest first, with a little twinkle.
+    // The stars, the faintest first, with a little twinkle. Near the horizon the air dims them.
     const s = this.stars;
     let count = 0;
     while (count < s.mag.length && s.mag[count] <= f.limitMag) count++;
     for (let i = count - 1; i >= 0; i--) {
-      const az = f.stars[2 * i];
       const alt = f.stars[2 * i + 1];
       if (alt < -1) continue;
-      const x = p.x(az);
+      const x = p.x(f.stars[2 * i]);
       const y = p.y(alt);
       if (x < -4 || x > this.width + 4 || y < -4 || y > p.horizonY + 2) continue;
       const mag = s.mag[i];
-      const fade = Math.min(1, 0.3 + (f.limitMag - mag) / 1.5);
+      const extinction = clamp(0.25 + alt / 10);
+      const fade = clamp(0.3 + (f.limitMag - mag) / 1.5) * extinction;
       const twinkle = mag < 2.5 ? 0.85 + 0.15 * Math.sin(nowMs / 700 + i) : 1;
       const color = starColor(s.bv[i]);
       const r = starRadius(mag) * 0.9;
@@ -186,21 +204,21 @@ export class Sky {
 
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    // The names of the brightest stars.
+    // The names of the brightest stars and of the constellations.
     if (f.namesAlpha > 0.01) {
       ctx.font = "12px system-ui, -apple-system, sans-serif";
       ctx.fillStyle = `rgba(220, 228, 255, ${0.8 * f.namesAlpha})`;
       for (let i = 0; i < count && s.mag[i] <= 1.4; i++) {
         const name = s.names.get(i);
         const alt = f.stars[2 * i + 1];
-        if (!name || alt < 1) continue;
+        if (!name || alt < 2) continue;
         ctx.fillText(name, p.x(f.stars[2 * i]), p.y(alt) - 7);
       }
-      ctx.font = "italic 13px system-ui, -apple-system, sans-serif";
-      ctx.fillStyle = `rgba(150, 185, 255, ${0.75 * f.namesAlpha})`;
+      ctx.font = "italic 14px ui-serif, 'Iowan Old Style', Palatino, Georgia, serif";
+      ctx.fillStyle = `rgba(170, 160, 255, ${0.8 * f.namesAlpha})`;
       s.constellations.forEach((c, i) => {
         const alt = f.labels[2 * i + 1];
-        if (alt < 3) return;
+        if (alt < 4) return;
         ctx.fillText(c.name, p.x(f.labels[2 * i]), p.y(alt));
       });
     }
@@ -219,30 +237,60 @@ export class Sky {
       ctx.fillText(planet.name, x, y - 8);
     }
 
-    // The moon with its phase.
     if (f.moon.altitudeDeg > -1 && f.moonFraction > 0.02) this.moon(p, f, day);
-
-    // The ring of a tap.
-    if (f.tap && f.tap.progress > 0 && f.tap.progress < 1) {
-      ctx.strokeStyle = `rgba(255, 255, 255, ${1 - f.tap.progress})`;
-      ctx.lineWidth = 2;
+    // The sun, until it goes down behind the ground (the ground is drawn after it).
+    if (f.sun.altitudeDeg > -1) {
+      ctx.save();
+      ctx.fillStyle = "#fff1cc";
+      ctx.shadowColor = "rgba(255, 190, 90, 0.9)";
+      ctx.shadowBlur = 30;
       ctx.beginPath();
-      ctx.arc(
-        p.x(f.tap.direction.azimuthDeg),
-        p.y(f.tap.direction.altitudeDeg),
-        10 + f.tap.progress * 40,
-        0,
-        Math.PI * 2,
-      );
-      ctx.stroke();
+      ctx.arc(p.x(f.sun.azimuthDeg), p.y(f.sun.altitudeDeg), 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
+    if (f.alignment && f.alignment.alpha > 0.01) this.alignment(p, f, f.alignment);
 
     this.ground(p, f, day);
 
     if (f.dim > 0) {
-      ctx.fillStyle = `rgba(3, 6, 15, ${f.dim})`;
+      ctx.fillStyle = `rgba(3, 5, 14, ${f.dim})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
+  }
+
+  /**
+   * The Milky Way: soft clouds and fine grains, added on top of each other (the light of many
+   * stars). The air near the horizon dims it, as in the real sky. Near the zenith the panorama
+   * stretches the sky sideways, so the Milky Way fades out above 70°.
+   */
+  private milkyWayDust(p: Panorama, f: Frame) {
+    if (f.milkyWayAlpha < 0.01) return;
+    const ctx = this.ctx;
+    const { weight, cloud } = this.milkyWay;
+    const cloudSize = 2.6 * p.pxPerDegX;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = "rgb(225, 230, 255)";
+    for (let i = 0; i < weight.length; i++) {
+      const alt = f.dust[2 * i + 1];
+      if (alt < 0 || alt > 80) continue;
+      const x = p.x(f.dust[2 * i]);
+      const y = p.y(alt);
+      if (x < -cloudSize || x > this.width + cloudSize || y < -cloudSize || y > p.horizonY) {
+        continue;
+      }
+      const alpha = f.milkyWayAlpha * weight[i] * clamp(alt / 14) * clamp((80 - alt) / 10);
+      if (cloud[i]) {
+        ctx.globalAlpha = 0.075 * alpha;
+        const size = cloudSize * (0.6 + (0.8 * ((i * 7919) % 100)) / 100);
+        ctx.drawImage(this.sprite, x - size / 2, y - size / 2, size, size);
+      } else {
+        ctx.globalAlpha = 0.55 * alpha;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    ctx.restore();
   }
 
   /** The lines of all constellations (or of one), turned by `offsetDeg` in azimuth. */
@@ -253,10 +301,12 @@ export class Sky {
     color: string,
     width: number,
     only = -1,
+    dash: number[] = [],
   ) {
     const ctx = this.ctx;
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
+    ctx.setLineDash(dash);
     ctx.beginPath();
     this.stars.constellations.forEach((c, k) => {
       if (only >= 0 && k !== only) return;
@@ -276,6 +326,95 @@ export class Sky {
       }
     });
     ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  /**
+   * The compass chapter: the frame of a phone around one constellation. The phone draws the
+   * constellation where its compass says (dashed, off by the error); after a tap on the star it
+   * moves onto the real stars.
+   */
+  private alignment(p: Panorama, f: Frame, a: Alignment) {
+    const ctx = this.ctx;
+    const sx = p.x(f.stars[2 * a.star]);
+    const sy = p.y(f.stars[2 * a.star + 1]);
+    // The phone: about 9 by 16 and 32° wide, around the star.
+    const w = Math.min(this.width * 0.42, 32 * p.pxPerDegX);
+    const h = Math.min(this.height * 0.86, w * 1.9);
+    const left = sx - w / 2;
+    const top = sy - h * 0.55;
+    ctx.save();
+    ctx.globalAlpha = a.alpha;
+    // The sky outside the phone is darker, so the eye goes to the phone.
+    ctx.fillStyle = "rgba(2, 4, 12, 0.45)";
+    ctx.beginPath();
+    ctx.rect(0, 0, this.width, this.height);
+    ctx.roundRect(left, top, w, h, 26);
+    ctx.fill("evenodd");
+    ctx.strokeStyle = "rgba(200, 210, 255, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(left, top, w, h, 26);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(200, 210, 255, 0.45)";
+    ctx.beginPath();
+    ctx.roundRect(sx - 22, top + 10, 44, 6, 3);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(left, top, w, h, 26);
+    ctx.clip();
+    // The real constellation, and the one of the phone off by the error of the compass.
+    this.constellationLines(p, f, 0, "rgba(190, 210, 255, 0.9)", 2, a.constellation);
+    if (a.offsetDeg > 0.05) {
+      const ghostAlpha = clamp(a.offsetDeg / 3);
+      this.constellationLines(
+        p,
+        f,
+        a.offsetDeg,
+        `rgba(127, 216, 255, ${0.85 * ghostAlpha})`,
+        2,
+        a.constellation,
+        [6, 5],
+      );
+      const gx = p.x(f.stars[2 * a.star] + a.offsetDeg);
+      ctx.strokeStyle = `rgba(127, 216, 255, ${0.85 * ghostAlpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(gx, sy, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      // The arrow from the drawn star to the real star: the correction of the tap.
+      if (Math.abs(gx - sx) > 24) {
+        const dir = Math.sign(sx - gx);
+        ctx.beginPath();
+        ctx.moveTo(gx + dir * 14, sy + 22);
+        ctx.lineTo(sx - dir * 10, sy + 22);
+        ctx.lineTo(sx - dir * 16, sy + 17);
+        ctx.moveTo(sx - dir * 10, sy + 22);
+        ctx.lineTo(sx - dir * 16, sy + 27);
+        ctx.stroke();
+      }
+    }
+    // The crosshair on the real star, and the ring of the tap.
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx - 18, sy);
+    ctx.lineTo(sx - 8, sy);
+    ctx.moveTo(sx + 8, sy);
+    ctx.lineTo(sx + 18, sy);
+    ctx.moveTo(sx, sy - 18);
+    ctx.lineTo(sx, sy - 8);
+    ctx.moveTo(sx, sy + 8);
+    ctx.lineTo(sx, sy + 18);
+    ctx.stroke();
+    if (a.tap > 0 && a.tap < 1) {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${1 - a.tap})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 10 + a.tap * 40, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** Draws a line through directions. A jump across the edge of the panorama starts a new line. */
@@ -339,23 +478,13 @@ export class Sky {
     ctx.restore();
   }
 
-  /** The ground below the horizon: flat, or the terrain with its line. */
+  /**
+   * The ground: a dark silhouette of the hills or the mountains, with a faint light along the
+   * crest, so the horizon looks like a landscape at night and not like the edge of a box.
+   */
   private ground(p: Panorama, f: Frame, day: number) {
     const ctx = this.ctx;
-    const color: Rgb = mix([4, 6, 12], [20, 28, 40], day);
-    ctx.fillStyle = css(color);
-    if (!f.terrain) {
-      ctx.fillRect(0, p.horizonY, this.width, this.height - p.horizonY);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, p.horizonY);
-      ctx.lineTo(this.width, p.horizonY);
-      ctx.stroke();
-      return;
-    }
-    // The terrain from the left edge to the right edge of the screen, in steps of the profile.
-    const { stepDeg, altitudeDeg } = f.terrain;
+    const { stepDeg, altitudeDeg } = f.ground;
     const span = this.width / p.pxPerDegX;
     const left = f.centerAzimuthDeg - span / 2 - stepDeg;
     const points: [number, number][] = [];
@@ -366,14 +495,22 @@ export class Sky {
         p.y(altitudeDeg[index]),
       ]);
     }
+    const crest = Math.min(...points.map(([, y]) => y));
+    const near: Rgb = mix([2, 3, 8], [14, 20, 30], day);
+    const far: Rgb = mix([9, 12, 24], [30, 40, 56], day);
+    const fill = ctx.createLinearGradient(0, crest, 0, this.height);
+    fill.addColorStop(0, css(far));
+    fill.addColorStop(0.35, css(near));
+    fill.addColorStop(1, css(near));
+    ctx.fillStyle = fill;
     ctx.beginPath();
     ctx.moveTo(points[0][0], this.height);
     for (const [x, y] of points) ctx.lineTo(x, y);
     ctx.lineTo(points[points.length - 1][0], this.height);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(170, 210, 160, 0.7)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = f.realTerrain ? "rgba(170, 200, 255, 0.55)" : "rgba(150, 170, 230, 0.22)";
+    ctx.lineWidth = f.realTerrain ? 1.5 : 1;
     ctx.beginPath();
     points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
