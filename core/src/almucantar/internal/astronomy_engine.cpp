@@ -2,6 +2,7 @@
 
 #include <astronomy.h>
 
+#include <cmath>
 #include <stdexcept>
 
 #include "almucantar/internal/math.hpp"
@@ -94,6 +95,40 @@ std::vector<Horizontal> galactic_airless(const std::vector<Galactic>& directions
     const astro_vector_t horizon =
         Astronomy_RotateVector(rotation, Astronomy_VectorFromSphere(sphere, time));
     const astro_spherical_t position = Astronomy_HorizonFromVector(horizon, REFRACTION_NONE);
+    if (position.status != ASTRO_SUCCESS) {
+      throw std::runtime_error("Astronomy Engine failed to calculate the position");
+    }
+    result.push_back({.azimuth_deg = wrap_360(position.lon), .altitude_deg = position.lat});
+  }
+  return result;
+}
+
+std::vector<Horizontal> stars_airless(const std::vector<EquatorialJ2000>& directions,
+                                      const double unix_utc, const Observer& observer) {
+  astro_time_t time = to_astro_time(unix_utc);
+  const astro_observer_t where =
+      Astronomy_MakeObserver(observer.latitude_deg, observer.longitude_deg, 0.0);
+  // One rotation for all directions: J2000 to the horizon of date (precession and nutation).
+  const astro_rotation_t rotation = Astronomy_Rotation_EQJ_HOR(&time, where);
+  // The annual aberration: the light of a star comes from the direction u + v/c, with v the
+  // barycentric velocity of the Earth in J2000 (AU per day), and c in AU per day.
+  const astro_state_vector_t earth = Astronomy_BaryState(BODY_EARTH, time);
+  if (rotation.status != ASTRO_SUCCESS || earth.status != ASTRO_SUCCESS) {
+    throw std::runtime_error("Astronomy Engine failed to calculate the rotation");
+  }
+  constexpr double kLightAuPerDay = 173.1446326846693;
+  const double bx = earth.vx / kLightAuPerDay;
+  const double by = earth.vy / kLightAuPerDay;
+  const double bz = earth.vz / kLightAuPerDay;
+  std::vector<Horizontal> result;
+  result.reserve(directions.size());
+  for (const EquatorialJ2000& direction : directions) {
+    const double ux = (cos_deg(direction.dec_deg) * cos_deg(direction.ra_deg)) + bx;
+    const double uy = (cos_deg(direction.dec_deg) * sin_deg(direction.ra_deg)) + by;
+    const double uz = sin_deg(direction.dec_deg) + bz;
+    const astro_vector_t j2000{.status = ASTRO_SUCCESS, .x = ux, .y = uy, .z = uz, .t = time};
+    const astro_spherical_t position =
+        Astronomy_HorizonFromVector(Astronomy_RotateVector(rotation, j2000), REFRACTION_NONE);
     if (position.status != ASTRO_SUCCESS) {
       throw std::runtime_error("Astronomy Engine failed to calculate the position");
     }

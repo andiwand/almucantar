@@ -348,6 +348,8 @@ void bind_view(py::module_& m) {
   m.def("camera_from_fov", &camera_from_fov, "width"_a, "height"_a, "horizontal_fov_deg"_a,
         "Returns a camera without distortion with the given horizontal field of view.");
   m.def("project", &project, "view"_a, "direction"_a, "Projects a direction to the screen.");
+  m.def("project_points", &project_points, "view"_a, "directions"_a,
+        "Projects many directions in one call. Returns a list of Projection.");
   m.def("unproject", &unproject, "view"_a, "point"_a,
         "Returns the direction that the screen point shows.");
   m.def("project_line", &project_line, "view"_a, "line"_a,
@@ -656,6 +658,27 @@ void bind_sky(py::module_& m) {
   m.def("galactic_plane", &galactic_plane, "unix_utc"_a, "observer"_a, "step_deg"_a = 1.0,
         "options"_a = SkyOptions{},
         "Returns the galactic plane (the center line of the Milky Way) for the observer.");
+
+  py::class_<StarCatalog>(m, "StarCatalog",
+                          "A catalogue of stars as columns: J2000 positions and proper motions.")
+      .def(py::init([](std::vector<double> ra_deg, std::vector<double> dec_deg,
+                       std::vector<double> pm_ra_arcsec_per_year,
+                       std::vector<double> pm_dec_arcsec_per_year) {
+             return StarCatalog{.ra_deg = std::move(ra_deg),
+                                .dec_deg = std::move(dec_deg),
+                                .pm_ra_arcsec_per_year = std::move(pm_ra_arcsec_per_year),
+                                .pm_dec_arcsec_per_year = std::move(pm_dec_arcsec_per_year)};
+           }),
+           "ra_deg"_a = std::vector<double>{}, "dec_deg"_a = std::vector<double>{},
+           "pm_ra_arcsec_per_year"_a = std::vector<double>{},
+           "pm_dec_arcsec_per_year"_a = std::vector<double>{})
+      .def_readwrite("ra_deg", &StarCatalog::ra_deg)
+      .def_readwrite("dec_deg", &StarCatalog::dec_deg)
+      .def_readwrite("pm_ra_arcsec_per_year", &StarCatalog::pm_ra_arcsec_per_year)
+      .def_readwrite("pm_dec_arcsec_per_year", &StarCatalog::pm_dec_arcsec_per_year);
+  m.def("star_positions", &star_positions, "catalog"_a, "unix_utc"_a, "observer"_a,
+        "options"_a = SkyOptions{},
+        "Returns the apparent positions of all stars of the catalogue for the observer.");
 }
 
 }  // namespace

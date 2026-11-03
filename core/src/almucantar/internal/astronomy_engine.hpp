@@ -34,6 +34,17 @@ struct Galactic {
 [[nodiscard]] std::vector<Horizontal> galactic_airless(const std::vector<Galactic>& directions,
                                                        double unix_utc, const Observer& observer);
 
+/// A direction in the equatorial system of J2000 (the mean equator and equinox of J2000.0).
+struct EquatorialJ2000 {
+  double ra_deg = 0;
+  double dec_deg = 0;
+};
+
+/// The positions of J2000 directions of stars for the observer: the precession, the nutation, and
+/// the annual aberration, without refraction.
+[[nodiscard]] std::vector<Horizontal> stars_airless(const std::vector<EquatorialJ2000>& directions,
+                                                    double unix_utc, const Observer& observer);
+
 /// The illuminated fraction of the disc of the moon, 0 (new moon) to 1 (full moon).
 [[nodiscard]] double moon_fraction(double unix_utc);
 

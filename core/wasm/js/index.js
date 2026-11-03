@@ -10,6 +10,12 @@ export const SolarModel = Object.freeze({ noaa: 0, astronomyEngine: 1 });
 /** The body of terrainEvents(). */
 export const Body = Object.freeze({ sun: 0, moon: 1 });
 
+/** The planets of planetPosition() and planetMagnitude(). */
+export const Planet = Object.freeze({ mercury: 0, venus: 1, mars: 2, jupiter: 3, saturn: 4, uranus: 5, neptune: 6 });
+
+/** The galactic coordinates of the center of the Milky Way (Sagittarius A*). */
+export const GALACTIC_CENTER = Object.freeze({ longitudeDeg: 0, latitudeDeg: 0 });
+
 /** The result kind of sunEvents(). */
 export const DayKind = Object.freeze({ normal: 0, polarDay: 1, polarNight: 2 });
 
@@ -51,6 +57,15 @@ export async function load(moduleOptions = {}) {
       m.sunPath(observer, startUtc, endUtc, merge(d.pathOptions, options)),
     moonPosition: (unixUtc, observer, options) => m.moonPosition(unixUtc, observer, merge(d.moonOptions, options)),
     moonIlluminatedFraction: (unixUtc) => m.moonIlluminatedFraction(unixUtc),
+    planetPosition: (planet, unixUtc, observer, options) =>
+      m.planetPosition(planet, unixUtc, observer, merge(d.skyOptions, options)),
+    planetMagnitude: (planet, unixUtc) => m.planetMagnitude(planet, unixUtc),
+    galacticPosition: (longitudeDeg, latitudeDeg, unixUtc, observer, options) =>
+      m.galacticPosition(longitudeDeg, latitudeDeg, unixUtc, observer, merge(d.skyOptions, options)),
+    galacticPlane: (unixUtc, observer, stepDeg = 1, options) =>
+      m.galacticPlane(unixUtc, observer, stepDeg, merge(d.skyOptions, options)),
+    starPositions: (catalog, unixUtc, observer, options) =>
+      m.starPositions(catalog, unixUtc, observer, merge(d.skyOptions, options)),
     readElevationGeotiff: (data, level = 0) => m.readElevationGeotiff(data, level),
     elevationGeotiffPrefixSize: (header, level) => m.elevationGeotiffPrefixSize(header, level),
     elevationTiles: (observer, maxDistanceM) => m.elevationTiles(observer, maxDistanceM),
@@ -64,6 +79,7 @@ export async function load(moduleOptions = {}) {
     cameraFromFov: (width, height, horizontalFovDeg) => m.cameraFromFov(width, height, horizontalFovDeg),
     project: (v, direction) => m.project(view(v), direction),
     unproject: (v, point) => m.unproject(view(v), point),
+    projectPoints: (v, directions) => m.projectPoints(view(v), directions),
     projectLine: (v, line) => m.projectLine(view(v), line),
     projectPath: (v, path) => m.projectLine(view(v), path.map((p) => p.position)),
     horizonLine: (v) => m.horizonLine(view(v)),

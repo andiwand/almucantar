@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const dist = process.env.ALMUCANTAR_WASM_DIST;
 assert.ok(dist, "ALMUCANTAR_WASM_DIST is not set");
-const { load, SolarModel, DayKind, Body } = await import(pathToFileURL(path.join(dist, "index.js")).href);
+const { load, SolarModel, DayKind, Body, Planet, GALACTIC_CENTER } = await import(pathToFileURL(path.join(dist, "index.js")).href);
 const almucantar = await load();
 
 const vienna = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 };
@@ -203,4 +203,37 @@ test("terrain: the moon behind the terrain", () => {
   const rise = events.crossings.find((c) => c.rising);
   assert.ok(almucantar.moonPosition(rise.unixUtc + 2, vienna).altitudeDeg + 0.2667 > 0);
   assert.throws(() => almucantar.terrainEvents(vienna, flat, dayStart, dayStart + day, { body: 9 }), RangeError);
+});
+
+test("planets, Milky Way, stars, and projectPoints", () => {
+  const t = 1782000000;
+  const saturn = almucantar.planetPosition(Planet.saturn, t, vienna);
+  const airless = almucantar.planetPosition(Planet.saturn, t, vienna, { refraction: false });
+  assert.equal(saturn.azimuthDeg, airless.azimuthDeg);
+  assert.ok(almucantar.planetMagnitude(Planet.venus, t) < -3.5);
+  const plane = almucantar.galacticPlane(t, vienna, 10);
+  assert.equal(plane.length, 36);
+  const center = almucantar.galacticPosition(GALACTIC_CENTER.longitudeDeg, GALACTIC_CENTER.latitudeDeg, t, vienna);
+  assert.ok(Math.abs(center.azimuthDeg - plane[0].azimuthDeg) < 1e-9);
+
+  // Sirius and Vega, as typed arrays and as plain arrays.
+  const catalog = { raDeg: new Float64Array([101.2871, 279.2346]), decDeg: [-16.7161, 38.7837] };
+  const stars = almucantar.starPositions(catalog, t, vienna);
+  assert.ok(stars instanceof Float64Array);
+  assert.equal(stars.length, 4);
+  const moving = almucantar.starPositions(
+    { ...catalog, pmRaArcsecPerYear: [-0.553, 0.201], pmDecArcsecPerYear: [-1.205, 0.286] },
+    t,
+    vienna,
+  );
+  assert.notEqual(moving[1], stars[1]);
+  assert.throws(() => almucantar.starPositions({ raDeg: [1, 2], decDeg: [1] }, t, vienna), RangeError);
+
+  const view = { camera: almucantar.cameraFromFov(1000, 1000, 60) };
+  const points = almucantar.projectPoints(view, [0, 0, 180, 0]);
+  assert.equal(points.length, 4);
+  const one = almucantar.project(view, { azimuthDeg: 0, altitudeDeg: 0 });
+  assert.equal(one.valid, !Number.isNaN(points[0]));
+  if (one.valid) assert.equal(points[0], one.point.x);
+  assert.ok(Number.isNaN(points[2]) || Number.isNaN(points[0]));
 });

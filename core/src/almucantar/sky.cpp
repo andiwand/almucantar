@@ -4,7 +4,9 @@
 #include <cstddef>
 
 #include "almucantar/internal/astronomy_engine.hpp"
+#include "almucantar/internal/math.hpp"
 #include "almucantar/internal/refraction.hpp"
+#include "almucantar/internal/time.hpp"
 #include "almucantar/internal/validate.hpp"
 
 namespace almucantar {
@@ -71,6 +73,50 @@ std::vector<Horizontal> galactic_plane(const double unix_utc, const Observer& ob
     point = seen(point, options);
   }
   return plane;
+}
+
+std::vector<Horizontal> star_positions(const StarCatalog& catalog, const double unix_utc,
+                                       const Observer& observer, const SkyOptions& options) {
+  validate(unix_utc, observer, options);
+  const std::size_t count = catalog.ra_deg.size();
+  require(catalog.dec_deg.size() == count, "dec_deg does not have the length of ra_deg");
+  const bool moves =
+      !catalog.pm_ra_arcsec_per_year.empty() || !catalog.pm_dec_arcsec_per_year.empty();
+  if (moves) {
+    require(catalog.pm_ra_arcsec_per_year.size() == count,
+            "pm_ra_arcsec_per_year does not have the length of ra_deg");
+    require(catalog.pm_dec_arcsec_per_year.size() == count,
+            "pm_dec_arcsec_per_year does not have the length of ra_deg");
+  }
+  // The proper motion is linear in the years since the epoch 2000.0 (Julian years).
+  const double years = (internal::julian_date(unix_utc) - 2451545.0) / 365.25;
+  std::vector<internal::EquatorialJ2000> directions;
+  directions.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    double ra = catalog.ra_deg[i];
+    double dec = catalog.dec_deg[i];
+    require_finite(ra, "ra_deg");
+    require_finite(dec, "dec_deg");
+    require(dec >= -90 && dec <= 90, "dec_deg is not in the range [-90, 90]");
+    if (moves) {
+      const double pm_ra = catalog.pm_ra_arcsec_per_year[i];
+      const double pm_dec = catalog.pm_dec_arcsec_per_year[i];
+      require_finite(pm_ra, "pm_ra_arcsec_per_year");
+      require_finite(pm_dec, "pm_dec_arcsec_per_year");
+      // pm_ra includes cos(dec). At a pole, the right ascension has no meaning, so it stays.
+      const double cos_dec = internal::cos_deg(dec);
+      if (cos_dec > 1e-9) {
+        ra += pm_ra * years / 3600 / cos_dec;
+      }
+      dec += pm_dec * years / 3600;
+    }
+    directions.push_back({.ra_deg = ra, .dec_deg = dec});
+  }
+  std::vector<Horizontal> positions = internal::stars_airless(directions, unix_utc, observer);
+  for (Horizontal& position : positions) {
+    position = seen(position, options);
+  }
+  return positions;
 }
 
 }  // namespace almucantar

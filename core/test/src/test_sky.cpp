@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -149,6 +150,95 @@ TEST_CASE("galactic_plane is 90° from the galactic pole", "[sky]") {
   REQUIRE_THAT(test::angular_separation_deg(plane[10], plane[11]), WithinAbs(1, 1e-6));
   REQUIRE(galactic_plane(t, sydney, 90).size() == 4);
   REQUIRE(galactic_plane(t, sydney, 7).size() == 52);
+}
+
+TEST_CASE("star_positions agrees with an independent calculation", "[sky]") {
+  // Sirius, Vega, Polaris, and Canopus in J2000 (Bright Star Catalogue), without proper motion.
+  const StarCatalog catalog{.ra_deg = {101.2871, 279.2346, 37.9529, 95.9879},
+                            .dec_deg = {-16.7161, 38.7837, 89.2642, -52.6957}};
+  for (const std::string& name : test::site_names()) {
+    const Observer observer = test::site(name);
+    for (double t = 1'767'225'600; t < 1'798'761'600; t += 86400 * 29.3) {
+      const std::vector<Horizontal> positions =
+          star_positions(catalog, t, observer, {.refraction = false});
+      REQUIRE(positions.size() == 4);
+      for (std::size_t i = 0; i < positions.size(); ++i) {
+        INFO(name << " " << t << " star " << i);
+        const Horizontal expected =
+            j2000_to_horizontal(catalog.ra_deg[i], catalog.dec_deg[i], t, observer);
+        // The reference has no nutation (up to 0.005°) and no aberration (up to 0.006°).
+        REQUIRE(test::angular_separation_deg(positions[i], expected) < 0.02);
+      }
+    }
+  }
+}
+
+TEST_CASE("star_positions adds the annual aberration", "[sky]") {
+  // The north galactic pole as a star, and as a galactic direction, which has no aberration.
+  // The pole has an ecliptic latitude of 29.8°, so the aberration there goes from
+  // 20.5" * sin(29.8°) = 0.0028° to 20.5" = 0.0057° in a year.
+  const StarCatalog pole{.ra_deg = {192.859481}, .dec_deg = {27.128251}};
+  const Observer vienna = test::site("vienna");
+  double smallest = 1;
+  double largest = 0;
+  for (double t = 1'767'225'600; t < 1'798'761'600; t += 86400) {
+    const Horizontal star = star_positions(pole, t, vienna, {.refraction = false}).front();
+    const Horizontal galactic = galactic_position(0, 90, t, vienna, {.refraction = false});
+    const double shift = test::angular_separation_deg(star, galactic);
+    smallest = std::min(smallest, shift);
+    largest = std::max(largest, shift);
+  }
+  INFO("smallest " << smallest << " largest " << largest);
+  // Measured in 2026: 0.00277° to 0.00622°. The largest value includes about 0.0005° of the
+  // difference between the J2000 position of the pole above and the galactic frame of Astronomy
+  // Engine.
+  REQUIRE_THAT(smallest, WithinAbs(0.0028, 0.0003));
+  REQUIRE(largest < 0.0065);
+  REQUIRE(largest > 0.0055);
+}
+
+TEST_CASE("star_positions applies the proper motion", "[sky]") {
+  // Arcturus: -1.093 and -1.999 arcseconds per year (Bright Star Catalogue).
+  const StarCatalog fixed{.ra_deg = {213.9154}, .dec_deg = {19.1824}};
+  StarCatalog moving = fixed;
+  moving.pm_ra_arcsec_per_year = {-1.093};
+  moving.pm_dec_arcsec_per_year = {-1.999};
+  const Observer vienna = test::site("vienna");
+  const double t = 1'782'000'000;  // 2026-06-20, 26.47 years after J2000.0
+  const Horizontal a = star_positions(fixed, t, vienna, {.refraction = false}).front();
+  const Horizontal b = star_positions(moving, t, vienna, {.refraction = false}).front();
+  const double years = ((t / 86400) + 2440587.5 - 2451545.0) / 365.25;
+  const double expected = std::hypot(1.093, 1.999) * years / 3600;
+  REQUIRE_THAT(test::angular_separation_deg(a, b), WithinAbs(expected, expected * 0.01));
+}
+
+TEST_CASE("star_positions adds the refraction", "[sky]") {
+  const StarCatalog catalog{.ra_deg = {0, 90, 180, 270}, .dec_deg = {0, 20, -20, 40}};
+  const Observer vienna = test::site("vienna");
+  const double t = 1'782'000'000;
+  const std::vector<Horizontal> airless = star_positions(catalog, t, vienna, {.refraction = false});
+  const std::vector<Horizontal> seen = star_positions(catalog, t, vienna);
+  for (std::size_t i = 0; i < seen.size(); ++i) {
+    REQUIRE(seen[i].azimuth_deg == airless[i].azimuth_deg);
+    REQUIRE(seen[i].altitude_deg >= airless[i].altitude_deg);
+  }
+}
+
+TEST_CASE("star_positions validates the catalogue", "[sky]") {
+  const Observer vienna = test::site("vienna");
+  REQUIRE(star_positions({}, 0, vienna).empty());
+  REQUIRE_THROWS_AS(star_positions({.ra_deg = {1, 2}, .dec_deg = {1}}, 0, vienna),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(star_positions({.ra_deg = {1}, .dec_deg = {91}}, 0, vienna),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(star_positions({.ra_deg = {std::nan("")}, .dec_deg = {1}}, 0, vienna),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(star_positions({.ra_deg = {1},
+                                    .dec_deg = {1},
+                                    .pm_ra_arcsec_per_year = {0.1},
+                                    .pm_dec_arcsec_per_year = {}},
+                                   0, vienna),
+                    std::invalid_argument);
 }
 
 TEST_CASE("the sky functions validate their arguments", "[sky]") {

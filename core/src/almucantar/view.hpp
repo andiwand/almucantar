@@ -74,6 +74,12 @@ using Polyline = std::vector<ScreenPoint>;
 /// length that is not positive, or an unknown screen rotation.
 [[nodiscard]] Projection project(const View& view, Horizontal direction);
 
+/// Projects many directions, for example all stars of a catalogue, in one call. The result has
+/// the order of `directions`. Throws `std::invalid_argument` if the view is not valid or if a
+/// direction is not finite.
+[[nodiscard]] std::vector<Projection> project_points(const View& view,
+                                                     const std::vector<Horizontal>& directions);
+
 /// Returns the direction that the screen point shows. This is the inverse of
 /// `project()`. Throws `std::invalid_argument` if the view is not valid.
 [[nodiscard]] Horizontal unproject(const View& view, ScreenPoint point);

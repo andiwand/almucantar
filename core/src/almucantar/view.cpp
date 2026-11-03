@@ -60,6 +60,19 @@ Projection project(const View& view, const Horizontal direction) {
   return projector(view).project(internal::to_enu(direction));
 }
 
+std::vector<Projection> project_points(const View& view,
+                                       const std::vector<Horizontal>& directions) {
+  const internal::Projector p = projector(view);
+  std::vector<Projection> result;
+  result.reserve(directions.size());
+  for (const Horizontal& h : directions) {
+    require_finite(h.azimuth_deg, "azimuth_deg");
+    require_finite(h.altitude_deg, "altitude_deg");
+    result.push_back(p.project(internal::to_enu(h)));
+  }
+  return result;
+}
+
 Horizontal unproject(const View& view, const ScreenPoint point) {
   require_finite(point.x, "x");
   require_finite(point.y, "y");

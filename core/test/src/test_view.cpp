@@ -108,6 +108,29 @@ TEST_CASE("project normalizes the quaternion", "[view]") {
   CHECK_THAT(scaled.point.y, WithinAbs(reference.point.y, 1e-9));
 }
 
+TEST_CASE("project_points gives the same points as project", "[view]") {
+  View view = view_facing(140, 20, 5);
+  view.camera = camera_from_fov(1080, 1920, 65);
+  view.heading_offset_deg = 3;
+  std::vector<Horizontal> directions;
+  for (double az = 0; az < 360; az += 7.5) {
+    directions.push_back({.azimuth_deg = az, .altitude_deg = std::fmod(az, 70) - 10});
+  }
+  const std::vector<Projection> points = project_points(view, directions);
+  REQUIRE(points.size() == directions.size());
+  for (std::size_t i = 0; i < directions.size(); ++i) {
+    const Projection one = project(view, directions[i]);
+    REQUIRE(points[i].valid == one.valid);
+    if (one.valid) {
+      REQUIRE(points[i].point.x == one.point.x);
+      REQUIRE(points[i].point.y == one.point.y);
+    }
+  }
+  REQUIRE(project_points(view, {}).empty());
+  REQUIRE_THROWS_AS(project_points(view, {{.azimuth_deg = std::nan(""), .altitude_deg = 0}}),
+                    std::invalid_argument);
+}
+
 TEST_CASE("unproject is the inverse of project, with distortion", "[view]") {
   View view = view_facing(123, 35, -12, ScreenRotation::rotation_90);
   view.heading_offset_deg = 4.5;

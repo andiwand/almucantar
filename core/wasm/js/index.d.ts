@@ -24,6 +24,33 @@ export interface SearchOptions {
   maxSeparationDeg: number;
 }
 export interface MoonOptions { refraction: boolean; atmosphere: Atmosphere }
+export interface SkyOptions { refraction: boolean; atmosphere: Atmosphere }
+
+/** The planets of planetPosition() and planetMagnitude(). */
+export declare const Planet: Readonly<{
+  mercury: 0;
+  venus: 1;
+  mars: 2;
+  jupiter: 3;
+  saturn: 4;
+  uranus: 5;
+  neptune: 6;
+}>;
+export type Planet = (typeof Planet)[keyof typeof Planet];
+
+/** The galactic coordinates of the center of the Milky Way (Sagittarius A*). */
+export declare const GALACTIC_CENTER: Readonly<{ longitudeDeg: number; latitudeDeg: number }>;
+
+/**
+ * A catalogue of stars as columns of the same length: J2000 positions at the epoch 2000.0, and the
+ * proper motions (pmRaArcsecPerYear is d(ra)/dt * cos(dec)). The proper motions are optional.
+ */
+export interface StarCatalog {
+  raDeg: ArrayLike<number>;
+  decDeg: ArrayLike<number>;
+  pmRaArcsecPerYear?: ArrayLike<number>;
+  pmDecArcsecPerYear?: ArrayLike<number>;
+}
 export interface MagnetometerOptions { sensorSigmaDeg: number }
 
 /**
@@ -98,6 +125,7 @@ export interface Almucantar {
     readonly pathOptions: Readonly<PathOptions>;
     readonly searchOptions: Readonly<SearchOptions>;
     readonly moonOptions: Readonly<MoonOptions>;
+    readonly skyOptions: Readonly<SkyOptions>;
     readonly horizonOptions: Readonly<HorizonOptions>;
     readonly terrainEventOptions: Readonly<TerrainEventOptions>;
     readonly magnetometerOptions: Readonly<MagnetometerOptions>;
@@ -113,6 +141,25 @@ export interface Almucantar {
   sunEvents(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<EventOptions>): DayEvents;
   sunPath(observer: Observer, startUtc: number, endUtc: number, options?: Partial2<PathOptions>): PathPoint[];
   moonPosition(unixUtc: number, observer: Observer, options?: Partial2<MoonOptions>): Horizontal;
+  /** The apparent topocentric position of the center of a planet. */
+  planetPosition(planet: Planet, unixUtc: number, observer: Observer, options?: Partial2<SkyOptions>): Horizontal;
+  /** The visual magnitude of a planet, as seen from the center of the Earth. Smaller is brighter. */
+  planetMagnitude(planet: Planet, unixUtc: number): number;
+  /** The position of a direction in the galactic system, for example GALACTIC_CENTER. */
+  galacticPosition(
+    longitudeDeg: number,
+    latitudeDeg: number,
+    unixUtc: number,
+    observer: Observer,
+    options?: Partial2<SkyOptions>,
+  ): Horizontal;
+  /** The center line of the Milky Way: the point i is at the galactic longitude i * stepDeg. */
+  galacticPlane(unixUtc: number, observer: Observer, stepDeg?: number, options?: Partial2<SkyOptions>): Horizontal[];
+  /**
+   * The apparent positions of all stars of the catalogue, as a flat array [azimuthDeg0,
+   * altitudeDeg0, azimuthDeg1, ...]: one call per second for all stars, then projectPoints().
+   */
+  starPositions(catalog: StarCatalog, unixUtc: number, observer: Observer, options?: Partial2<SkyOptions>): Float64Array;
   moonIlluminatedFraction(unixUtc: number): number;
   /** Reads a GeoTIFF of heights, for example a Copernicus tile. level 1, 2, ... are the overviews. */
   readElevationGeotiff(data: Uint8Array, level?: number): ElevationGrid & { heightsM: Float32Array };
@@ -138,6 +185,12 @@ export interface Almucantar {
   project(view: Partial2<View>, direction: Horizontal): Projection;
   unproject(view: Partial2<View>, point: ScreenPoint): Horizontal;
   projectLine(view: Partial2<View>, line: Horizontal[]): Polyline[];
+  /**
+   * Projects many directions, given as a flat array [azimuthDeg0, altitudeDeg0, ...] (for example
+   * the result of starPositions). Returns a flat array [x0, y0, x1, y1, ...] with NaN where a
+   * direction is not valid (behind the camera or outside the valid cone).
+   */
+  projectPoints(view: Partial2<View>, directions: ArrayLike<number>): Float64Array;
   projectPath(view: Partial2<View>, path: PathPoint[]): Polyline[];
   horizonLine(view: Partial2<View>): Polyline[];
   findTime(observer: Observer, direction: Horizontal, startUtc: number, endUtc: number, options?: Partial2<SearchOptions>): TimeMatch;

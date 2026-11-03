@@ -11,6 +11,8 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <stdexcept>
@@ -345,6 +347,83 @@ val heading_filter_update_magnetometer_js(const val& f, const Quaternion& q, con
   });
 }
 
+// The sky: the planets, the Milky Way, and the stars.
+
+Horizontal planet_position_js(int planet, double t, const Observer& o, const SkyOptions& opt) {
+  return guarded([&] { return planet_position(to_enum<Planet>(planet, "planet"), t, o, opt); });
+}
+
+double planet_magnitude_js(int planet, double t) {
+  return guarded([&] { return planet_magnitude(to_enum<Planet>(planet, "planet"), t); });
+}
+
+Horizontal galactic_position_js(double l, double b, double t, const Observer& o,
+                                const SkyOptions& opt) {
+  return guarded([&] { return galactic_position(l, b, t, o, opt); });
+}
+
+val horizontals_to_js(const std::vector<Horizontal>& directions) {
+  val result = val::array();
+  for (const Horizontal& h : directions) {
+    result.call<void>("push", h);
+  }
+  return result;
+}
+
+val galactic_plane_js(double t, const Observer& o, double step, const SkyOptions& opt) {
+  return guarded([&] { return horizontals_to_js(galactic_plane(t, o, step, opt)); });
+}
+
+std::vector<double> numbers_or_empty(const val& v) {
+  if (v.isUndefined() || v.isNull()) {
+    return {};
+  }
+  return emscripten::convertJSArrayToNumberVector<double>(v);
+}
+
+// Many stars cross as typed arrays: the catalogue as columns, and the result as a flat
+// Float64Array [azimuth0, altitude0, azimuth1, altitude1, ...], so a call makes no JS objects.
+val star_positions_js(const val& catalog, double t, const Observer& o, const SkyOptions& opt) {
+  return guarded([&] {
+    const StarCatalog c{.ra_deg = numbers_or_empty(catalog["raDeg"]),
+                        .dec_deg = numbers_or_empty(catalog["decDeg"]),
+                        .pm_ra_arcsec_per_year = numbers_or_empty(catalog["pmRaArcsecPerYear"]),
+                        .pm_dec_arcsec_per_year = numbers_or_empty(catalog["pmDecArcsecPerYear"])};
+    const std::vector<Horizontal> positions = star_positions(c, t, o, opt);
+    std::vector<double> flat;
+    flat.reserve(positions.size() * 2);
+    for (const Horizontal& h : positions) {
+      flat.push_back(h.azimuth_deg);
+      flat.push_back(h.altitude_deg);
+    }
+    return val(emscripten::typed_memory_view(flat.size(), flat.data())).call<val>("slice");
+  });
+}
+
+// The directions as a flat array [azimuth0, altitude0, ...]; the result as a flat Float64Array
+// [x0, y0, x1, y1, ...], with NaN for a direction that is not valid.
+val project_points_js(const ViewJs& v, const val& directions) {
+  return guarded([&] {
+    const std::vector<double> flat = emscripten::convertJSArrayToNumberVector<double>(directions);
+    if (flat.size() % 2 != 0) {
+      throw std::invalid_argument("directions does not have an even length");
+    }
+    std::vector<Horizontal> list;
+    list.reserve(flat.size() / 2);
+    for (std::size_t i = 0; i + 1 < flat.size(); i += 2) {
+      list.push_back({.azimuth_deg = flat[i], .altitude_deg = flat[i + 1]});
+    }
+    const std::vector<Projection> points = project_points(v.get(), list);
+    std::vector<double> out;
+    out.reserve(points.size() * 2);
+    for (const Projection& p : points) {
+      out.push_back(p.valid ? p.point.x : std::nan(""));
+      out.push_back(p.valid ? p.point.y : std::nan(""));
+    }
+    return val(emscripten::typed_memory_view(out.size(), out.data())).call<val>("slice");
+  });
+}
+
 // The terrain. A grid has many heights, so they cross as a Float32Array, not as a JS array.
 
 /// Copies `values` out of the memory of the module into a new typed array.
@@ -485,6 +564,7 @@ val defaults_js() {
   d.set("pathOptions", PathOptionsJs{});
   d.set("searchOptions", SearchOptionsJs{});
   d.set("moonOptions", MoonOptions{});
+  d.set("skyOptions", SkyOptions{});
   d.set("horizonOptions", HorizonOptions{});
   d.set("terrainEventOptions", TerrainEventOptionsJs{});
   d.set("magnetometerOptions", MagnetometerOptions{});
@@ -546,6 +626,9 @@ EMSCRIPTEN_BINDINGS(almucantar) {
   value_object<MoonOptions>("MoonOptions")
       .field("refraction", &MoonOptions::refraction)
       .field("atmosphere", &MoonOptions::atmosphere);
+  value_object<SkyOptions>("SkyOptions")
+      .field("refraction", &SkyOptions::refraction)
+      .field("atmosphere", &SkyOptions::atmosphere);
   value_object<HorizonOptions>("HorizonOptions")
       .field("azimuthStepDeg", &HorizonOptions::azimuth_step_deg)
       .field("maxDistanceM", &HorizonOptions::max_distance_m)
@@ -604,6 +687,12 @@ EMSCRIPTEN_BINDINGS(almucantar) {
   function("sunPath", &sun_path_js);
   function("moonPosition", &moon_position_js);
   function("moonIlluminatedFraction", &moon_illuminated_fraction_js);
+  function("planetPosition", &planet_position_js);
+  function("planetMagnitude", &planet_magnitude_js);
+  function("galacticPosition", &galactic_position_js);
+  function("galacticPlane", &galactic_plane_js);
+  function("starPositions", &star_positions_js);
+  function("projectPoints", &project_points_js);
   function("readElevationGeotiff", &read_elevation_geotiff_js);
   function("elevationGeotiffPrefixSize", &elevation_geotiff_prefix_size_js);
   function("elevationTiles", &elevation_tiles_js);

@@ -54,4 +54,25 @@ inline constexpr double kGalacticCenterLatitudeDeg = 0;
                                                      double step_deg = 1,
                                                      const SkyOptions& options = {});
 
+/// A catalogue of stars as columns of the same length, so a binding passes it as arrays. The
+/// positions are J2000 at the epoch 2000.0. An empty proper motion column means 0 for all stars.
+struct StarCatalog {
+  std::vector<double> ra_deg;   ///< right ascension, J2000, in degrees
+  std::vector<double> dec_deg;  ///< declination, J2000, in degrees
+  /// The proper motion in right ascension, d(ra)/dt * cos(dec), in arcseconds per year (the
+  /// convention of the Bright Star Catalogue and of Hipparcos).
+  std::vector<double> pm_ra_arcsec_per_year;
+  std::vector<double> pm_dec_arcsec_per_year;  ///< the proper motion in declination
+};
+
+/// Returns the apparent positions of all stars of `catalog` at `unix_utc` for `observer`, in the
+/// order of the catalogue. The function applies the proper motion, the precession, the nutation,
+/// and the annual aberration (Astronomy Engine), and the refraction of `options`. It ignores the
+/// parallax (at most 0.0002° for a bright star). One call for all stars is fast: a frame projects
+/// the result with `project_points()`. Throws `std::invalid_argument` if the columns do not have
+/// the same length, if a value is not finite, or if an argument is not valid.
+[[nodiscard]] std::vector<Horizontal> star_positions(const StarCatalog& catalog, double unix_utc,
+                                                     const Observer& observer,
+                                                     const SkyOptions& options = {});
+
 }  // namespace almucantar

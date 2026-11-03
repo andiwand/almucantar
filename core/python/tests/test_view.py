@@ -83,3 +83,18 @@ def test_invalid_view_raises_value_error():
         almucantar.unproject(
             almucantar.View(camera=almucantar.Camera(fx=0)), almucantar.ScreenPoint()
         )
+
+
+def test_project_points():
+    view = almucantar.View(camera=almucantar.camera_from_fov(1000, 1000, 60))
+    directions = [
+        almucantar.Horizontal(azimuth_deg=az, altitude_deg=5.0)
+        for az in (350.0, 0.0, 10.0, 180.0)
+    ]
+    points = almucantar.project_points(view, directions)
+    assert len(points) == 4
+    for point, direction in zip(points, directions):
+        one = almucantar.project(view, direction)
+        assert point.valid == one.valid
+        if one.valid:
+            assert point.point.x == one.point.x

@@ -14,6 +14,14 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- The stars: `star_positions()` gives the apparent positions of all stars of a `StarCatalog`
+  (J2000 positions and proper motions, as columns) in one call, with the precession, the
+  nutation, the annual aberration, and the refraction. 5080 stars take about 1 ms in WebAssembly.
+  `project_points()` projects many directions in one call. In C++, Python, and WASM.
+- The WASM package has the planets and the Milky Way: `planetPosition()`, `planetMagnitude()`,
+  `galacticPosition()`, and `galacticPlane()`, with `Planet` and `GALACTIC_CENTER`. In
+  `starPositions()` and `projectPoints()`, the stars and the points cross as flat `Float64Array`s.
+
 - **Breaking:** the core has the new name almucantar, because it is the core of more than one
   app. The C++ headers are in `almucantar/` (`almucantar/almucantar.hpp`), and the namespace is
   `almucantar`. The Python package is `almucantar`, the npm package is `@almucantar/core`, the
