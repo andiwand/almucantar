@@ -7,7 +7,7 @@ from conan.tools.files import copy
 
 class SunradarConan(ConanFile):
     name = "sunradar"
-    version = "0.1.0"
+    version = "0.2.0"
     url = "https://github.com/andiwand/sunradar"
     description = "Sun position, sun path and projection for a camera overlay"
     license = "MPL-2.0"

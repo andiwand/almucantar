@@ -14,6 +14,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-03
+
 - The terrain horizon: `horizon_profile()` calculates the altitude of the terrain for each
   azimuth from a list of `ElevationGrid` tiles (a DEM), with the curvature of the Earth and the
   terrestrial refraction. `terrain_altitude_deg()` interpolates the profile, and
