@@ -14,7 +14,7 @@
     "format:check": "prettier --check src test *.ts *.json public/*.webmanifest public/*.js index.html"
   },
   "dependencies": {
-    "@almucantar/core": "file:../../core/build/emscripten-wasm-release/wasm/dist",
+    "@almucantar/core": "file:../../../core/build/emscripten-wasm-release/wasm/dist",
     "@almucantar/web-shared": "*"
   },
   "devDependencies": {

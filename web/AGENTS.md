@@ -5,12 +5,17 @@ One npm workspace for all web apps of the repository and the website (PLAN.md 14
 | Package | What |
 |---|---|
 | `shared/` (`@almucantar/web-shared`) | The code that the web apps share. See below. |
-| `sunradar/` | The PWA of sunradar. See [`sunradar/AGENTS.md`](sunradar/AGENTS.md). |
-| `website/` | The website. See [`website/AGENTS.md`](website/AGENTS.md). |
+| `home/` | The page of the family at the root of GitHub Pages: links to the apps. |
+| `sunradar/app/` | The PWA of sunradar. See [`sunradar/app/AGENTS.md`](sunradar/app/AGENTS.md). |
+| `sunradar/site/` | The website of sunradar. See [`sunradar/site/AGENTS.md`](sunradar/site/AGENTS.md). |
+
+Each app has a folder with `app/` (the PWA) and `site/` (the website). GitHub Pages serves this
+tree (PLAN.md 14.2): `/` is `home/`, `/<app>/` is the website of the app, and `/<app>/app/` is its
+PWA. The step "Assemble the site" of `web.yml` makes the tree from the `dist/` folders.
 
 All packages take the core `@almucantar/core` from the WASM build output (`file:` to
 `core/build/emscripten-wasm-release/wasm/dist`), so build `core/wasm` first. The workflow `web.yml`
-builds the workspace and puts the PWA under `/app/` of the website on GitHub Pages.
+builds the workspace and deploys the tree of the sites to GitHub Pages.
 
 ## Build and test
 
@@ -23,7 +28,7 @@ npm run build
 npm run format:check
 ```
 
-`-w <package>` runs a command in one package, for example `npm run dev -w sunradar`.
+`-w <package>` runs a command in one package, for example `npm run dev -w sunradar/app`.
 
 ## The shared package
 
@@ -48,6 +53,6 @@ compile them. `npm run build -w shared` only type-checks it.
   `PlacePanelDeps` does.
 - Code goes to `shared/` when a second app needs it, or when it is the same in all apps (the
   place, the terrain), not because it might be useful later.
-- A new web app is a new package next to `sunradar/`, with `@almucantar/web-shared` as a
-  dependency, and an entry in `workspaces` of `package.json`.
+- A new web app is a new folder next to `sunradar/` with `app/` and `site/`, each with an entry in
+  `workspaces` of `package.json`, and a line in the step "Assemble the site" of `web.yml`.
 - Formatting: prettier (`npm run format`).

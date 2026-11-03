@@ -57,7 +57,7 @@ second.
 | `.../TimePanel.kt` | The date and time sliders. |
 | `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
-| `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/website/src/sky.ts`. |
+| `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sunradar/site/src/sky.ts`. |
 | `sunradar/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sunradar.screenshot`. The release build has a no-op version in `sunradar/src/release/`. |
 | `sunradar/src/test/` | JVM unit tests. |
 | `sunradar/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |

@@ -75,10 +75,10 @@ PROJECTS = {
             "web/package.json",
             "web/package-lock.json",
         ],
-        "changelog": "web/sunradar/CHANGELOG.md",
+        "changelog": "web/sunradar/app/CHANGELOG.md",
         "stamps": [
             (
-                "web/sunradar/package.json",
+                "web/sunradar/app/package.json",
                 r'("version": ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )

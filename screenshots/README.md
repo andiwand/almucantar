@@ -66,14 +66,14 @@ covers the hour labels and the crosshair.
 
 ### The drawn sky
 
-The drawn sky replaces the camera image. It is the sky of the website (`web/website/src/sky.ts`),
+The drawn sky replaces the camera image. It is the sky of the website (`web/sunradar/site/src/sky.ts`),
 drawn with the projection of the app:
 
 - The sky is a vertical gradient from the top of the screen to the horizon. The colors come from
-  the altitude of the sun, with the stops of `SKY` in `web/website/src/sky.ts`.
+  the altitude of the sun, with the stops of `SKY` in `web/sunradar/site/src/sky.ts`.
 - A glow surrounds the sun when it is higher than -12°.
 - Stars show when the sun is lower than -4°, from the same generator (`random(7)`, 420 stars).
-- The skyline: the buildings of `BUILDINGS` in `web/website/src/sky.ts` (`random(42)`). Each building
+- The skyline: the buildings of `BUILDINGS` in `web/sunradar/site/src/sky.ts` (`random(42)`). Each building
   is a polygon in sky directions, projected with the core. Below the horizon, the ground has the
   color of the skyline. At night the buildings have lit windows.
 

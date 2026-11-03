@@ -13,7 +13,7 @@ export default defineConfig({
   // The app reads files from the repository root (the WASM build of the core and the offline base
   // map in assets/basemap/) and the shared package (web/shared). Vite allows only the project
   // directory without this.
-  server: { fs: { allow: [fileURLToPath(new URL("../..", import.meta.url))] } },
+  server: { fs: { allow: [fileURLToPath(new URL("../../..", import.meta.url))] } },
   plugins: [
     {
       name: "offline-assets",

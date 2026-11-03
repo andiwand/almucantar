@@ -1,0 +1,18 @@
+{
+  "name": "almucantar-home",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The page of the family of apps at the root of GitHub Pages",
+  "license": "MPL-2.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "format": "prettier --write src *.json index.html",
+    "format:check": "prettier --check src *.json index.html"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "vite": "^6.0.0"
+  }
+}

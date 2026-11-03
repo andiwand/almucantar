@@ -2,7 +2,7 @@
 
 The web app sunradar: Vite, TypeScript, the core as the npm package `@almucantar/core`
 (`core/wasm`), and the shared code `@almucantar/web-shared` (`../shared`). It is a package of the
-npm workspace `web/` (see [`../AGENTS.md`](../AGENTS.md)). GitHub Pages serves the app under
+npm workspace `web/` (see [`../AGENTS.md`](../../AGENTS.md)). GitHub Pages serves the app under
 `/app/` of the website.
 
 ## Layout
@@ -21,12 +21,12 @@ Run these commands in `web/` (the workspace), not here:
 
 ```sh
 npm ci
-npm test -w sunradar
-npm run build -w sunradar
-npm run format:check -w sunradar
+npm test -w sunradar/app
+npm run build -w sunradar/app
+npm run format:check -w sunradar/app
 ```
 
-`npm run dev -w sunradar` serves the app. The camera and the sensors need HTTPS (or `localhost`).
+`npm run dev -w sunradar/app` serves the app. The camera and the sensors need HTTPS (or `localhost`).
 
 ## Notes
 

@@ -5,6 +5,11 @@ The changes in the PWA of sunradar that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The web app has a new address: <https://andiwand.github.io/almucantar/sunradar/app/>, and the
+  website is at <https://andiwand.github.io/almucantar/sunradar/>. The repository has the new name
+  almucantar, because it holds more than one app. An installed app from the old address does not
+  update: install it again from the new address.
+
 ## 0.1.0 - 2026-11-03
 
 - The Place panel looks like a map app: a full-screen map, a rounded search bar with a back arrow,

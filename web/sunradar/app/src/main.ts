@@ -31,7 +31,7 @@ import {
 } from "@almucantar/web-shared/terrain";
 import type { TerrainState } from "@almucantar/web-shared/terrain";
 import { fromWallTime, startOfDay, wallTime } from "@almucantar/web-shared/zone";
-import baseMapUrl from "../../../assets/basemap/basemap.json?url";
+import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
 
 const almucantar = await load();
 

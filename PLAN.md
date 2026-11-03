@@ -536,7 +536,7 @@ contain the same core.
 - TypeScript, Vite. Uses `@almucantar/core` (`core/wasm`) from the WASM build output (a
   `file:` dependency). The core runs on the main thread, because a frame needs less than
   1 ms; the values are plain objects, so a Web Worker is possible later.
-- GitHub Pages serves the website (`web/website/`) and the PWA (`web/sunradar/`) under `/app/`.
+- GitHub Pages serves the website (`web/sunradar/site/`) and the PWA (`web/sunradar/`) under `/app/`.
 - Camera: `getUserMedia`. Orientation: `AbsoluteOrientationSensor`, with
   `deviceorientation` as a fallback. iOS needs a permission prompt for the sensors.
 - FOV: a slider, or calibration with two sun or moon taps.
@@ -884,7 +884,7 @@ sky that the core calculates, then a playground, then the facts.
 | Play | "Your sky" | the place, the date, and the time of the user |
 | Rest | precise, offline, open source, and a link to sunradar | dim |
 
-The drawing of the sky of the sunradar website (`web/website/src/sky.ts`) is a panorama. The
+The drawing of the sky of the sunradar website (`web/sunradar/site/src/sky.ts`) is a panorama. The
 star sky needs the same panorama plus the stars, so the common parts (the colors of the sky, the
 projection of the panorama, the horizon, the terrain) move to `web/shared`.
 

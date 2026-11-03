@@ -102,15 +102,20 @@ jobs:
       - name: Build
         run: npm run build
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pwa
-          path: web/sunradar/dist
+      # The tree of GitHub Pages: the page of the family at the root, and one folder for each app
+      # with its website and, under app/, its PWA.
+      - name: Assemble the site
+        run: |
+          mkdir -p ../site
+          cp -r home/dist/. ../site/
+          mkdir -p ../site/sunradar
+          cp -r sunradar/site/dist/. ../site/sunradar/
+          cp -r sunradar/app/dist ../site/sunradar/app
 
       - uses: actions/upload-artifact@v4
         with:
-          name: website
-          path: web/website/dist
+          name: site
+          path: site
 
   # Runs only if GitHub Pages is enabled for the repository (source: GitHub Actions) and the
   # repository variable PAGES_ENABLED is "true".
@@ -128,13 +133,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: website
+          name: site
           path: site
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: pwa
-          path: site/app
 
       - uses: actions/upload-pages-artifact@v3
         with:

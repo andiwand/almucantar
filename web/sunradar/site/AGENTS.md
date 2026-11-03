@@ -18,11 +18,11 @@ website and puts the PWA under `/app/`.
 
 ```sh
 npm ci                          # in web/, the workspace
-npm run build -w website
-npm run format:check -w website
+npm run build -w sunradar/site
+npm run format:check -w sunradar/site
 ```
 
-`npm run dev -w website` serves the website.
+`npm run dev -w sunradar/site` serves the website.
 
 ## Notes
 

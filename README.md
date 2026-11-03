@@ -17,7 +17,7 @@ the milestones, and the plan of the apps (section 14).
   <img src="assets/logo.svg" alt="Sunradar" width="128" height="128">
 </p>
 
-**Website and web app: <https://andiwand.github.io/almucantar/>**
+**Website and web app: <https://andiwand.github.io/almucantar/sunradar/>**
 
 sunradar shows the path of the sun on top of the camera image. You can see when the sun is at a
 given place in the sky, for example when you visit a flat.
@@ -39,7 +39,7 @@ sunradar is a pre-release. It is not ready for all users yet.
 | What | Where |
 |---|---|
 | Android app | the APK of [sunradar-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sunradar-android-v0.2.0) (a debug build: allow the installation from this source) |
-| Web app | <https://andiwand.github.io/almucantar/app/> (also offline after the first visit) |
+| Web app | <https://andiwand.github.io/almucantar/sunradar/app/> (also offline after the first visit) |
 | iOS app | build it from `ios/` (see [`ios/AGENTS.md`](ios/AGENTS.md)); it is not in the App Store |
 
 ## The core packages
@@ -66,7 +66,7 @@ are grouped by platform: each platform is one build with a shared part and one p
 | `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
 | `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/` and `sunradar/` |
 | `ios/` | the iOS apps (SwiftUI): `Shared/` and `Sunradar/` |
-| `web/` | one npm workspace: `shared/`, `sunradar/` (the PWA), and `website/` (GitHub Pages; the PWA is under `/app/`) |
+| `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and `sunradar/app/` and `sunradar/site/` (on GitHub Pages under `/sunradar/`) |
 | `assets/` | the logo and the offline base map |
 
 ## License
