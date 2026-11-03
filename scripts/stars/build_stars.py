@@ -128,6 +128,7 @@ def main():
 
     # The lines: d3-celestial gives coordinates, so each point becomes the nearest star.
     used = set()
+    # A list for each id, because Serpens has two parts (Caput and Cauda) with the id "Ser".
     lines = {}
     missed = 0
     for feature in lines_json["features"]:
@@ -144,7 +145,7 @@ def main():
             if len(indices) >= 2:
                 out.append(indices)
                 used.update(indices)
-        lines[feature["id"]] = out
+        lines.setdefault(feature["id"], []).append(out)
     if missed:
         print(
             f"{missed} points of the constellation lines have no star within {MATCH_DEG}°"
@@ -167,16 +168,34 @@ def main():
             names.append([index[by_hd[int(hd)]], name])
     names.sort()
 
+    def distance_deg(line_set, lon, lat):
+        """The angle from the label to the nearest star of a set of lines."""
+        v = unit(lon % 360, lat)
+        best = 180.0
+        for line in line_set:
+            for i in line:
+                w = vectors[i]
+                c = max(-1.0, min(1.0, v[0] * w[0] + v[1] * w[1] + v[2] * w[2]))
+                best = min(best, math.degrees(math.acos(c)))
+        return best
+
     constellations = []
     for feature in names_json["features"]:
         cid = feature["id"]
         lon, lat = feature["geometry"]["coordinates"]
+        # The lines of this part: of the sets with this id, the set nearest to the label.
+        candidates = lines.get(cid, [])
+        chosen = []
+        if candidates:
+            chosen = min(candidates, key=lambda c: distance_deg(c, lon, lat))
+            candidates.remove(chosen)
         constellations.append(
             {
                 "id": cid,
-                "name": feature["properties"]["en"],
+                # The IAU name in Latin, as sky maps use it (for example "Pisces", "Serpens Caput").
+                "name": feature["properties"]["name"],
                 "label": [round(lon % 360, 2), round(lat, 2)],
-                "lines": [[index[i] for i in line] for line in lines.get(cid, [])],
+                "lines": [[index[i] for i in line] for line in chosen],
             }
         )
 

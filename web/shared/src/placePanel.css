@@ -1,4 +1,4 @@
-/* The place panel of the apps (placePanel.ts). It uses the variable --muted of the app. */
+/* The place panel of the apps (placePanel.ts). It defines its own colors. */
 /* The place panel: a full-screen map, as in a map app. */
 #place-panel {
   --surface: #1b2433;

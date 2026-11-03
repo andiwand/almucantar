@@ -84,6 +84,23 @@ PROJECTS = {
             )
         ],
     },
+    "starradar-pwa": {
+        "paths": [
+            "web/starradar/app/**",
+            "web/shared/**",
+            "web/package.json",
+            "web/package-lock.json",
+            "assets/stars/**",
+        ],
+        "changelog": "web/starradar/app/CHANGELOG.md",
+        "stamps": [
+            (
+                "web/starradar/app/package.json",
+                r'("version": ")[^"]*(")',
+                r"\g<1>{version}\g<2>",
+            )
+        ],
+    },
 }
 
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")

@@ -508,13 +508,16 @@ export function cacheStorageStore(name = "sunradar-terrain-v1"): BlobStore {
   };
 }
 
-const INDEX_KEY = "sunradar-terrain-index-v1";
-const KEPT_KEY = "sunradar-terrain-kept-v1";
-
-export function localStorageIndex(): Pick<
-  TileCacheDeps,
-  "loadIndex" | "saveIndex" | "loadKept" | "saveKept"
-> {
+/**
+ * The index of the tile cache in localStorage. The apps of one site share localStorage, so each
+ * app has its own prefix, the same as the name of its Cache Storage (cacheStorageStore). The
+ * default is the prefix of sunradar, which had no parameter before.
+ */
+export function localStorageIndex(
+  prefix = "sunradar-terrain",
+): Pick<TileCacheDeps, "loadIndex" | "saveIndex" | "loadKept" | "saveKept"> {
+  const INDEX_KEY = `${prefix}-index-v1`;
+  const KEPT_KEY = `${prefix}-kept-v1`;
   return {
     loadKept() {
       try {

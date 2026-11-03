@@ -1,0 +1,201 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #050916;
+  color: #fff;
+  font:
+    15px/1.35 system-ui,
+    sans-serif;
+  touch-action: none;
+  user-select: none;
+}
+#camera,
+#sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#camera {
+  object-fit: cover;
+  display: none;
+}
+.panel {
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.hidden {
+  display: none !important;
+}
+#status,
+#message {
+  position: fixed;
+  left: 12px;
+  max-width: min(440px, calc(100% - 48px));
+}
+#status {
+  top: calc(12px + env(safe-area-inset-top));
+}
+#message {
+  top: calc(120px + env(safe-area-inset-top));
+}
+#bottom {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#bottom > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+/* The time panel: one row for each field, with the name and the value above the slider. */
+#time-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(560px, 100%);
+  box-sizing: border-box;
+}
+#time-panel .field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#time-panel .field.hidden {
+  display: none;
+}
+#time-panel .field-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+#time-panel .field-head span:last-child {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+#time-panel input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+#time-panel .panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#time-panel .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#time-panel .credits {
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.7;
+}
+#time-panel .credits a {
+  color: inherit;
+}
+#buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+button {
+  font: inherit;
+  color: #fff;
+  background: #4a4458;
+  border: 0;
+  border-radius: 20px;
+  padding: 10px 18px;
+}
+button.primary {
+  background: #cfbcff;
+  color: #21005d;
+}
+button:disabled {
+  opacity: 0.5;
+}
+.heading-good {
+  color: #a5d6a7;
+}
+.heading-fair {
+  color: #ffe082;
+}
+.heading-poor {
+  color: #ffb74d;
+}
+
+/* The search: a field and a list of results at the top. */
+#find-panel {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 24px));
+  box-sizing: border-box;
+  z-index: 5;
+}
+#find-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 14px;
+  background: #1b2433;
+  color: #fff;
+  font: inherit;
+}
+#find-results {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+#find-results button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #fff;
+  padding: 8px 6px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#find-results button:hover,
+#find-results button:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+#find-results .kind {
+  color: #b4c0d2;
+  font-size: 13px;
+}
+/* The card of a tapped or found object. */
+#info {
+  max-width: min(440px, 100%);
+}
+#info .name {
+  font-weight: 600;
+  font-size: 17px;
+}
+#info .muted {
+  color: #b4c0d2;
+}
+/* The red light: everything turns red, so the eyes stay adapted to the dark. */
+#night {
+  position: fixed;
+  inset: 0;
+  background: #ff2010;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 100;
+}
