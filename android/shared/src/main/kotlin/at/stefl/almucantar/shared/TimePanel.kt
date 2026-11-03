@@ -1,4 +1,4 @@
-package at.stefl.sunradar
+package at.stefl.almucantar.shared
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

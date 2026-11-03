@@ -91,6 +91,7 @@ import at.stefl.almucantar.shared.PlacePanel
 import at.stefl.almucantar.shared.PlaceSource
 import at.stefl.almucantar.shared.SkyColors
 import at.stefl.almucantar.shared.TerrainLines
+import at.stefl.almucantar.shared.TimePanel
 import at.stefl.almucantar.shared.ViewBlob
 import at.stefl.almucantar.shared.ViewCamera
 import at.stefl.almucantar.shared.angleBetweenDeg
