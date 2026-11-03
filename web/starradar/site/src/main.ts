@@ -749,8 +749,9 @@ function frame(ms: number) {
     ...chapters[name](shown.progress),
   } as Target;
 
-  // A new place or a jump of more than three hours fades: the sky would turn too far.
-  if (target.place !== shownPlace || Math.abs(target.time - shown.time) > 3 * HOUR) {
+  // A new place or a jump of more than eight hours fades. A shorter jump (for example from the
+  // night of the hero to the sunset of the dusk chapter) turns the sky smoothly, without a cut.
+  if (target.place !== shownPlace || Math.abs(target.time - shown.time) > 8 * HOUR) {
     if (shown.fade >= 0.98 || reducedMotion.matches) {
       shownPlace = target.place;
       shown.time = target.time;

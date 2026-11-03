@@ -1,6 +1,6 @@
 /* The website of starradar. The scroll story has the form of the website of sunradar, with its
-   own look: serif headings, chapter numbers and readouts like a star chart, cards with the corners
-   of a viewfinder, and a rail of stars that shows the chapter. */
+   own look: light and wide headings, chapter numbers and readouts like a star chart, cards with the
+   corners of a viewfinder, and a rail of stars that shows the chapter. */
 
 :root {
   --sky: #04060f;
@@ -11,8 +11,8 @@
   --muted: #a8b1cc;
   --glass: rgba(6, 9, 24, 0.62);
   --edge: rgba(179, 168, 255, 0.2);
-  --serif:
-    ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  /* Light and wide: the headings of starradar, unlike the bold headings of sunradar. */
+  --display: "Avenir Next", Avenir, "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
@@ -93,12 +93,15 @@ main {
     0 12px 60px rgba(140, 120, 255, 0.35);
 }
 h1 {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(48px, 9vw, 92px);
+  font-family: var(--display);
+  font-weight: 200;
+  font-size: clamp(40px, 8vw, 84px);
   line-height: 1;
-  margin: 18px 0 0;
-  letter-spacing: 0.01em;
+  margin: 22px 0 0;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  /* The letter spacing also follows the last letter; this keeps the word centered. */
+  padding-left: 0.22em;
   background: linear-gradient(180deg, #ffffff 30%, #b9b1ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -106,9 +109,10 @@ h1 {
   filter: drop-shadow(0 2px 30px rgba(140, 120, 255, 0.35));
 }
 .tagline {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: clamp(21px, 3vw, 28px);
+  font-family: var(--display);
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  font-size: clamp(20px, 2.8vw, 26px);
   color: var(--star);
   margin: 10px 0 16px;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
@@ -244,10 +248,11 @@ html:not(.ready) .drag-hint {
   color: var(--accent-2);
 }
 h2 {
-  font-family: var(--serif);
-  font-weight: 500;
-  font-size: clamp(28px, 3.6vw, 38px);
-  line-height: 1.12;
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: clamp(26px, 3.3vw, 34px);
+  letter-spacing: 0.01em;
+  line-height: 1.15;
   margin: 12px 0 12px;
 }
 .readout {
@@ -377,8 +382,10 @@ h2 {
 
 /* --- The playground -------------------------------------------------------------------------- */
 
+/* The playground starts below the last chapter, so its card does not touch the card before. */
 .play {
   height: 160vh;
+  margin-top: 40vh;
   padding: 0 clamp(16px, 6vw, 96px);
 }
 .card.wide {

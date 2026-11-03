@@ -214,7 +214,7 @@ export class Sky {
         if (!name || alt < 2) continue;
         ctx.fillText(name, p.x(f.stars[2 * i]), p.y(alt) - 7);
       }
-      ctx.font = "italic 14px ui-serif, 'Iowan Old Style', Palatino, Georgia, serif";
+      ctx.font = "300 13px 'Avenir Next', Avenir, system-ui, sans-serif";
       ctx.fillStyle = `rgba(170, 160, 255, ${0.8 * f.namesAlpha})`;
       s.constellations.forEach((c, i) => {
         const alt = f.labels[2 * i + 1];
