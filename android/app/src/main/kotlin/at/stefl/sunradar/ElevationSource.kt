@@ -1,10 +1,10 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.ElevationGrid
-import at.stefl.sunradar.core.ElevationTile
-import at.stefl.sunradar.core.HorizonOptions
-import at.stefl.sunradar.core.elevationGeotiffPrefixSize
-import at.stefl.sunradar.core.readElevationGeotiff
+import at.stefl.almucantar.core.ElevationGrid
+import at.stefl.almucantar.core.ElevationTile
+import at.stefl.almucantar.core.HorizonOptions
+import at.stefl.almucantar.core.elevationGeotiffPrefixSize
+import at.stefl.almucantar.core.readElevationGeotiff
 
 /**
  * A source of elevation tiles of 1° × 1°. The terrain logic ([DemCache], [TerrainLoader], the

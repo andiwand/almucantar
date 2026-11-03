@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// A source of elevation tiles of 1° (`ElevationTile`), as Cloud Optimized GeoTIFF files with
 /// overviews. The terrain and the cache use only this description, so another source (for example

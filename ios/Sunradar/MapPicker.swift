@@ -1,5 +1,5 @@
 import MapKit
-import Sunradar
+import Almucantar
 import SwiftUI
 
 /// A map to pick a landmark: tap a place that you can see from where you are. `onDone` gets the

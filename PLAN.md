@@ -84,9 +84,9 @@ package. The apps use the packages and contain no C++.
 └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
           └─────────────────────┴──────────┬──────────┴─────────────────────┘
 ┌──────────────────────────────────────────┴──────────────────────────────────────────┐
-│ core/src/sunradar/*.hpp: the public C++ API (small, value types, free functions)     │
+│ core/src/almucantar/*.hpp: the public C++ API (small, value types, free functions)     │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ core/src/sunradar/internal/: solar models, refraction, WMM, orientation,             │
+│ core/src/almucantar/internal/: solar models, refraction, WMM, orientation,             │
 │ calibration, camera model, projection, search, numerics                              │
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -382,7 +382,7 @@ The public API is small, and its form makes every binding easy:
   promise or a thrown `Error`, a Swift `throws`).
 - The public headers stay C++20. The internal code can use C++23 later, if the NDK and
   emsdk support what we need.
-- One umbrella header, `sunradar/sunradar.hpp`, includes all public headers.
+- One umbrella header, `almucantar/almucantar.hpp`, includes all public headers.
 
 The public headers:
 
@@ -409,8 +409,8 @@ in the core.
 | Binding | Directory | Technology | Package | Registry |
 |---|---|---|---|---|
 | Python | `core/python/` | pybind11, scikit-build-core | `sunradar` | PyPI |
-| Android | `core/android/` | JNI by hand, Kotlin API | `at.stefl.sunradar:core-android` (AAR) | Maven Central |
-| Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@sunradar/core` | npm |
+| Android | `core/android/` | JNI by hand, Kotlin API | `at.stefl.almucantar:core-android` (AAR) | Maven Central |
+| Web | `core/wasm/` | Emscripten, embind, hand-written `index.js` and `index.d.ts` | `@almucantar/core` | npm |
 | Apple | `core/apple/` | C API and Swift package with a prebuilt xcframework | `Sunradar` | SwiftPM (GitHub release) |
 | C++ | `core/` | Conan recipe | `sunradar` | own Conan remote, if anyone needs it |
 
@@ -531,7 +531,7 @@ contain the same core.
 
 ## 9. PWA (after Android)
 
-- TypeScript, Vite. Uses `@sunradar/core` (`core/wasm`) from the WASM build output (a
+- TypeScript, Vite. Uses `@almucantar/core` (`core/wasm`) from the WASM build output (a
   `file:` dependency). The core runs on the main thread, because a frame needs less than
   1 ms; the values are plain objects, so a Web Worker is possible later.
 - GitHub Pages serves the website (`website/`) and the PWA under `/app/`.
@@ -557,7 +557,7 @@ contain the same core.
 | M8b | Sun detection in the camera image: the saturated region nearest to the predicted sun (within max(10°, 3σ) and at most 3° in radius) gets a box; a tap on the box aligns the heading | implemented; the detector is tested on synthetic images. |
 | M9 | `core/wasm` npm package, PWA, website on GitHub Pages | implemented: 10 node tests of the package, 4 vitest tests, and a check in Chrome. Deviation: the core runs on the main thread, not in a Web Worker (a frame needs less than 1 ms). |
 | M10 | `release.yml`, publishing to PyPI, npm, and Maven Central, Android APK | implemented: `scripts/release.py` and git cliff, the release workflow with a dry run, `publish-core.yml` (npm, wheels for Linux and macOS, sdist, AAR), `android-release.yml`. Open: the accounts and secrets of the registries, Windows wheels. |
-| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`sunradar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. |
+| M11 | iOS app: `core/apple` as a Swift package (xcframework of the core, Swift API), and the app in `ios/` (SwiftUI, AVFoundation camera, CoreMotion, CoreLocation) with the same features as Android | implemented: a C API (`almucantar_c.h`, with a C test) below the Swift API, because the C API is stable and the Swift C++ interop is not; the xcframework for iOS, the simulator, and macOS; 8 XCTest tests; the app with the sky view, the camera, the heading filter, the alignment with the sun, the moon, or a landmark on a map (MapKit), the sun detection, the azimuth readout, the dates, and the time panel, checked in the simulator; 6 unit tests of the detector and the geodesy. |
 | M12 | Moon phase in the apps; store screenshots (a demo mode in the debug builds, fastlane lanes, the workflow `screenshots.yml`) | implemented: the lit part of the moon faces the sun on Android, iOS, and the PWA. Open: the store accounts and secrets (see M10). |
 | M13 | Terrain horizon (13.1) and the offline place (13.3) in the core and in all apps | implemented: the terrain line, the visible sunrise and sunset, the moon behind the terrain, the 2 km clearance for surface models, the coarse tiles first, the Place panel with the offline map, and "Keep offline". |
 
@@ -609,7 +609,7 @@ fast way to plot paths and to compare models.
 - iOS (M11): decided. `Package.swift` is at the root of the monorepo. The Swift API is on
   top of a C API, not on Swift C++ interop and not on the Objective-C layer of
   OpenDocument.core. A release attaches the xcframework and tags `X.Y.Z` for SwiftPM.
-- The names of the packages: `sunradar` on PyPI and `@sunradar/core` on npm are proposals.
+- The names of the packages: `sunradar` on PyPI and `@almucantar/core` on npm are proposals.
   On 2026-11-03 both packages do not exist yet, but this does not reserve the names. The npm
   scope needs an npm organization "sunradar". The
   Maven group is `at.stefl.sunradar` (decided); Maven Central needs the verified namespace

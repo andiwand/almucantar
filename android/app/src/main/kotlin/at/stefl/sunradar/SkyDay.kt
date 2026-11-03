@@ -1,14 +1,14 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.DayKind
-import at.stefl.sunradar.core.DirectionLine
-import at.stefl.sunradar.core.Horizontal
-import at.stefl.sunradar.core.Observer
-import at.stefl.sunradar.core.PathOptions
-import at.stefl.sunradar.core.PathPoint
-import at.stefl.sunradar.core.sunEvents
-import at.stefl.sunradar.core.sunPath
-import at.stefl.sunradar.core.sunPosition
+import at.stefl.almucantar.core.DayKind
+import at.stefl.almucantar.core.DirectionLine
+import at.stefl.almucantar.core.Horizontal
+import at.stefl.almucantar.core.Observer
+import at.stefl.almucantar.core.PathOptions
+import at.stefl.almucantar.core.PathPoint
+import at.stefl.almucantar.core.sunEvents
+import at.stefl.almucantar.core.sunPath
+import at.stefl.almucantar.core.sunPosition
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId

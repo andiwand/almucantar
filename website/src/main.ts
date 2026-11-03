@@ -2,12 +2,12 @@
 // page sets the time, the date, and the parts of the sky. The core (the same WebAssembly package
 // as the app) calculates the sun and the moon.
 
-import { load } from "@sunradar/core";
-import type { Horizontal, Observer, PathPoint } from "@sunradar/core";
+import { load } from "@almucantar/core";
+import type { Horizontal, Observer, PathPoint } from "@almucantar/core";
 import { Sky } from "./sky";
 import type { Frame, HourMark } from "./sky";
 
-const sunradar = await load();
+const almucantar = await load();
 
 const DAY = 86400;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -79,8 +79,8 @@ function dayAt(unixUtc: number): Day {
   const cached = days.get(key);
   if (cached) return cached;
   const end = startOfDay(start + DAY + 7200);
-  const points = sunradar.sunPath(observer, start, end, { stepS: 300 });
-  const events = sunradar.sunEvents(observer, start, end);
+  const points = almucantar.sunPath(observer, start, end, { stepS: 300 });
+  const events = almucantar.sunEvents(observer, start, end);
   const day: Day = {
     start,
     points,
@@ -130,8 +130,8 @@ function moonNight(): number {
   const today = startOfDay(now());
   for (let i = 0; i < 31; i++) {
     const midnight = today + (i + 1) * DAY;
-    const fraction = sunradar.moonIlluminatedFraction(midnight);
-    if (fraction > 0.55 && sunradar.moonPosition(midnight, observer).altitudeDeg > 15) {
+    const fraction = almucantar.moonIlluminatedFraction(midnight);
+    if (fraction > 0.55 && almucantar.moonPosition(midnight, observer).altitudeDeg > 15) {
       return midnight;
     }
   }
@@ -163,8 +163,8 @@ function moonArc(): MoonArc {
   const moon: Horizontal[] = [];
   const dark: boolean[] = [];
   for (let t = begin; t <= night + 14 * 3600; t += step) {
-    moon.push(sunradar.moonPosition(t, observer));
-    dark.push(sunradar.sunPosition(t, observer).altitudeDeg < -8);
+    moon.push(almucantar.moonPosition(t, observer));
+    dark.push(almucantar.sunPosition(t, observer).altitudeDeg < -8);
   }
   // Go from midnight to both sides while the moon is above the horizon. Keep the first sample
   // below the horizon, so the line reaches the horizon.
@@ -339,7 +339,7 @@ function middleDates(): string {
   const key = `${start}:${observer.latitudeDeg}:${observer.longitudeDeg}`;
   if (key !== datesFor) {
     datesFor = key;
-    const dates = sunradar.findDates(observer, WINDOW_MIDDLE, start, start + 365 * DAY);
+    const dates = almucantar.findDates(observer, WINDOW_MIDDLE, start, start + 365 * DAY);
     datesText = dates.length
       ? `In the middle of the window: ${dates.map((m) => `${dayMonth(m.unixUtc)} at ${hhmm(m.unixUtc)}`).join(" and ")}`
       : "The sun does not reach the middle of the window this year.";
@@ -383,7 +383,7 @@ function readouts(name: string, time: number, sun: Horizontal, band: number) {
     setText("window-detail", windowTimes(day));
     setText("window-dates", middleDates());
   } else if (name === "moon") {
-    const fraction = sunradar.moonIlluminatedFraction(time);
+    const fraction = almucantar.moonIlluminatedFraction(time);
     setText("moon-date", hhmm(time));
     setText("moon-night", `The night of ${dayMonth(night - DAY)}`);
     setText("moon-detail", `${Math.round(fraction * 100)} % of the moon is lit.`);
@@ -539,7 +539,7 @@ function frame(ms: number) {
   // day, and the sun would flash up during a change of the date.
   const time = startOfDay(shown.day + DAY / 2) + shown.hours * 3600;
   const day = dayAt(time);
-  const sun = sunradar.sunPosition(time, observer);
+  const sun = almucantar.sunPosition(time, observer);
   // In the south, or in the north on the southern hemisphere. A narrow screen follows the sun
   // while it is up, so the sunrise and the sunset of a summer day stay on the screen. Below the
   // horizon, the view goes back to the south: at night the sun is in the north, and the view would
@@ -550,8 +550,8 @@ function frame(ms: number) {
   const center = south + clamp(offset * 0.8, -60, 60) * follow;
   shown.center += (center - shown.center) * k;
 
-  const moon = shown.moon > 0.01 ? sunradar.moonPosition(time, observer) : null;
-  const moonFraction = moon ? sunradar.moonIlluminatedFraction(time) : 0;
+  const moon = shown.moon > 0.01 ? almucantar.moonPosition(time, observer) : null;
+  const moonFraction = moon ? almucantar.moonIlluminatedFraction(time) : 0;
   const moonPath = target.moon ? moonArc().path : [];
   const frameData: Frame = {
     sun,

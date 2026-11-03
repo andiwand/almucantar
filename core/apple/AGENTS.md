@@ -1,10 +1,10 @@
 # AGENTS.md — the Apple binding
 
-The Swift package `Sunradar` of the public C++ API (`core/src/sunradar/*.hpp`). It has two
+The Swift package `Almucantar` of the public C++ API (`core/src/almucantar/*.hpp`). It has two
 layers:
 
-1. A C API (`include/sunradar_c.h`). It is plain C, so Swift imports it without C++ interop.
-2. A Swift API (`swift/Sources/Sunradar`) on top of the C API, with Swift structs, enums, and
+1. A C API (`include/almucantar_c.h`). It is plain C, so Swift imports it without C++ interop.
+2. A Swift API (`swift/Sources/Almucantar`) on top of the C API, with Swift structs, enums, and
    throwing functions.
 
 `Package.swift` is at the root of the repository, because SwiftPM needs that for a package
@@ -14,13 +14,13 @@ from a Git URL.
 
 | Path | What |
 |---|---|
-| `include/sunradar_c.h` | The C API: `sr_*` structs, `sr_default_*()`, and functions that return a status. |
-| `src/sunradar_c.cpp` | The implementation of the C API on top of the public C++ API. |
-| `CMakeLists.txt` | The `sunradar_c` static library and the C test. The core includes it if `SUNRADAR_APPLE` is ON. |
-| `test/sunradar_c_test.c` | A test of the C API in C. CTest runs it if `SUNRADAR_TESTS` is ON. |
-| `build_xcframework.py` | Builds `build/SunradarC.xcframework` (iOS, the simulator, macOS). `--zip` also writes the zip of a release and its checksum. |
-| `swift/Sources/Sunradar` | The Swift API: `Types.swift` and `Sunradar.swift`. |
-| `swift/Tests/SunradarTests` | The XCTest tests. |
+| `include/almucantar_c.h` | The C API: `sr_*` structs, `sr_default_*()`, and functions that return a status. |
+| `src/almucantar_c.cpp` | The implementation of the C API on top of the public C++ API. |
+| `CMakeLists.txt` | The `almucantar_c` static library and the C test. The core includes it if `ALMUCANTAR_APPLE` is ON. |
+| `test/almucantar_c_test.c` | A test of the C API in C. CTest runs it if `ALMUCANTAR_TESTS` is ON. |
+| `build_xcframework.py` | Builds `build/AlmucantarC.xcframework` (iOS, the simulator, macOS). `--zip` also writes the zip of a release and its checksum. |
+| `swift/Sources/Almucantar` | The Swift API: `Types.swift` and `Almucantar.swift`. |
+| `swift/Tests/AlmucantarTests` | The XCTest tests. |
 
 ## Build and test
 
@@ -36,7 +36,7 @@ On `main`, that zip is a placeholder, so build the xcframework first.
 
 ## Rules
 
-- Bind the public API only. Never include `sunradar/internal/...` headers.
+- Bind the public API only. Never include `almucantar/internal/...` headers.
 - The C API catches all C++ exceptions. A function returns `SR_OK`, `SR_INVALID_ARGUMENT`, or
   `SR_ERROR`, and `sr_last_error()` gives the message (one per thread).
 - A function that returns a list allocates it. The caller frees it with `sr_free`,
@@ -48,7 +48,7 @@ On `main`, that zip is a placeholder, so build the xcframework first.
 - A C function has the name of the C++ function with `sr_`, but the name of a struct wins if they
   are the same: `sr_calculate_horizon_profile` and `sr_find_terrain_events`.
 - The defaults of the options come from C++ (`sr_default_*()`). Do not write defaults in Swift.
-- An invalid argument becomes `SunradarError` with `kind == .invalidArgument`.
+- An invalid argument becomes `AlmucantarError` with `kind == .invalidArgument`.
 - The field names are camelCase (`latitudeDeg`), the same as in the other bindings.
 - A new public C++ function: add it to the C API, to the C test, to the Swift API, and to the
   XCTest tests.

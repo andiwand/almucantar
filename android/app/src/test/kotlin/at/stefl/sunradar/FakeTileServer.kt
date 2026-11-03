@@ -1,7 +1,7 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.ElevationGrid
-import at.stefl.sunradar.core.ElevationTile
+import at.stefl.almucantar.core.ElevationGrid
+import at.stefl.almucantar.core.ElevationTile
 import java.io.IOException
 
 /** One request to [FakeTileServer]. */

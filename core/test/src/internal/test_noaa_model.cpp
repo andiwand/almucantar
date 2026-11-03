@@ -5,11 +5,11 @@
 #include <map>
 #include <string>
 
+#include "almucantar/internal/noaa_model.hpp"
 #include "reference_data.hpp"
-#include "sunradar/internal/noaa_model.hpp"
 
-using namespace sunradar;
-using sunradar::internal::NoaaModel;
+using namespace almucantar;
+using almucantar::internal::NoaaModel;
 
 TEST_CASE("NoaaModel agrees with JPL Horizons", "[noaa]") {
   // Measured maximum: 0.0154 degrees (2026, quito). The target of the plan is 0.05.

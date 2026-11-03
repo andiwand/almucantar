@@ -2,8 +2,8 @@ package at.stefl.sunradar
 
 import android.content.Context
 import android.util.Log
-import at.stefl.sunradar.core.Observer
-import at.stefl.sunradar.core.elevationTiles
+import at.stefl.almucantar.core.Observer
+import at.stefl.almucantar.core.elevationTiles
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException

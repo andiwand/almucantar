@@ -5,16 +5,16 @@
 #include <numbers>
 #include <stdexcept>
 
+#include "almucantar/heading.hpp"
+#include "almucantar/internal/time.hpp"
+#include "almucantar/internal/wmm.hpp"
+#include "almucantar/magnetic.hpp"
+#include "almucantar/sun.hpp"
 #include "poses.hpp"
 #include "reference_data.hpp"
-#include "sunradar/heading.hpp"
-#include "sunradar/internal/time.hpp"
-#include "sunradar/internal/wmm.hpp"
-#include "sunradar/magnetic.hpp"
-#include "sunradar/sun.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 using test::Axis;
 using test::upright_pose;
 

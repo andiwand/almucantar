@@ -2,13 +2,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstddef>
 
+#include "almucantar/internal/refraction.hpp"
 #include "reference_data.hpp"
-#include "sunradar/internal/refraction.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
-using sunradar::internal::refracted;
-using sunradar::internal::refraction_deg;
+using namespace almucantar;
+using almucantar::internal::refracted;
+using almucantar::internal::refraction_deg;
 
 TEST_CASE("refraction agrees with JPL Horizons", "[refraction]") {
   // Horizons uses the same formula and the same standard atmosphere, so the

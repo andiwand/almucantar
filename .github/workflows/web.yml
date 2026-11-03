@@ -59,8 +59,8 @@ jobs:
         run: |
           conan install . --build=missing -pr:h conan/profiles/emscripten -pr:b default \
             -o "&:with_tests=False" -o "&:with_wasm=True"
-          cmake --preset conan-emscripten-wasm-release -DSUNRADAR_WARNINGS_AS_ERRORS=ON \
-            -DSUNRADAR_NODE="$(which node)"
+          cmake --preset conan-emscripten-wasm-release -DALMUCANTAR_WARNINGS_AS_ERRORS=ON \
+            -DALMUCANTAR_NODE="$(which node)"
           cmake --build --preset conan-emscripten-wasm-release
 
       - name: Test

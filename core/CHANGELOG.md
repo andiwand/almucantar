@@ -14,6 +14,14 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- **Breaking:** the core has the new name almucantar, because it is the core of more than one
+  app. The C++ headers are in `almucantar/` (`almucantar/almucantar.hpp`), and the namespace is
+  `almucantar`. The Python package is `almucantar`, the npm package is `@almucantar/core`, the
+  AAR is `at.stefl.almucantar:core-android` with the Kotlin package `at.stefl.almucantar.core`,
+  and the Swift package is `Almucantar` (`AlmucantarC.xcframework`, `almucantar_c.h`). The
+  CMake options start with `ALMUCANTAR_`. The repository is
+  <https://github.com/andiwand/almucantar>.
+
 ## 0.2.0 - 2026-11-03
 
 - The terrain horizon: `horizon_profile()` calculates the altitude of the terrain for each

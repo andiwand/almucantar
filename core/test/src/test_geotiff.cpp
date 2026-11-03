@@ -11,17 +11,17 @@
 #include <string>
 #include <vector>
 
-#include "sunradar/terrain.hpp"
+#include "almucantar/terrain.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 namespace {
 
 /// The files of test/tools/make_geotiff.py: 7 rows and 5 columns with a step of 0.5°, the corner
 /// at 48° north and 11° east, and h(row, column) = 1000 + 10 * row + column + 0.25.
 std::vector<std::uint8_t> read_file(const std::string& name) {
-  std::ifstream file(std::string(SUNRADAR_TEST_DATA_DIR) + "/geotiff/" + name, std::ios::binary);
+  std::ifstream file(std::string(ALMUCANTAR_TEST_DATA_DIR) + "/geotiff/" + name, std::ios::binary);
   REQUIRE(file);
   return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 }

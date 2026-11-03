@@ -1,10 +1,10 @@
 # core-android
 
-The AAR `at.stefl.sunradar:core-android`: the Kotlin API of the sunradar core and the
-native library `libsunradar_jni.so` for `arm64-v8a` and `x86_64`.
+The AAR `at.stefl.almucantar:core-android`: the Kotlin API of the almucantar core and the
+native library `libalmucantar_jni.so` for `arm64-v8a` and `x86_64`.
 
 ```kotlin
-import at.stefl.sunradar.core.*
+import at.stefl.almucantar.core.*
 
 val vienna = Observer(latitudeDeg = 48.2082, longitudeDeg = 16.3738)
 val sun = sunPosition(System.currentTimeMillis() / 1000.0, vienna)
@@ -38,5 +38,5 @@ Gradle properties and environment variables:
 
 | Property | Variable | Meaning |
 |---|---|---|
-| `sunradar.abis` | `SUNRADAR_ABIS` | The ABIs that `build_native.py` builds, default `armv8,x86_64`. Empty: use the libraries that are already in `native/prebuilt/jniLibs`. |
-| `sunradar.python` | `SUNRADAR_PYTHON` | The Python that runs `build_native.py`, default `python3`. It must have Conan. |
+| `almucantar.abis` | `ALMUCANTAR_ABIS` | The ABIs that `build_native.py` builds, default `armv8,x86_64`. Empty: use the libraries that are already in `native/prebuilt/jniLibs`. |
+| `almucantar.python` | `ALMUCANTAR_PYTHON` | The Python that runs `build_native.py`, default `python3`. It must have Conan. |

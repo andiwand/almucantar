@@ -9,7 +9,7 @@ NCEI. The WMM is a work of the US government, and it is in the public domain.
 - Validity: 2025.0 to 2030.0
 
 `generate_wmm.py` converts the file to
-`src/sunradar/internal/wmm_coefficients.cpp`. The test values of the same
+`src/almucantar/internal/wmm_coefficients.cpp`. The test values of the same
 download are in `test/data/WMM2025_TestValues.txt`.
 
 For WMM2030:
@@ -17,4 +17,4 @@ For WMM2030:
 1. Download the new coefficient file and the test values.
 2. Replace `WMM2025.COF` and `test/data/WMM2025_TestValues.txt`.
 3. Run `python3 tools/wmm/generate_wmm.py tools/wmm/WMM2030.COF`.
-4. Update the validity in `src/sunradar/magnetic.hpp`, and run the tests.
+4. Update the validity in `src/almucantar/magnetic.hpp`, and run the tests.

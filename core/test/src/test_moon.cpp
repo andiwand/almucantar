@@ -6,12 +6,12 @@
 #include <limits>
 #include <stdexcept>
 
+#include "almucantar/moon.hpp"
+#include "almucantar/sun.hpp"
 #include "reference_data.hpp"
-#include "sunradar/moon.hpp"
-#include "sunradar/sun.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 TEST_CASE("moon_position agrees with JPL Horizons", "[moon]") {
   // Measured maximum: 0.0019° over 4260 points in 2026 at five sites.

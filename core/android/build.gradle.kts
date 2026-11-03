@@ -1,4 +1,4 @@
-// The AAR at.stefl.sunradar:core-android: the Kotlin API and libsunradar_jni.so.
+// The AAR at.stefl.almucantar:core-android: the Kotlin API and libalmucantar_jni.so.
 
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import com.vanniktech.maven.publish.DeploymentValidation
@@ -9,19 +9,19 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-group = "at.stefl.sunradar"
+group = "at.stefl.almucantar"
 
-// The release gives the version (sunradar.version or SUNRADAR_VERSION, for example 0.2.0 or
+// The release gives the version (almucantar.version or ALMUCANTAR_VERSION, for example 0.2.0 or
 // core-v0.2.0). Other builds are snapshots.
-val sunradarVersion =
+val almucantarVersion =
     providers
-        .gradleProperty("sunradar.version")
-        .orElse(providers.environmentVariable("SUNRADAR_VERSION"))
+        .gradleProperty("almucantar.version")
+        .orElse(providers.environmentVariable("ALMUCANTAR_VERSION"))
         .filter { it.isNotEmpty() }
         .map { it.removePrefix("core-v").removePrefix("v") }
         .getOrElse("0.0.0-SNAPSHOT")
 
-version = sunradarVersion
+version = almucantarVersion
 
 // ktfmt in the kotlinlang style. `./gradlew spotlessApply` formats, `spotlessCheck` checks.
 spotless {
@@ -35,13 +35,13 @@ spotless {
     }
 }
 
-// The ABIs that `build_native.py` builds. Set `-Psunradar.abis=` or SUNRADAR_ABIS (empty) when
+// The ABIs that `build_native.py` builds. Set `-Palmucantar.abis=` or ALMUCANTAR_ABIS (empty) when
 // the libraries come from somewhere else, for example from the CI jobs of each ABI. The
 // environment variables also reach this build when the app includes it as a composite build.
 val nativeAbis =
     providers
-        .gradleProperty("sunradar.abis")
-        .orElse(providers.environmentVariable("SUNRADAR_ABIS"))
+        .gradleProperty("almucantar.abis")
+        .orElse(providers.environmentVariable("ALMUCANTAR_ABIS"))
         .getOrElse("armv8,x86_64")
         .split(",")
         .map { it.trim() }
@@ -49,13 +49,13 @@ val nativeAbis =
 
 val buildNative =
     tasks.register<Exec>("buildNative") {
-        description = "Builds libsunradar_jni.so for sunradar.abis into native/prebuilt"
+        description = "Builds libalmucantar_jni.so for almucantar.abis into native/prebuilt"
         commandLine(
             buildList {
                 add(
                     providers
-                        .gradleProperty("sunradar.python")
-                        .orElse(providers.environmentVariable("SUNRADAR_PYTHON"))
+                        .gradleProperty("almucantar.python")
+                        .orElse(providers.environmentVariable("ALMUCANTAR_PYTHON"))
                         .getOrElse("python3")
                 )
                 add(file("build_native.py").absolutePath)
@@ -79,11 +79,11 @@ val checkNative =
             val abiDirectories = jniLibs.listFiles()?.filter { it.isDirectory }.orEmpty()
             if (abiDirectories.isEmpty()) {
                 throw GradleException(
-                    "nothing in $jniLibs: run build_native.py, or set -Psunradar.abis=<abis>"
+                    "nothing in $jniLibs: run build_native.py, or set -Palmucantar.abis=<abis>"
                 )
             }
             for (directory in abiDirectories) {
-                val library = directory.resolve("libsunradar_jni.so")
+                val library = directory.resolve("libalmucantar_jni.so")
                 if (!library.isFile || library.length() == 0L) {
                     throw GradleException("missing or empty native library: $library")
                 }
@@ -94,7 +94,7 @@ val checkNative =
 tasks.named("preBuild") { dependsOn(checkNative) }
 
 android {
-    namespace = "at.stefl.sunradar.core"
+    namespace = "at.stefl.almucantar.core"
     compileSdk = 36
 
     defaultConfig {
@@ -146,14 +146,14 @@ mavenPublishing {
         signAllPublications()
     }
 
-    coordinates("at.stefl.sunradar", "core-android", sunradarVersion)
+    coordinates("at.stefl.almucantar", "core-android", almucantarVersion)
 
     pom {
         name = "core-android"
         description =
-            "The sunradar core for Android: sun and moon position, sun path, magnetic declination, " +
+            "The almucantar core for Android: sun and moon position, sun path, magnetic declination, " +
                 "camera projection, a heading filter, and the terrain horizon"
-        url = "https://github.com/andiwand/sunradar"
+        url = "https://github.com/andiwand/almucantar"
         licenses {
             license {
                 name = "MPL-2.0"
@@ -168,9 +168,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection = "scm:git:https://github.com/andiwand/sunradar.git"
-            developerConnection = "scm:git:git@github.com:andiwand/sunradar.git"
-            url = "https://github.com/andiwand/sunradar"
+            connection = "scm:git:https://github.com/andiwand/almucantar.git"
+            developerConnection = "scm:git:git@github.com:andiwand/almucantar.git"
+            url = "https://github.com/andiwand/almucantar"
         }
     }
 }

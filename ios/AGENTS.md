@@ -53,7 +53,7 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
 ## Rules
 
 - The module name of the app is `SunradarApp`, because the package module is `Sunradar`.
-  `View` is in both SwiftUI and `Sunradar`, so write `SwiftUI.View` and `Sunradar.View`.
+  `View` is in both SwiftUI and `Sunradar`, so write `SwiftUI.View` and `Almucantar.View`.
 - The interface orientation gives the `ScreenRotation`: `landscapeRight` is `rotation90` (the
   top of the device is on the left), and `landscapeLeft` is `rotation270`. This is the same
   convention as `Display.getRotation()` on Android.

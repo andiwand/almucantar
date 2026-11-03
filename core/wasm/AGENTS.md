@@ -1,32 +1,32 @@
 # AGENTS.md — the WebAssembly binding
 
-The embind binding of the public C++ API (`core/src/sunradar/*.hpp`), packaged as the npm
-package `@sunradar/core`. The rules are the ones of the WASM binding of OpenDocument.core.
+The embind binding of the public C++ API (`core/src/almucantar/*.hpp`), packaged as the npm
+package `@almucantar/core`. The rules are the ones of the WASM binding of OpenDocument.core.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `CMakeLists.txt` | The `sunradar_wasm` target (`sunradar.mjs` and `sunradar.wasm` in `build/.../wasm/dist`). The core includes it if `SUNRADAR_WASM` is ON. It fails without Emscripten. |
+| `CMakeLists.txt` | The `almucantar_wasm` target (`almucantar.mjs` and `almucantar.wasm` in `build/.../wasm/dist`). The core includes it if `ALMUCANTAR_WASM` is ON. It fails without Emscripten. |
 | `src/bindings.cpp` | The binding. |
 | `js/` | The hand-written half of the package: `package.json`, `index.js` (defaults, enums), `index.d.ts`, `README.md`. CMake copies them next to the generated module. |
-| `tests/` | The `node --test` suite. CTest runs it as `sunradar_wasm_node`. |
+| `tests/` | The `node --test` suite. CTest runs it as `almucantar_wasm_node`. |
 
 ## Build and test
 
 Run these commands in `core/`. The tests need node 18 or later; emsdk brings an older one,
-so give the path with `SUNRADAR_NODE`.
+so give the path with `ALMUCANTAR_NODE`.
 
 ```sh
 conan install . --build=missing -pr:h conan/profiles/emscripten -pr:b default -o "&:with_tests=False" -o "&:with_wasm=True"
-cmake --preset conan-emscripten-wasm-release -DSUNRADAR_NODE="$(which node)"
+cmake --preset conan-emscripten-wasm-release -DALMUCANTAR_NODE="$(which node)"
 cmake --build --preset conan-emscripten-wasm-release
 ctest --test-dir build/emscripten-wasm-release --output-on-failure
 ```
 
 ## Rules
 
-- Bind the public API only. Never include `sunradar/internal/...` headers.
+- Bind the public API only. Never include `almucantar/internal/...` headers.
 - Values cross as plain JS objects (`value_object`) or arrays built with `emscripten::val`, so
   they can go through `postMessage`. No embind class handles. A test checks that results
   survive `structuredClone`.

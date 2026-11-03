@@ -1,8 +1,8 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.ElevationTile
-import at.stefl.sunradar.core.HorizonOptions
-import at.stefl.sunradar.core.HorizonProfile
+import at.stefl.almucantar.core.ElevationTile
+import at.stefl.almucantar.core.HorizonOptions
+import at.stefl.almucantar.core.HorizonProfile
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 

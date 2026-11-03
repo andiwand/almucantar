@@ -1,23 +1,23 @@
-# sunradar (Python)
+# almucantar (Python)
 
-The Python binding of the sunradar core. It calculates the position, the path,
+The Python binding of the almucantar core. It calculates the position, the path,
 and the rise and set times of the sun.
 
 ```python
-import sunradar
+import almucantar
 
-vienna = sunradar.Observer(latitude_deg=48.2082, longitude_deg=16.3738)
+vienna = almucantar.Observer(latitude_deg=48.2082, longitude_deg=16.3738)
 
 # The position at 2026-06-21T10:57Z, with refraction.
-print(sunradar.sun_position(1782039420, vienna))
+print(almucantar.sun_position(1782039420, vienna))
 
 # The sunrise and the sunset of the local day 2026-06-21 (CEST).
-day = sunradar.sun_events(vienna, 1781992800, 1781992800 + 86400)
+day = almucantar.sun_events(vienna, 1781992800, 1781992800 + 86400)
 for crossing in day.crossings:
     print("rise" if crossing.rising else "set", crossing.unix_utc)
 
 # The path in steps of 10 minutes.
-path = sunradar.sun_path(vienna, 1781992800, 1781992800 + 86400, sunradar.PathOptions(step_s=600))
+path = almucantar.sun_path(vienna, 1781992800, 1781992800 + 86400, almucantar.PathOptions(step_s=600))
 ```
 
 All times are Unix time in seconds (UTC). An invalid argument raises `ValueError`.

@@ -13,7 +13,7 @@
     "format:check": "prettier --check src *.ts *.json index.html"
   },
   "dependencies": {
-    "@sunradar/core": "file:../core/build/emscripten-wasm-release/wasm/dist"
+    "@almucantar/core": "file:../core/build/emscripten-wasm-release/wasm/dist"
   },
   "devDependencies": {
     "prettier": "^3.3.0",

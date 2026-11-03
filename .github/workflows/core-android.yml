@@ -39,7 +39,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build, lint, and check the format
-        run: ./gradlew assembleRelease lintDebug spotlessCheck -Psunradar.abis=
+        run: ./gradlew assembleRelease lintDebug spotlessCheck -Palmucantar.abis=
 
       - uses: actions/upload-artifact@v4
         with:
@@ -88,7 +88,7 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: true
           working-directory: core/android
-          script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=
+          script: ./gradlew connectedDebugAndroidTest -Palmucantar.abis=
 
       - name: Run the instrumented tests (second attempt)
         if: steps.attempt1.outcome == 'failure'
@@ -100,4 +100,4 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: true
           working-directory: core/android
-          script: ./gradlew connectedDebugAndroidTest -Psunradar.abis=
+          script: ./gradlew connectedDebugAndroidTest -Palmucantar.abis=

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import type { ElevationGrid, HorizonProfile, MapTile } from "@sunradar/core";
+import type { ElevationGrid, HorizonProfile, MapTile } from "@almucantar/core";
 import { MAX_AGE_MS, Terrain, TileCache, distanceM, keepOffline, tileUrl } from "../src/terrain";
 import type { BlobStore, KeptPlace, TerrainDeps, TerrainState, TileEntry } from "../src/terrain";
 
@@ -129,18 +129,18 @@ describe("Terrain", () => {
     const horizonProfile = vi.fn((_o: unknown, grids: ElevationGrid[]) =>
       grids.length === 2 ? coarseProfile : profile,
     );
-    const sunradar = {
+    const almucantar = {
       mapTiles: vi.fn((_o: unknown, _d: number, zoom: number) => (zoom === 8 ? tiles : fineTiles)),
       terrariumGrid: vi.fn(() => ({}) as ElevationGrid),
       horizonProfile,
     };
     const subject = new Terrain({
-      sunradar: sunradar as unknown as TerrainDeps["sunradar"],
+      almucantar: almucantar as unknown as TerrainDeps["almucantar"],
       cache: t.cache,
       decode: decode as never,
       onChange: (s) => states.push(s),
     });
-    return { subject, states, sunradar, t };
+    return { subject, states, almucantar, t };
   }
 
   const done = (states: TerrainState[]) =>
@@ -165,18 +165,18 @@ describe("Terrain", () => {
   });
 
   test("does not calculate again for a small move", async () => {
-    const { subject, states, sunradar } = terrain(async () => ({
+    const { subject, states, almucantar } = terrain(async () => ({
       rgba: new Uint8ClampedArray(16),
       width: 2,
       height: 2,
     }));
     subject.update({ latitudeDeg: 47, longitudeDeg: 11 });
     await done(states);
-    const calls = sunradar.mapTiles.mock.calls.length;
+    const calls = almucantar.mapTiles.mock.calls.length;
     subject.update({ latitudeDeg: 47.001, longitudeDeg: 11 }); // about 110 m
-    expect(sunradar.mapTiles).toHaveBeenCalledTimes(calls);
+    expect(almucantar.mapTiles).toHaveBeenCalledTimes(calls);
     subject.update({ latitudeDeg: 47.01, longitudeDeg: 11 }); // about 1.1 km
-    expect(sunradar.mapTiles.mock.calls.length).toBeGreaterThan(calls);
+    expect(almucantar.mapTiles.mock.calls.length).toBeGreaterThan(calls);
   });
 
   test("downloads a damaged tile again one time", async () => {
@@ -281,14 +281,14 @@ describe("the threshold of the terrain", () => {
       grids.length === 1 ? high : detailed,
     );
     const subject = new Terrain({
-      sunradar: {
+      almucantar: {
         mapTiles: (_o: unknown, distance: number, zoom: number) => {
           expect(zoom === 8 ? distance : 25_000).toBe(zoom === 8 ? 100_000 : distance);
           return zoom === 8 ? coarse : fine;
         },
         terrariumGrid: () => ({}) as ElevationGrid,
         horizonProfile,
-      } as unknown as TerrainDeps["sunradar"],
+      } as unknown as TerrainDeps["almucantar"],
       cache: t.cache,
       decode: async () => ({ rgba: new Uint8ClampedArray(16), width: 2, height: 2 }),
       onChange: (s) => states.push(s),
@@ -316,11 +316,11 @@ describe("errors and races", () => {
   function subject(cache: TileCache, decode: TerrainDeps["decode"] = grid) {
     const states: TerrainState[] = [];
     const terrain = new Terrain({
-      sunradar: {
+      almucantar: {
         mapTiles: () => coarse,
         terrariumGrid: () => ({}) as ElevationGrid,
         horizonProfile: () => flat,
-      } as unknown as TerrainDeps["sunradar"],
+      } as unknown as TerrainDeps["almucantar"],
       cache,
       decode,
       onChange: (s) => states.push(s),

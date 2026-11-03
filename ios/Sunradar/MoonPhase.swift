@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The moon at the selected time: its direction and the illuminated fraction, from 0 to 1.
 struct MoonAt {

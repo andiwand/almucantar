@@ -3,11 +3,11 @@
 #include <limits>
 #include <stdexcept>
 
+#include "almucantar/almucantar.hpp"
 #include "reference_data.hpp"
-#include "sunradar/sunradar.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 TEST_CASE("sun_position agrees with JPL Horizons, with and without refraction", "[sun]") {
   // The internal tests check every point. This test checks that the public

@@ -9,10 +9,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import at.stefl.sunradar.core.Horizontal
-import at.stefl.sunradar.core.ScreenPoint
-import at.stefl.sunradar.core.View
-import at.stefl.sunradar.core.unproject
+import at.stefl.almucantar.core.Horizontal
+import at.stefl.almucantar.core.ScreenPoint
+import at.stefl.almucantar.core.View
+import at.stefl.almucantar.core.unproject
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.max

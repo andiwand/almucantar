@@ -3,11 +3,11 @@
 #include <limits>
 #include <stdexcept>
 
+#include "almucantar/sun.hpp"
 #include "reference_data.hpp"
-#include "sunradar/sun.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 TEST_CASE("sun_path samples at the step", "[path]") {
   const Observer vienna = test::site("vienna");

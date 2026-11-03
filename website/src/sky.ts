@@ -2,7 +2,7 @@
 // azimuth goes to x and the altitude goes to y, so the whole path of a summer day fits on the
 // screen. The core calculates all positions; this file only draws them.
 
-import type { Horizontal } from "@sunradar/core";
+import type { Horizontal } from "@almucantar/core";
 
 export interface HourMark {
   direction: Horizontal;

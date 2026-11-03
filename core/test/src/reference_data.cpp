@@ -8,7 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace sunradar::test {
+namespace almucantar::test {
 
 namespace {
 
@@ -25,7 +25,7 @@ const std::map<std::string, Observer>& sites() {
 }
 
 std::vector<std::vector<std::string>> read_csv(const std::string& name) {
-  const std::string path = std::string(SUNRADAR_TEST_DATA_DIR) + "/" + name;
+  const std::string path = std::string(ALMUCANTAR_TEST_DATA_DIR) + "/" + name;
   std::ifstream file(path);
   if (!file) {
     throw std::runtime_error("cannot open " + path);
@@ -130,4 +130,4 @@ double angular_separation_deg(Horizontal a, Horizontal b) {
   return std::atan2(cross, dot) / kD;
 }
 
-}  // namespace sunradar::test
+}  // namespace almucantar::test

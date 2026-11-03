@@ -54,8 +54,8 @@ jobs:
       - name: Configure
         run: >
           cmake --preset conan-${{ matrix.preset }}
-          -DSUNRADAR_WARNINGS_AS_ERRORS=ON
-          -DSUNRADAR_SANITIZE=${{ matrix.sanitize }}
+          -DALMUCANTAR_WARNINGS_AS_ERRORS=ON
+          -DALMUCANTAR_SANITIZE=${{ matrix.sanitize }}
 
       - name: Build
         run: cmake --build --preset conan-${{ matrix.preset }}

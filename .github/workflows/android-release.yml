@@ -29,7 +29,7 @@ jobs:
       run:
         working-directory: android
     env:
-      SUNRADAR_ABIS: ""
+      ALMUCANTAR_ABIS: ""
       SUNRADAR_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
     steps:
       - uses: actions/checkout@v4

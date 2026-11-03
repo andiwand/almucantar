@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Builds SunradarC.xcframework: the C API and the core as one static library per Apple slice.
+"""Builds AlmucantarC.xcframework: the C API and the core as one static library per Apple slice.
 
     python3 core/apple/build_xcframework.py            all slices, then the xcframework
     python3 core/apple/build_xcframework.py --slice macos-arm64_x86_64
     python3 core/apple/build_xcframework.py --zip      also the zip of a release, and its checksum
 
-The output is core/apple/build/SunradarC.xcframework. Package.swift (at the root of the
+The output is core/apple/build/AlmucantarC.xcframework. Package.swift (at the root of the
 repository) uses it if it exists. Each Conan profile gets its own build; `libtool` merges
-libsunradar_c.a and libsunradar.a, and `lipo` joins the architectures of one platform, because
+libalmucantar_c.a and libalmucantar.a, and `lipo` joins the architectures of one platform, because
 an xcframework has one entry for each platform (device, simulator, macOS). The merge also takes
 the static libraries of the Conan dependencies of the core (miniz), so the app links one library.
 """
@@ -21,7 +21,7 @@ import subprocess
 APPLE = pathlib.Path(__file__).resolve().parent
 CORE = APPLE.parent
 OUT = APPLE / "build"
-NAME = "SunradarC"
+NAME = "AlmucantarC"
 
 SLICES = {
     "ios-arm64": ["apple-ios-armv8"],
@@ -52,7 +52,7 @@ def dependency_archives(graph: dict) -> list[pathlib.Path]:
         if (
             node.get("context") != "host"
             or not folder
-            or node.get("ref", "").startswith("sunradar")
+            or node.get("ref", "").startswith("almucantar")
         ):
             continue
         archives += sorted((pathlib.Path(folder) / "lib").glob("*.a"))
@@ -79,8 +79,8 @@ def build(profile: str, conan: str) -> pathlib.Path:
     )
     dependencies = dependency_archives(json.loads(result.stdout))
     preset = f"conan-{FOLDERS[profile]}"
-    run(["cmake", "--preset", preset, "-DSUNRADAR_WARNINGS_AS_ERRORS=ON"])
-    run(["cmake", "--build", "--preset", preset, "--target", "sunradar_c"])
+    run(["cmake", "--preset", preset, "-DALMUCANTAR_WARNINGS_AS_ERRORS=ON"])
+    run(["cmake", "--build", "--preset", preset, "--target", "almucantar_c"])
     build_dir = CORE / "build" / FOLDERS[profile]
     merged = build_dir / f"lib{NAME}.a"
     run(
@@ -89,8 +89,8 @@ def build(profile: str, conan: str) -> pathlib.Path:
             "-static",
             "-o",
             merged,
-            build_dir / "apple" / "libsunradar_c.a",
-            build_dir / "libsunradar.a",
+            build_dir / "apple" / "libalmucantar_c.a",
+            build_dir / "libalmucantar.a",
             *dependencies,
         ]
     )
@@ -112,9 +112,9 @@ def main() -> None:
     headers = OUT / "headers"
     shutil.rmtree(headers, ignore_errors=True)
     headers.mkdir(parents=True)
-    shutil.copy2(APPLE / "include" / "sunradar_c.h", headers)
+    shutil.copy2(APPLE / "include" / "almucantar_c.h", headers)
     (headers / "module.modulemap").write_text(
-        f'module {NAME} {{\n  header "sunradar_c.h"\n  link "c++"\n  export *\n}}\n'
+        f'module {NAME} {{\n  header "almucantar_c.h"\n  link "c++"\n  export *\n}}\n'
     )
 
     libraries = []

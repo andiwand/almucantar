@@ -1,8 +1,8 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.ElevationTile
-import at.stefl.sunradar.core.HorizonOptions
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.ElevationTile
+import at.stefl.almucantar.core.HorizonOptions
+import at.stefl.almucantar.core.Observer
 import java.io.File
 import java.nio.file.Files
 import org.junit.After

@@ -1,6 +1,6 @@
 # AGENTS.md — the website
 
-The website on GitHub Pages: Vite, TypeScript, and the core as the npm package `@sunradar/core`
+The website on GitHub Pages: Vite, TypeScript, and the core as the npm package `@almucantar/core`
 (`core/wasm`), the same as the PWA. Build `core/wasm` first. The workflow `web.yml` builds the
 website and puts the PWA under `/app/`.
 

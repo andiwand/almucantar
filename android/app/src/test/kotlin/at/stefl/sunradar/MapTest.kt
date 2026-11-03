@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import kotlin.math.floor
 import org.junit.Assert.assertEquals
 import org.junit.Test

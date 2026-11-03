@@ -1,7 +1,7 @@
 // Orientation sources of the browser, as quaternions device frame -> East-North-Up (the same
 // convention as the core and the Android rotation vector).
 
-import type { Quaternion } from "@sunradar/core";
+import type { Quaternion } from "@almucantar/core";
 
 const DEG = Math.PI / 180;
 

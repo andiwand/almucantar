@@ -1,11 +1,11 @@
 {
-  "name": "@sunradar/core",
+  "name": "@almucantar/core",
   "version": "0.0.0",
   "description": "Sun and moon position, sun path, and camera projection (WebAssembly)",
   "keywords": ["sun", "sun path", "solar position", "moon", "wasm", "webassembly"],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andiwand/sunradar.git",
+    "url": "git+https://github.com/andiwand/almucantar.git",
     "directory": "core/wasm"
   },
   "license": "MPL-2.0",
@@ -18,7 +18,7 @@
       "types": "./index.d.ts",
       "default": "./index.js"
     },
-    "./sunradar.wasm": "./sunradar.wasm"
+    "./almucantar.wasm": "./almucantar.wasm"
   },
-  "files": ["index.js", "index.d.ts", "sunradar.mjs", "sunradar.wasm", "README.md", "LICENSE"]
+  "files": ["index.js", "index.d.ts", "almucantar.mjs", "almucantar.wasm", "README.md", "LICENSE"]
 }

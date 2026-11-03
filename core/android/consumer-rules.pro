@@ -1,6 +1,6 @@
-# The native library finds SunradarNative and its methods by name (JNI). R8 cannot see
+# The native library finds AlmucantarNative and its methods by name (JNI). R8 cannot see
 # these references, so it must not rename or remove them.
--keep class at.stefl.sunradar.core.SunradarNative { *; }
+-keep class at.stefl.almucantar.core.AlmucantarNative { *; }
 -keepclasseswithmembernames class * {
     native <methods>;
 }

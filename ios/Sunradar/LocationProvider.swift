@@ -1,6 +1,6 @@
 import CoreLocation
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The last place, in UserDefaults, so the app starts at that place also offline and without a
 /// location permission.

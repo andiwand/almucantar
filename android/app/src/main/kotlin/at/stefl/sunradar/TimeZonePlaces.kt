@@ -1,7 +1,7 @@
 package at.stefl.sunradar
 
 import android.content.Context
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 
 /** The main city of a time zone, from `assets/tzdata/zone.tab` (IANA, public domain). */
 data class TimeZonePlace(val observer: Observer, val city: String)

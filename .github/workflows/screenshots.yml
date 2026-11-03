@@ -44,7 +44,7 @@ jobs:
       matrix:
         device: [phone, tablet]
     env:
-      SUNRADAR_ABIS: ""
+      ALMUCANTAR_ABIS: ""
       SUNRADAR_SCREENSHOT_DEVICE: ${{ matrix.device }}
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate

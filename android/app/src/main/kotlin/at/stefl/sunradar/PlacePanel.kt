@@ -67,7 +67,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale

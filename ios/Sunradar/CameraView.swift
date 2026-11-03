@@ -1,6 +1,6 @@
 @preconcurrency import AVFoundation
 import os
-import Sunradar
+import Almucantar
 import SwiftUI
 
 /// The preview of the back camera, and its camera model in the points of the view.
@@ -15,7 +15,7 @@ import SwiftUI
 struct CameraView: UIViewRepresentable {
     var detectSun = false
     var onBlobs: ([ViewBlob]) -> Void = { _ in }
-    let onCamera: (Sunradar.Camera?) -> Void
+    let onCamera: (Almucantar.Camera?) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
@@ -37,7 +37,7 @@ struct CameraView: UIViewRepresentable {
     final class PreviewView: UIView, AVCaptureVideoDataOutputSampleBufferDelegate {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
-        var onCamera: ((Sunradar.Camera?) -> Void)?
+        var onCamera: ((Almucantar.Camera?) -> Void)?
         var onBlobs: (([ViewBlob]) -> Void)?
         /// Read by the queue of the frames, so the detection switches on and off without a new
         /// configuration.
@@ -129,7 +129,7 @@ struct CameraView: UIViewRepresentable {
             let pointsPerWidth = hypot(side.x - center.x, side.y - center.y) / 0.1
             let f = focal * Double(pointsPerWidth)
             onCamera?(
-                Sunradar.Camera(
+                Almucantar.Camera(
                     width: Double(bounds.width), height: Double(bounds.height), fx: f, fy: f, cx: Double(center.x),
                     cy: Double(center.y)))
         }

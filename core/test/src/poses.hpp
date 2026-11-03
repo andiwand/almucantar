@@ -4,10 +4,10 @@
 
 #include <array>
 
-#include "sunradar/types.hpp"
-#include "sunradar/view.hpp"
+#include "almucantar/types.hpp"
+#include "almucantar/view.hpp"
 
-namespace sunradar::test {
+namespace almucantar::test {
 
 using Axis = std::array<double, 3>;  // East, North, Up
 
@@ -33,4 +33,4 @@ Pose upright_pose(double azimuth_deg, double pitch_deg = 0, double roll_deg = 0,
 Quaternion upright(double azimuth_deg, double pitch_deg = 0, double roll_deg = 0,
                    ScreenRotation rotation = ScreenRotation::rotation_0);
 
-}  // namespace sunradar::test
+}  // namespace almucantar::test

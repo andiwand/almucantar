@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 import XCTest
 
 @testable import SunradarApp

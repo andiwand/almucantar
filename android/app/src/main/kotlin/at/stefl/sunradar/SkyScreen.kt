@@ -57,24 +57,24 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import at.stefl.sunradar.core.AzimuthCrossing
-import at.stefl.sunradar.core.DirectionLine
-import at.stefl.sunradar.core.Horizontal
-import at.stefl.sunradar.core.Observer
-import at.stefl.sunradar.core.ScreenPoint
-import at.stefl.sunradar.core.ScreenRotation
-import at.stefl.sunradar.core.TimeMatch
-import at.stefl.sunradar.core.View
-import at.stefl.sunradar.core.cameraFromFov
-import at.stefl.sunradar.core.findAzimuthTimes
-import at.stefl.sunradar.core.findDates
-import at.stefl.sunradar.core.headingFromDirection
-import at.stefl.sunradar.core.horizonLine
-import at.stefl.sunradar.core.moonIlluminatedFraction
-import at.stefl.sunradar.core.moonPosition
-import at.stefl.sunradar.core.projectLine
-import at.stefl.sunradar.core.sunPosition
-import at.stefl.sunradar.core.unproject
+import at.stefl.almucantar.core.AzimuthCrossing
+import at.stefl.almucantar.core.DirectionLine
+import at.stefl.almucantar.core.Horizontal
+import at.stefl.almucantar.core.Observer
+import at.stefl.almucantar.core.ScreenPoint
+import at.stefl.almucantar.core.ScreenRotation
+import at.stefl.almucantar.core.TimeMatch
+import at.stefl.almucantar.core.View
+import at.stefl.almucantar.core.cameraFromFov
+import at.stefl.almucantar.core.findAzimuthTimes
+import at.stefl.almucantar.core.findDates
+import at.stefl.almucantar.core.headingFromDirection
+import at.stefl.almucantar.core.horizonLine
+import at.stefl.almucantar.core.moonIlluminatedFraction
+import at.stefl.almucantar.core.moonPosition
+import at.stefl.almucantar.core.projectLine
+import at.stefl.almucantar.core.sunPosition
+import at.stefl.almucantar.core.unproject
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -694,7 +694,7 @@ private fun alignWithLandmark(
 private fun applyMeasurement(
     tracker: HeadingTracker,
     name: String,
-    measure: () -> at.stefl.sunradar.core.HeadingMeasurement,
+    measure: () -> at.stefl.almucantar.core.HeadingMeasurement,
 ): String {
     val measurement =
         try {

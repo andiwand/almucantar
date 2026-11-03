@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-vi.mock("@sunradar/core", () => ({
+vi.mock("@almucantar/core", () => ({
   DayKind: {},
   load: async () => ({ magneticDeclinationDeg: () => 0 }),
 }));

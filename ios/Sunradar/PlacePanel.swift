@@ -1,4 +1,4 @@
-import Sunradar
+import Almucantar
 import SwiftUI
 
 /// The place panel: the offline map (Natural Earth) fills the screen, and a tap drops the place.

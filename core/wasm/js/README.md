@@ -1,15 +1,15 @@
-# @sunradar/core
+# @almucantar/core
 
-The sunradar core as WebAssembly: the position of the sun and the moon, the path of the
+The almucantar core as WebAssembly: the position of the sun and the moon, the path of the
 sun, sunrise and sunset, the magnetic declination (WMM2025), the projection to a camera
 image, the search for times and dates, and a heading filter.
 
 ```js
-import { load } from "@sunradar/core";
+import { load } from "@almucantar/core";
 
-const sunradar = await load();
+const almucantar = await load();
 const vienna = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 };
-const sun = sunradar.sunPosition(Date.now() / 1000, vienna);
+const sun = almucantar.sunPosition(Date.now() / 1000, vienna);
 console.log(sun.azimuthDeg, sun.altitudeDeg);
 ```
 

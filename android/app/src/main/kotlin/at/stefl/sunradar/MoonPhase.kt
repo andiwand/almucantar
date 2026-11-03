@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Horizontal
+import at.stefl.almucantar.core.Horizontal
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan2

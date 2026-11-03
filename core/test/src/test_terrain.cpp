@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "sunradar/moon.hpp"
-#include "sunradar/sun.hpp"
-#include "sunradar/terrain.hpp"
+#include "almucantar/moon.hpp"
+#include "almucantar/sun.hpp"
+#include "almucantar/terrain.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 namespace {
 

@@ -8,14 +8,14 @@
 #include <stdexcept>
 #include <vector>
 
+#include "almucantar/view.hpp"
 #include "poses.hpp"
 #include "reference_data.hpp"
-#include "sunradar/view.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
-using sunradar::test::from_axes;
-using sunradar::test::upright;
+using namespace almucantar;
+using almucantar::test::from_axes;
+using almucantar::test::upright;
 
 namespace {
 

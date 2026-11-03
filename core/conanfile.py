@@ -5,10 +5,10 @@ from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 from conan.tools.files import copy
 
 
-class SunradarConan(ConanFile):
-    name = "sunradar"
+class AlmucantarConan(ConanFile):
+    name = "almucantar"
     version = "0.2.0"
-    url = "https://github.com/andiwand/sunradar"
+    url = "https://github.com/andiwand/almucantar"
     description = "Sun position, sun path and projection for a camera overlay"
     license = "MPL-2.0"
 
@@ -58,11 +58,11 @@ class SunradarConan(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.cache_variables["SUNRADAR_TESTS"] = bool(self.options.with_tests)
-        tc.cache_variables["SUNRADAR_PYTHON"] = bool(self.options.with_python)
-        tc.cache_variables["SUNRADAR_JNI"] = bool(self.options.with_jni)
-        tc.cache_variables["SUNRADAR_WASM"] = bool(self.options.with_wasm)
-        tc.cache_variables["SUNRADAR_APPLE"] = bool(self.options.with_apple)
+        tc.cache_variables["ALMUCANTAR_TESTS"] = bool(self.options.with_tests)
+        tc.cache_variables["ALMUCANTAR_PYTHON"] = bool(self.options.with_python)
+        tc.cache_variables["ALMUCANTAR_JNI"] = bool(self.options.with_jni)
+        tc.cache_variables["ALMUCANTAR_WASM"] = bool(self.options.with_wasm)
+        tc.cache_variables["ALMUCANTAR_APPLE"] = bool(self.options.with_apple)
         tc.generate()
         CMakeDeps(self).generate()
 
@@ -85,4 +85,4 @@ class SunradarConan(ConanFile):
         CMake(self).install(component="core")
 
     def package_info(self):
-        self.cpp_info.libs = ["sunradar"]
+        self.cpp_info.libs = ["almucantar"]

@@ -19,7 +19,7 @@ camerax = "1.6.2"
 
 [libraries]
 # From the composite build of ../core/android (see settings.gradle.kts), so it has no version.
-core-android = { module = "at.stefl.sunradar:core-android" }
+core-android = { module = "at.stefl.almucantar:core-android" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }

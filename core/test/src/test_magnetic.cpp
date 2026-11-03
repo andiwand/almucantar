@@ -3,11 +3,11 @@
 #include <limits>
 #include <stdexcept>
 
+#include "almucantar/magnetic.hpp"
 #include "reference_data.hpp"
-#include "sunradar/magnetic.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 TEST_CASE("magnetic_declination_deg gives known values", "[magnetic]") {
   // The internal test checks the model against all official test values. This test

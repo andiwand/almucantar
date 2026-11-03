@@ -1,5 +1,5 @@
 # Fails if a public header includes an internal header. Run with
-#   cmake -DSOURCE_DIR=<core/src/sunradar> -P check_public_headers.cmake
+#   cmake -DSOURCE_DIR=<core/src/almucantar> -P check_public_headers.cmake
 
 file(GLOB public_headers "${SOURCE_DIR}/*.hpp")
 if(NOT public_headers)
@@ -8,7 +8,7 @@ endif()
 
 set(failed FALSE)
 foreach(header IN LISTS public_headers)
-  file(STRINGS "${header}" includes REGEX "^[ \t]*#[ \t]*include[ \t]*[\"<]sunradar/internal/")
+  file(STRINGS "${header}" includes REGEX "^[ \t]*#[ \t]*include[ \t]*[\"<]almucantar/internal/")
   if(includes)
     message(SEND_ERROR "${header} includes an internal header: ${includes}")
     set(failed TRUE)

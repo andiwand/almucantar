@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <numbers>
 
-namespace sunradar::test {
+namespace almucantar::test {
 
 Quaternion from_axes(const Axis& x, const Axis& y, const Axis& z) {
   const double m00 = x[0], m01 = y[0], m02 = z[0];
@@ -67,4 +67,4 @@ Quaternion upright(const double azimuth_deg, const double pitch_deg, const doubl
   return upright_pose(azimuth_deg, pitch_deg, roll_deg, rotation).q;
 }
 
-}  // namespace sunradar::test
+}  // namespace almucantar::test

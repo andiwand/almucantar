@@ -1,20 +1,20 @@
 # AGENTS.md — the Python binding
 
-The pybind11 binding of the public C++ API (`src/sunradar/*.hpp`), packaged as
-`sunradar`. The build and test loop is in [`README.md`](README.md).
+The pybind11 binding of the public C++ API (`src/almucantar/*.hpp`), packaged as
+`almucantar`. The build and test loop is in [`README.md`](README.md).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `CMakeLists.txt` | Builds the `sunradar/_core` extension (target `sunradar_python`). The core includes it if `SUNRADAR_PYTHON` is ON. |
+| `CMakeLists.txt` | Builds the `almucantar/_core` extension (target `almucantar_python`). The core includes it if `ALMUCANTAR_PYTHON` is ON. |
 | `src/module.cpp` | The binding. |
-| `sunradar/` | The pure Python package. `__init__.py` re-exports `_core`. |
-| `tests/` | The pytest suite. CTest runs it as `sunradar_python_pytest`. |
+| `almucantar/` | The pure Python package. `__init__.py` re-exports `_core`. |
+| `tests/` | The pytest suite. CTest runs it as `almucantar_python_pytest`. |
 
 ## Rules
 
-- Bind the public API only. Never include `sunradar/internal/...` headers.
+- Bind the public API only. Never include `almucantar/internal/...` headers.
 - Mirror the C++ names exactly: functions, types, fields, enumerators, and the
   argument names. Constants use upper case (`SUNRISE_ALTITUDE_DEG`).
 - Every struct gets a constructor with keyword arguments. The defaults come from a

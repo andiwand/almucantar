@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Camera
+import at.stefl.almucantar.core.Camera
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sqrt

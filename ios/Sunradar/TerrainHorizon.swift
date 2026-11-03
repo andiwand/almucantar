@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The terrain horizon of the current place: it loads the DEM tiles from the DemCache and
 /// calculates the horizon profile off the main thread. The profile is calculated again when the

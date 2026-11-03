@@ -7,11 +7,11 @@
 #include <stdexcept>
 #include <string>
 
+#include "almucantar/sun.hpp"
 #include "reference_data.hpp"
-#include "sunradar/sun.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 namespace {
 

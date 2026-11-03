@@ -1,7 +1,7 @@
 // The Sunradar PWA: the sky view with the path of the sun, the horizon, and the time when the sun
-// is in the direction of the crosshair. The core comes from @sunradar/core (WebAssembly).
+// is in the direction of the crosshair. The core comes from @almucantar/core (WebAssembly).
 
-import { DayKind, load } from "@sunradar/core";
+import { DayKind, load } from "@almucantar/core";
 import type {
   AzimuthCrossing,
   HeadingEstimate,
@@ -11,7 +11,7 @@ import type {
   Polyline,
   Quaternion,
   View,
-} from "@sunradar/core";
+} from "@almucantar/core";
 import { litOutline, towardSun } from "./moon";
 import type { MoonAt } from "./moon";
 import { fromDeviceOrientation, screenRotation, upright, withCompass } from "./orientation";
@@ -38,7 +38,7 @@ import {
 import type { BaseMap, MapView } from "./basemap";
 import baseMapUrl from "../../assets/basemap/basemap.json?url";
 
-const sunradar = await load();
+const almucantar = await load();
 
 // --- State --------------------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ const tileCache = new TileCache({
   now: () => Date.now(),
 });
 const terrain = new Terrain({
-  sunradar,
+  almucantar,
   cache: tileCache,
   decode: decodePng,
   onChange: (state: TerrainState) => {
@@ -202,7 +202,7 @@ function computeDay(): Day {
   const key = `${start}:${zone}:${observer.latitudeDeg}:${observer.longitudeDeg}:${terrainVersion}`;
   if (day?.key === key) return day;
   const profile = terrainProfile();
-  const points = sunradar.sunPath(observer, start, end);
+  const points = almucantar.sunPath(observer, start, end);
   const segments = (
     pts: typeof points,
     keep: (h: Horizontal) => boolean = (h) => h.altitudeDeg >= 0,
@@ -221,12 +221,12 @@ function computeDay(): Day {
   };
   // With the terrain, the parts of the path behind the terrain are a separate, dimmer line.
   const terrainAt = (h: Horizontal) => {
-    const t = profile ? sunradar.terrainAltitudeDeg(profile, h.azimuthDeg) : NaN;
+    const t = profile ? almucantar.terrainAltitudeDeg(profile, h.azimuthDeg) : NaN;
     return Number.isNaN(t) ? 0 : t;
   };
   const visible = (h: Horizontal) => h.altitudeDeg >= 0 && h.altitudeDeg >= terrainAt(h);
   const hidden = (h: Horizontal) => h.altitudeDeg >= 0 && h.altitudeDeg < terrainAt(h);
-  const events = sunradar.sunEvents(observer, start, end);
+  const events = almucantar.sunEvents(observer, start, end);
   const summary =
     events.kind === DayKind.polarDay
       ? "Polar day"
@@ -237,7 +237,7 @@ function computeDay(): Day {
             .join(" · ");
   let terrainSummary = "";
   if (profile) {
-    const t = sunradar.terrainEvents(observer, profile, start, end);
+    const t = almucantar.terrainEvents(observer, profile, start, end);
     terrainSummary =
       t.kind === DayKind.polarDay
         ? "Over the terrain all day"
@@ -249,7 +249,7 @@ function computeDay(): Day {
   const year = wallTime(zone, start * 1000).year;
   const guides = [6, 12].flatMap((month) => {
     const s = fromWallTime(zone, year, month, 21) / 1000;
-    return segments(sunradar.sunPath(observer, s, s + 86400));
+    return segments(almucantar.sunPath(observer, s, s + 86400));
   });
   day = {
     key,
@@ -285,7 +285,7 @@ function currentView(): View {
         )
       : 0,
     headingOffsetDeg: sensorsActive ? heading.offsetDeg : 0,
-    camera: sunradar.cameraFromFov(width, height, fov),
+    camera: almucantar.cameraFromFov(width, height, fov),
   };
 }
 
@@ -307,9 +307,9 @@ function strokeLines(lines: Polyline[], color: string, width: number, dash: numb
 
 /** Draws a label upright relative to the horizon: its top points to a point higher in the sky. */
 function uprightLabel(view: View, direction: Horizontal, text: string, gap: number) {
-  const at = sunradar.project(view, direction);
+  const at = almucantar.project(view, direction);
   if (!at.valid) return;
-  const higher = sunradar.project(view, {
+  const higher = almucantar.project(view, {
     azimuthDeg: direction.azimuthDeg,
     altitudeDeg: Math.min(direction.altitudeDeg + 0.5, 89.9),
   });
@@ -330,7 +330,7 @@ function uprightLabel(view: View, direction: Horizontal, text: string, gap: numb
 function drawMoon(view: View, moon: MoonAt, sun: Horizontal, x: number, y: number, r: number) {
   let ux = 0;
   let uy = -1;
-  const q = sunradar.project(view, towardSun(moon.direction, sun));
+  const q = almucantar.project(view, towardSun(moon.direction, sun));
   if (q.valid) {
     const length = Math.hypot(q.point.x - x, q.point.y - y);
     if (length > 1e-3) {
@@ -362,7 +362,7 @@ function drawMoon(view: View, moon: MoonAt, sun: Horizontal, x: number, y: numbe
 function drawTerrain(view: View, profile: HorizonProfile) {
   const line: Horizontal[] = [];
   for (let az = 0; az <= 360; az++) {
-    const altitude = sunradar.terrainAltitudeDeg(profile, az % 360);
+    const altitude = almucantar.terrainAltitudeDeg(profile, az % 360);
     line.push({ azimuthDeg: az % 360, altitudeDeg: Number.isNaN(altitude) ? 0 : altitude });
   }
   if (!cameraOn) {
@@ -375,7 +375,7 @@ function drawTerrain(view: View, profile: HorizonProfile) {
         line[i + 1],
         { azimuthDeg: line[i + 1].azimuthDeg, altitudeDeg: line[i + 1].altitudeDeg - 10 },
         { azimuthDeg: line[i].azimuthDeg, altitudeDeg: line[i].altitudeDeg - 10 },
-      ].map((h) => sunradar.project(view, h));
+      ].map((h) => almucantar.project(view, h));
       if (!corners.every((p) => p.valid)) continue;
       corners.forEach((p, k) =>
         k ? ctx.lineTo(p.point.x, p.point.y) : ctx.moveTo(p.point.x, p.point.y),
@@ -384,7 +384,7 @@ function drawTerrain(view: View, profile: HorizonProfile) {
     }
     ctx.fill("nonzero");
   }
-  strokeLines(sunradar.projectLine(view, line), "rgba(190, 230, 170, 0.9)", 2);
+  strokeLines(almucantar.projectLine(view, line), "rgba(190, 230, 170, 0.9)", 2);
 }
 
 function draw(
@@ -410,7 +410,7 @@ function draw(
 
   const profile = terrainProfile();
   strokeLines(
-    sunradar.horizonLine(view),
+    almucantar.horizonLine(view),
     profile ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.8)",
     profile ? 1 : 1.5,
   );
@@ -424,17 +424,17 @@ function draw(
     uprightLabel(view, { azimuthDeg: az, altitudeDeg: 0 }, label, 14);
   }
   for (const g of d.guides)
-    strokeLines(sunradar.projectLine(view, g), "rgba(255,255,255,0.35)", 1.5, [4, 4]);
-  strokeLines(sunradar.projectLine(view, d.path), "rgba(255,200,61,0.5)", 2, [8, 6]);
+    strokeLines(almucantar.projectLine(view, g), "rgba(255,255,255,0.35)", 1.5, [4, 4]);
+  strokeLines(almucantar.projectLine(view, d.path), "rgba(255,200,61,0.5)", 2, [8, 6]);
   for (const s of d.hiddenSegments)
-    strokeLines(sunradar.projectLine(view, s), "rgba(255,200,61,0.45)", 2, [3, 5]);
+    strokeLines(almucantar.projectLine(view, s), "rgba(255,200,61,0.45)", 2, [3, 5]);
   for (const s of d.daySegments) {
-    const lines = sunradar.projectLine(view, s);
+    const lines = almucantar.projectLine(view, s);
     strokeLines(lines, "rgba(255,200,61,0.25)", 9);
     strokeLines(lines, "#ffc83d", 3);
   }
   for (const mark of d.hours) {
-    const p = sunradar.project(view, mark.direction);
+    const p = almucantar.project(view, mark.direction);
     if (!p.valid) continue;
     ctx.beginPath();
     ctx.arc(p.point.x, p.point.y, 4, 0, 2 * Math.PI);
@@ -451,8 +451,8 @@ function draw(
       azimuthDeg: center.azimuthDeg,
       altitudeDeg: (end * i) / steps,
     }));
-    strokeLines(sunradar.projectLine(view, vertical), "#7fd8ff", 1.5, [6, 5]);
-    const p = sunradar.project(view, crossing.sun);
+    strokeLines(almucantar.projectLine(view, vertical), "#7fd8ff", 1.5, [6, 5]);
+    const p = almucantar.project(view, crossing.sun);
     if (p.valid) {
       ctx.beginPath();
       ctx.arc(p.point.x, p.point.y, 9, 0, 2 * Math.PI);
@@ -464,7 +464,7 @@ function draw(
 
   // The moon with its phase. The faint disc shows the dark part.
   if (moon) {
-    const m = sunradar.project(view, moon.direction);
+    const m = almucantar.project(view, moon.direction);
     if (m.valid) {
       drawMoon(view, moon, sun, m.point.x, m.point.y, 11);
       ctx.fillStyle = "white";
@@ -472,7 +472,7 @@ function draw(
     }
   }
 
-  const s = sunradar.project(view, sun);
+  const s = almucantar.project(view, sun);
   if (s.valid) {
     ctx.beginPath();
     ctx.arc(s.point.x, s.point.y, 14, 0, 2 * Math.PI);
@@ -512,7 +512,7 @@ function scheduleDates(center: Horizontal | null) {
   }
   // The old text stays until the new result is ready, so sensor noise does not make it flicker.
   datesTimer = window.setTimeout(() => {
-    const dates = sunradar.findDates(observer, center, start, start + 365 * 86400);
+    const dates = almucantar.findDates(observer, center, start, start + 365 * 86400);
     datesText = dates.length
       ? "In the crosshair: " +
         dates
@@ -540,18 +540,18 @@ function frame() {
   const view = currentView();
   lastView = view;
   const time = selectedTime();
-  const sun = sunradar.sunPosition(time, observer);
-  const center = sunradar.unproject(view, { x: view.camera.cx, y: view.camera.cy });
+  const sun = almucantar.sunPosition(time, observer);
+  const center = almucantar.unproject(view, { x: view.camera.cx, y: view.camera.cy });
   const usable = Math.abs(center.altitudeDeg) <= MAX_CROSSHAIR_ALTITUDE_DEG;
   const crossing = usable
-    ? (sunradar.findAzimuthTimes(observer, center.azimuthDeg, d.start, d.end)[0] ?? null)
+    ? (almucantar.findAzimuthTimes(observer, center.azimuthDeg, d.start, d.end)[0] ?? null)
     : null;
   scheduleDates(usable ? center : null);
 
-  const moonFraction = sunradar.moonIlluminatedFraction(time);
+  const moonFraction = almucantar.moonIlluminatedFraction(time);
   const moon: MoonAt | null =
     moonFraction >= 0.02
-      ? { direction: sunradar.moonPosition(time, observer), fraction: moonFraction }
+      ? { direction: almucantar.moonPosition(time, observer), fraction: moonFraction }
       : null;
   draw(view, d, sun, moon, center, crossing);
 
@@ -660,7 +660,7 @@ function setPlace(next: StoredPlace) {
   renderPlaceCard();
   // Only the declination changes, so an alignment before stays.
   const old = declination;
-  declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
+  declination = almucantar.magneticDeclinationDeg(observer, Date.now() / 1000);
   heading = { ...heading, offsetDeg: heading.offsetDeg + declination - old };
   // The place panel can be open, and "Keep offline" needs a place.
   renderKept();
@@ -669,7 +669,7 @@ function setPlace(next: StoredPlace) {
 /** The browser heading is magnetic, so the offset is the declination until the user aligns. */
 let declination = 0;
 function resetHeading() {
-  declination = sunradar.magneticDeclinationDeg(observer, Date.now() / 1000);
+  declination = almucantar.magneticDeclinationDeg(observer, Date.now() / 1000);
   heading = { offsetDeg: declination, varianceDeg2: 15 * 15 };
 }
 
@@ -723,22 +723,22 @@ window.addEventListener("pointermove", (e) => {
 function alignWithSun(view: View, x: number, y: number) {
   aligning = false;
   $("align-button").textContent = "Align with the sun";
-  const sun = sunradar.sunPosition(Date.now() / 1000, observer);
-  const tapped = sunradar.unproject(view, { x, y });
+  const sun = almucantar.sunPosition(Date.now() / 1000, observer);
+  const tapped = almucantar.unproject(view, { x, y });
   if (Math.abs(tapped.altitudeDeg - sun.altitudeDeg) > 5) {
     showMessage("That point is not at the height of the sun. Tap the sun itself.");
     return;
   }
   let measurement;
   try {
-    measurement = sunradar.headingFromDirection(view, { x, y }, sun.azimuthDeg, 0.5);
+    measurement = almucantar.headingFromDirection(view, { x, y }, sun.azimuthDeg, 0.5);
   } catch (e) {
     // The core rejects a direction that gives no heading (for example near the zenith).
     if (!(e instanceof RangeError)) throw e;
     showMessage(`No alignment: ${e.message}.`);
     return;
   }
-  heading = sunradar.headingUpdate(heading, measurement);
+  heading = almucantar.headingUpdate(heading, measurement);
   showMessage(`Heading aligned with the sun (±${Math.sqrt(heading.varianceDeg2).toFixed(1)}°).`);
 }
 
@@ -746,7 +746,7 @@ $("start").addEventListener("click", () => void startSensors());
 $("camera-button").addEventListener("click", () => void toggleCamera());
 $("time-button").addEventListener("click", () => $("time-panel").classList.toggle("hidden"));
 $("align-button").addEventListener("click", () => {
-  const sunUp = sunradar.sunPosition(Date.now() / 1000, observer).altitudeDeg > 0;
+  const sunUp = almucantar.sunPosition(Date.now() / 1000, observer).altitudeDeg > 0;
   if (!sunUp) return showMessage("The sun is below the horizon.");
   if (!sensorsActive)
     return showMessage("The alignment needs the orientation sensors: press Start sensors.");
@@ -1014,7 +1014,7 @@ keepButton.addEventListener("click", async () => {
         ? state.fine
         : true;
     const result = await keepOffline(
-      sunradar,
+      almucantar,
       tileCache,
       observer,
       name,

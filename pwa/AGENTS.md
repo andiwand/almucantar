@@ -1,6 +1,6 @@
 # AGENTS.md — the PWA
 
-The web app: Vite, TypeScript, and the core as the npm package `@sunradar/core`
+The web app: Vite, TypeScript, and the core as the npm package `@almucantar/core`
 (`core/wasm`). `package.json` takes the package from the WASM build output (`file:`), so
 build `core/wasm` first. GitHub Pages serves the app under `/app/` of the website.
 

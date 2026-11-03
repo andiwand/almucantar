@@ -1,4 +1,4 @@
-// The Python binding of the public API (src/sunradar/*.hpp). It must not include
+// The Python binding of the public API (src/almucantar/*.hpp). It must not include
 // an internal header.
 
 #include <pybind11/pybind11.h>
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "sunradar/sunradar.hpp"
+#include "almucantar/almucantar.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -20,25 +20,25 @@ namespace {
 /// Formats `x` the way Python's repr() formats a float: the shortest exact form.
 std::string num(const double x) { return py::repr(py::float_(x)).cast<std::string>(); }
 
-std::string repr(const sunradar::Observer& o) {
+std::string repr(const almucantar::Observer& o) {
   return "Observer(latitude_deg=" + num(o.latitude_deg) +
          ", longitude_deg=" + num(o.longitude_deg) + ")";
 }
 
-std::string repr(const sunradar::Horizontal& h) {
+std::string repr(const almucantar::Horizontal& h) {
   return "Horizontal(azimuth_deg=" + num(h.azimuth_deg) + ", altitude_deg=" + num(h.altitude_deg) +
          ")";
 }
 
-std::string repr(const sunradar::Atmosphere& a) {
+std::string repr(const almucantar::Atmosphere& a) {
   return "Atmosphere(pressure_hpa=" + num(a.pressure_hpa) +
          ", temperature_c=" + num(a.temperature_c) + ")";
 }
 
 void bind_types(const py::module_& m) {
-  using sunradar::Atmosphere;
-  using sunradar::Horizontal;
-  using sunradar::Observer;
+  using almucantar::Atmosphere;
+  using almucantar::Horizontal;
+  using almucantar::Observer;
 
   py::class_<Observer>(m, "Observer", "A place on the Earth, in geodetic coordinates (WGS 84).")
       .def(py::init([](const double latitude_deg, const double longitude_deg) {
@@ -71,7 +71,7 @@ void bind_types(const py::module_& m) {
 }
 
 void bind_moon(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
   const MoonOptions defaults;
   py::class_<MoonOptions>(m, "MoonOptions")
       .def(py::init([](const bool refraction, const Atmosphere& atmosphere) {
@@ -87,7 +87,7 @@ void bind_moon(py::module_& m) {
 }
 
 void bind_heading(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
 
   py::class_<Vector3>(m, "Vector3", "A vector for sensor values.")
       .def(py::init([](const double x, const double y, const double z) {
@@ -199,7 +199,7 @@ void bind_heading(py::module_& m) {
 }
 
 void bind_search(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
 
   const SearchOptions defaults;
   py::class_<SearchOptions>(m, "SearchOptions")
@@ -251,7 +251,7 @@ void bind_search(py::module_& m) {
 }
 
 void bind_view(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
 
   py::class_<Quaternion>(m, "Quaternion",
                          "A unit quaternion. For the view: device frame to East-North-Up.")
@@ -360,7 +360,7 @@ void bind_view(py::module_& m) {
 }
 
 void bind_sun(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
 
   py::enum_<SolarModel>(m, "SolarModel", "The model that calculates the position of the sun.")
       .value("noaa", SolarModel::noaa, "NOAA solar calculator (Meeus)")
@@ -451,7 +451,7 @@ void bind_sun(py::module_& m) {
 }
 
 void bind_terrain(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
   py::class_<ElevationGrid>(
       m, "ElevationGrid",
       "A DEM as a grid of heights. Row 0 is in the north, column 0 in the west.")
@@ -624,7 +624,7 @@ void bind_terrain(py::module_& m) {
 }
 
 void bind_sky(py::module_& m) {
-  using namespace sunradar;
+  using namespace almucantar;
   py::enum_<Planet>(m, "Planet")
       .value("mercury", Planet::mercury)
       .value("venus", Planet::venus)
@@ -661,7 +661,7 @@ void bind_sky(py::module_& m) {
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
-  m.doc() = "The Python binding of the sunradar core.";
+  m.doc() = "The Python binding of the almucantar core.";
   bind_types(m);
   bind_sun(m);
   bind_view(m);
@@ -671,6 +671,6 @@ PYBIND11_MODULE(_core, m) {
   bind_terrain(m);
   bind_sky(m);
   m.def(
-      "version", [] { return std::string(sunradar::version()); },
+      "version", [] { return std::string(almucantar::version()); },
       "Returns the version of the core library.");
 }

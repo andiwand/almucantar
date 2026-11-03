@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos

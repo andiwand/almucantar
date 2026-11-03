@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// Geodesy on a sphere. For the distances of a landmark (up to some kilometres) it is sufficient.
 enum Geo {

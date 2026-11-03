@@ -1,7 +1,7 @@
 // The shape of the lit part of the moon. The bright side of the moon faces the sun, along the great
 // circle from the moon to the sun. The Android and the iOS app use the same calculation.
 
-import type { Horizontal } from "@sunradar/core";
+import type { Horizontal } from "@almucantar/core";
 
 const DEG = Math.PI / 180;
 

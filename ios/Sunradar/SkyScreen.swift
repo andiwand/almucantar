@@ -1,5 +1,5 @@
 import Combine
-import Sunradar
+import Almucantar
 import SwiftUI
 import simd
 
@@ -111,7 +111,7 @@ struct SkyScreen: SwiftUI.View {
     @State private var minuteOfDay: Double? = ScreenshotMode.scene.map { Double($0.hour * 60 + $0.minute) }
     @State private var showTime = ScreenshotMode.scene?.showTime ?? false
     @State private var cameraOn = ScreenshotMode.scene != nil
-    @State private var camera: Sunradar.Camera?
+    @State private var camera: Almucantar.Camera?
     @State private var aligning: AlignTarget?
     @State private var pickingLandmark = false
     @State private var showPlace = false
@@ -264,7 +264,7 @@ struct SkyScreen: SwiftUI.View {
 
     // MARK: - The view
 
-    private func makeView(size: CGSize) -> Sunradar.View {
+    private func makeView(size: CGSize) -> Almucantar.View {
         var fov = size.width < size.height ? 60.0 : 90.0
         if ScreenshotMode.scene != nil {
             // 65° across the shorter side of the screen, as on Android.
@@ -276,15 +276,15 @@ struct SkyScreen: SwiftUI.View {
             fov = size.width <= size.height ? 65 : wideFov
         }
         let virtualCamera =
-            (try? cameraFromFov(width: size.width, height: size.height, horizontalFovDeg: fov)) ?? Sunradar.Camera()
+            (try? cameraFromFov(width: size.width, height: size.height, horizontalFovDeg: fov)) ?? Almucantar.Camera()
         if motion.available, let q = motion.deviceToFrame {
-            return Sunradar.View(
+            return Almucantar.View(
                 // The scenes of the demo mode are for a device in portrait.
                 deviceToEnu: q, screenRotation: ScreenshotMode.scene != nil ? .rotation0 : screenRotation(),
                 headingOffsetDeg: motion.estimate.offsetDeg,
                 camera: cameraOn ? (camera ?? virtualCamera) : virtualCamera)
         }
-        return Sunradar.View(deviceToEnu: upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)
+        return Almucantar.View(deviceToEnu: upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)
     }
 
     private func screenRotation() -> ScreenRotation {
@@ -298,13 +298,13 @@ struct SkyScreen: SwiftUI.View {
     }
 
     /// A device upright in portrait, with the back camera to the azimuth, pitched up.
-    private func upright(azimuthDeg: Double, pitchDeg: Double) -> Sunradar.Quaternion {
+    private func upright(azimuthDeg: Double, pitchDeg: Double) -> Almucantar.Quaternion {
         // The rotation about east by 90° + pitch, then about up by -azimuth.
         let a = -azimuthDeg * .pi / 180
         let p = (90 + pitchDeg) * .pi / 180
         let qz = (w: cos(a / 2), z: sin(a / 2))
         let qx = (w: cos(p / 2), x: sin(p / 2))
-        return Sunradar.Quaternion(w: qz.w * qx.w, x: qz.w * qx.x, y: qz.z * qx.x, z: qz.z * qx.w)
+        return Almucantar.Quaternion(w: qz.w * qx.w, x: qz.w * qx.x, y: qz.z * qx.x, z: qz.z * qx.w)
     }
 
     private func selectedTime(day: SkyDay) -> Double {
@@ -324,7 +324,7 @@ struct SkyScreen: SwiftUI.View {
 
     /// The detected sun: the saturated region nearest to the predicted sun, within the error of
     /// the heading. A region larger than a few degrees is an overexposed sky, not the sun.
-    private func detectSun(view: Sunradar.View) -> DetectedSun? {
+    private func detectSun(view: Almucantar.View) -> DetectedSun? {
         guard detecting, let sun = try? sunPosition(now.timeIntervalSince1970, observer: location.observer) else {
             return nil
         }
@@ -340,7 +340,7 @@ struct SkyScreen: SwiftUI.View {
         .min { $0.separationDeg < $1.separationDeg }
     }
 
-    private func dragGesture(view: Sunradar.View, detected: DetectedSun?) -> some Gesture {
+    private func dragGesture(view: Almucantar.View, detected: DetectedSun?) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard !motion.available || motion.deviceToFrame == nil else { return }
@@ -356,7 +356,7 @@ struct SkyScreen: SwiftUI.View {
             }
     }
 
-    private func tap(view: Sunradar.View, at point: CGPoint, detected: DetectedSun?) {
+    private func tap(view: Almucantar.View, at point: CGPoint, detected: DetectedSun?) {
         let now = Date().timeIntervalSince1970
         let observer = location.observer
         if let detected, hypot(point.x - detected.blob.center.x, point.y - detected.blob.center.y) < detected.blob.radius + 48,
@@ -374,7 +374,7 @@ struct SkyScreen: SwiftUI.View {
     }
 
     /// Calibrates the heading with a tap on the sun or the moon. Returns the message for the user.
-    private func alignWithBody(view: Sunradar.View, at point: CGPoint, body: Horizontal, name: String) -> String {
+    private func alignWithBody(view: Almucantar.View, at point: CGPoint, body: Horizontal, name: String) -> String {
         let screen = ScreenPoint(x: point.x, y: point.y)
         guard let tapped = try? unproject(view, screen) else { return "That point is not on the sky." }
         let altitudeError = abs(tapped.altitudeDeg - body.altitudeDeg)
@@ -388,7 +388,7 @@ struct SkyScreen: SwiftUI.View {
 
     /// Calibrates the heading with a landmark in the crosshair. The error of the bearing comes from
     /// the location error and from the distance: an error e at a distance d is atan(e / d).
-    private func alignWithLandmark(view: Sunradar.View) -> String {
+    private func alignWithLandmark(view: Almucantar.View) -> String {
         guard let landmark else { return "No landmark." }
         let observer = location.observer
         let distance = Geo.distanceM(from: observer, to: landmark)
@@ -454,7 +454,7 @@ struct SkyScreen: SwiftUI.View {
     /// Draws the moon at `at` with the lit part toward the sun. The direction of the sun on the screen
     /// comes from a point 1° from the moon toward the sun, see `MoonPhase.towardSun`.
     private func drawMoon(
-        _ context: inout GraphicsContext, _ view: Sunradar.View, _ moon: MoonAt, sun: Horizontal?, at: CGPoint, radius: CGFloat
+        _ context: inout GraphicsContext, _ view: Almucantar.View, _ moon: MoonAt, sun: Horizontal?, at: CGPoint, radius: CGFloat
     ) {
         var u = CGPoint(x: 0, y: -1)
         if let sun, let q = point(view, MoonPhase.towardSun(moon.direction, sun)) {
@@ -474,13 +474,13 @@ struct SkyScreen: SwiftUI.View {
         context.fill(lit, with: .color(color))
     }
 
-    private func point(_ view: Sunradar.View, _ direction: Horizontal) -> CGPoint? {
+    private func point(_ view: Almucantar.View, _ direction: Horizontal) -> CGPoint? {
         guard let p = try? project(view, direction), p.valid else { return nil }
         return CGPoint(x: p.point.x, y: p.point.y)
     }
 
     /// Draws a label upright relative to the horizon: its top points to a point higher in the sky.
-    private func label(_ context: inout GraphicsContext, _ view: Sunradar.View, _ direction: Horizontal, _ text: String, gap: Double) {
+    private func label(_ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: String, gap: Double) {
         guard let at = point(view, direction) else { return }
         let higher = point(view, Horizontal(azimuthDeg: direction.azimuthDeg, altitudeDeg: min(direction.altitudeDeg + 0.5, 89.9)))
         let angle = higher.map { atan2($0.x - at.x, -($0.y - at.y)) } ?? 0
@@ -494,7 +494,7 @@ struct SkyScreen: SwiftUI.View {
     /// If `target` is not on the screen, the point on the border of the screen in the direction of
     /// `target`, seen from `from` (the center of the view), and the unit direction to go on. Nil
     /// if the target is visible.
-    private func edgeIndicator(_ view: Sunradar.View, from: Horizontal, to target: Horizontal) -> (CGPoint, CGPoint)? {
+    private func edgeIndicator(_ view: Almucantar.View, from: Horizontal, to target: Horizontal) -> (CGPoint, CGPoint)? {
         let bounds = CGRect(x: 0, y: 0, width: view.camera.width, height: view.camera.height).insetBy(dx: 28, dy: 28)
         let inside = { (h: Horizontal) in point(view, h).map { bounds.contains($0) } ?? false }
         if inside(target) { return nil }
@@ -518,7 +518,7 @@ struct SkyScreen: SwiftUI.View {
 
     /// Fills the area below the terrain line, in narrow parts of the azimuth. The projection cuts a
     /// part at the border of the view, so a narrow part keeps the error of the cut small.
-    private func fillTerrain(_ context: inout GraphicsContext, _ view: Sunradar.View, color: Color) {
+    private func fillTerrain(_ context: inout GraphicsContext, _ view: Almucantar.View, color: Color) {
         let chunk = 12
         var fill = Path()
         for line in terrain.lines {
@@ -540,7 +540,7 @@ struct SkyScreen: SwiftUI.View {
     }
 
     private func draw(
-        _ context: inout GraphicsContext, view: Sunradar.View, day: SkyDay, terrainDay: TerrainDay?, sun: Horizontal?,
+        _ context: inout GraphicsContext, view: Almucantar.View, day: SkyDay, terrainDay: TerrainDay?, sun: Horizontal?,
         moon: MoonAt?, landmark: Horizontal?, center: Horizontal?, crossing: AzimuthCrossing?
     ) {
         let yellow = Color(red: 1, green: 0.784, blue: 0.239)
@@ -778,7 +778,7 @@ struct SkyScreen: SwiftUI.View {
         aligning = target
     }
 
-    private func buttons(view: Sunradar.View) -> some SwiftUI.View {
+    private func buttons(view: Almucantar.View) -> some SwiftUI.View {
         HStack(spacing: 8) {
             Button(cameraOn ? "Sky" : "Camera") {
                 aligning = nil

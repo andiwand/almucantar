@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The answer of an HTTP GET request.
 struct HTTPResponse: Sendable {

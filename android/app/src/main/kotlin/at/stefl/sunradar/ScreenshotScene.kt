@@ -1,7 +1,7 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.HeadingEstimate
-import at.stefl.sunradar.core.Quaternion
+import at.stefl.almucantar.core.HeadingEstimate
+import at.stefl.almucantar.core.Quaternion
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.cos

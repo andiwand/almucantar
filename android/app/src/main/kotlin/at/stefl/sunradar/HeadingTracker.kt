@@ -11,16 +11,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleStartEffect
-import at.stefl.sunradar.core.HeadingEstimate
-import at.stefl.sunradar.core.HeadingFilter
-import at.stefl.sunradar.core.HeadingMeasurement
-import at.stefl.sunradar.core.Observer
-import at.stefl.sunradar.core.Quaternion
-import at.stefl.sunradar.core.Vector3
-import at.stefl.sunradar.core.headingFilterPredict
-import at.stefl.sunradar.core.headingFilterStart
-import at.stefl.sunradar.core.headingFilterUpdate
-import at.stefl.sunradar.core.headingFilterUpdateMagnetometer
+import at.stefl.almucantar.core.HeadingEstimate
+import at.stefl.almucantar.core.HeadingFilter
+import at.stefl.almucantar.core.HeadingMeasurement
+import at.stefl.almucantar.core.Observer
+import at.stefl.almucantar.core.Quaternion
+import at.stefl.almucantar.core.Vector3
+import at.stefl.almucantar.core.headingFilterPredict
+import at.stefl.almucantar.core.headingFilterStart
+import at.stefl.almucantar.core.headingFilterUpdate
+import at.stefl.almucantar.core.headingFilterUpdateMagnetometer
 
 /** The orientation frame of the tracker. */
 enum class OrientationFrame {

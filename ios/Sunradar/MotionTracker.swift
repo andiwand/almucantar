@@ -1,6 +1,6 @@
 import CoreMotion
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The orientation from CoreMotion and the heading filter of the core (the same design as the
 /// Android app: PLAN.md, section 5.4a).
@@ -13,7 +13,7 @@ import Sunradar
 /// corrects that bias, so the magnetometer does not pull the offset back.
 @MainActor
 final class MotionTracker: ObservableObject {
-    @Published private(set) var deviceToFrame: Sunradar.Quaternion?
+    @Published private(set) var deviceToFrame: Almucantar.Quaternion?
     @Published private(set) var estimate = HeadingEstimate()
     @Published private(set) var available = true
 
@@ -44,7 +44,7 @@ final class MotionTracker: ObservableObject {
 
     /// The demo mode of the store screenshots: a fixed orientation and a fixed heading, without
     /// sensors.
-    func startDemo(deviceToFrame q: Sunradar.Quaternion, headingSigmaDeg: Double) {
+    func startDemo(deviceToFrame q: Almucantar.Quaternion, headingSigmaDeg: Double) {
         available = true
         deviceToFrame = q
         estimate = HeadingEstimate(offsetDeg: 0, varianceDeg2: headingSigmaDeg * headingSigmaDeg)
@@ -77,9 +77,9 @@ final class MotionTracker: ObservableObject {
 
     private func update(_ motion: CMDeviceMotion) {
         let a = motion.attitude.quaternion
-        var q = Sunradar.Quaternion(w: a.w, x: a.x, y: a.y, z: a.z)
+        var q = Almucantar.Quaternion(w: a.w, x: a.x, y: a.y, z: a.z)
         if conjugate == nil { conjugate = Self.needsConjugate(q, gravity: motion.gravity) }  // nil until the tilt is clear
-        if conjugate == true { q = Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z) }
+        if conjugate == true { q = Almucantar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z) }
 
         if let last = lastTimestamp, motion.timestamp > last { pendingDtS += motion.timestamp - last }
         lastTimestamp = motion.timestamp
@@ -107,16 +107,16 @@ final class MotionTracker: ObservableObject {
     /// the quaternion, rotating "down" of the frame into the device frame gives that vector. The
     /// two directions give almost the same vector if the device is nearly flat, so the function
     /// decides only if they differ clearly (a tilt of more than about 30°), else it returns nil.
-    static func needsConjugate(_ q: Sunradar.Quaternion, gravity: CMAcceleration) -> Bool? {
+    static func needsConjugate(_ q: Almucantar.Quaternion, gravity: CMAcceleration) -> Bool? {
         let down = (x: 0.0, y: 0.0, z: -1.0)
         let dot = { (v: (x: Double, y: Double, z: Double)) in v.x * gravity.x + v.y * gravity.y + v.z * gravity.z }
         // q rotates from the device to the frame, so its inverse rotates "down" into the device.
-        let asGiven = dot(rotate(Sunradar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z), down))
+        let asGiven = dot(rotate(Almucantar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z), down))
         let conjugated = dot(rotate(q, down))
         return abs(asGiven - conjugated) > 0.5 ? conjugated > asGiven : nil
     }
 
-    static func rotate(_ q: Sunradar.Quaternion, _ v: (x: Double, y: Double, z: Double)) -> (x: Double, y: Double, z: Double) {
+    static func rotate(_ q: Almucantar.Quaternion, _ v: (x: Double, y: Double, z: Double)) -> (x: Double, y: Double, z: Double) {
         // v' = v + 2 u × (u × v + w v)
         let u = (x: q.x, y: q.y, z: q.z)
         let t = (

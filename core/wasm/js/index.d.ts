@@ -1,4 +1,4 @@
-// Types of @sunradar/core. All times are Unix time in seconds (UTC). All angles are in degrees.
+// Types of @almucantar/core. All times are Unix time in seconds (UTC). All angles are in degrees.
 // An invalid argument throws a RangeError.
 
 export interface Observer { latitudeDeg: number; longitudeDeg: number }
@@ -88,7 +88,7 @@ export interface HeadingFilter { offsetDeg: number; biasUt: Vector3; disturbance
 
 type Partial2<T> = { [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K] };
 
-export interface Sunradar {
+export interface Almucantar {
   version(): string;
   readonly sunriseAltitudeDeg: number;
   /** The C++ defaults (frozen). */
@@ -154,4 +154,4 @@ export interface Sunradar {
 }
 
 /** Loads the WebAssembly module. Options go to the Emscripten module (for example locateFile). */
-export declare function load(moduleOptions?: object): Promise<Sunradar>;
+export declare function load(moduleOptions?: object): Promise<Almucantar>;

@@ -1,6 +1,6 @@
 import CoreGraphics
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The offline base map (assets/basemap/basemap.json, Natural Earth): the decode, the search of
 /// the places, the time zone of a dropped place, and the Web Mercator projection. The format is in

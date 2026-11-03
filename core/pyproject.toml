@@ -1,4 +1,4 @@
-# The Python package `sunradar`. Conan resolves the C++ dependencies. Run
+# The Python package `almucantar`. Conan resolves the C++ dependencies. Run
 # `conan install` first and give CMake the toolchain file; see python/README.md.
 
 [build-system]
@@ -6,7 +6,7 @@ requires = ["scikit-build-core>=0.10", "setuptools-scm>=8"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "sunradar"
+name = "almucantar"
 # From the git tag of the core (core-v1.2.0 gives 1.2.0).
 dynamic = ["version"]
 description = "Sun position, sun path, and sunrise and sunset times"
@@ -27,8 +27,8 @@ classifiers = [
 test = ["pytest"]
 
 [project.urls]
-source = "https://github.com/andiwand/sunradar"
-tracker = "https://github.com/andiwand/sunradar/issues"
+source = "https://github.com/andiwand/almucantar"
+tracker = "https://github.com/andiwand/almucantar/issues"
 
 [tool.scikit-build]
 cmake.version = ">=3.24"
@@ -38,8 +38,8 @@ install.components = ["python"]
 sdist.exclude = ["build", "test/data"]
 
 [tool.scikit-build.cmake.define]
-SUNRADAR_PYTHON = "ON"
-SUNRADAR_TESTS = "OFF"
+ALMUCANTAR_PYTHON = "ON"
+ALMUCANTAR_TESTS = "OFF"
 BUILD_SHARED_LIBS = "OFF"
 
 [[tool.dynamic-metadata]]

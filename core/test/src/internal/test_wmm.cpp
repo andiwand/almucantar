@@ -7,10 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "sunradar/internal/wmm.hpp"
+#include "almucantar/internal/wmm.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar::internal;
+using namespace almucantar::internal;
 
 namespace {
 
@@ -26,7 +26,7 @@ struct TestValue {
 };
 
 std::vector<TestValue> read_test_values() {
-  std::ifstream file(std::string(SUNRADAR_TEST_DATA_DIR) + "/WMM2025_TestValues.txt");
+  std::ifstream file(std::string(ALMUCANTAR_TEST_DATA_DIR) + "/WMM2025_TestValues.txt");
   REQUIRE(file);
   std::vector<TestValue> values;
   std::string line;

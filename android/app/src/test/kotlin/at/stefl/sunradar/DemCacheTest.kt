@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.ElevationTile
+import at.stefl.almucantar.core.ElevationTile
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch

@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
+#include "almucantar/sky.hpp"
 #include "reference_data.hpp"
-#include "sunradar/sky.hpp"
 
 using Catch::Matchers::WithinAbs;
-using namespace sunradar;
+using namespace almucantar;
 
 namespace {
 

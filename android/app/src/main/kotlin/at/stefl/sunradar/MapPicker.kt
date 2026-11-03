@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.floor

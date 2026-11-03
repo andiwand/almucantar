@@ -1,5 +1,5 @@
 import Foundation
-import Sunradar
+import Almucantar
 
 /// The places that the user keeps offline (PLAN.md 13.3, "download this region"). "Keep offline"
 /// downloads the terrain data of a place, the same as `TerrainHorizon` loads, and the DemCache

@@ -30,7 +30,7 @@ PROJECTS = {
         "stamps": [
             (
                 "core/CMakeLists.txt",
-                r"(project\(sunradar\s+VERSION )[0-9][^\s)]*",
+                r"(project\(almucantar\s+VERSION )[0-9][^\s)]*",
                 r"\g<1>{version}",
             ),
             ("core/conanfile.py", r'(version = ")[^"]*(")', r"\g<1>{version}\g<2>"),

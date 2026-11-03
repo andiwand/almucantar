@@ -21,7 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.location.LocationManagerCompat
 import androidx.core.util.Consumer
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import java.io.IOException
 import java.time.ZoneId
 import kotlin.coroutines.resume

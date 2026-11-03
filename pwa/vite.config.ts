@@ -6,9 +6,9 @@ import { defineConfig } from "vite";
 export default defineConfig({
   // Relative paths, so the app works from any directory of a web server.
   base: "./",
-  // The WebAssembly module of @sunradar/core loads its .wasm next to itself; Vite must not
+  // The WebAssembly module of @almucantar/core loads its .wasm next to itself; Vite must not
   // pre-bundle the package, or the URL of the .wasm file breaks.
-  optimizeDeps: { exclude: ["@sunradar/core"] },
+  optimizeDeps: { exclude: ["@almucantar/core"] },
   build: { target: "es2022" },
   // The app reads files from the repository root: the WASM build of the core and the offline base
   // map (assets/basemap/). Vite allows only the project directory without this.

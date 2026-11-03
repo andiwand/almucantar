@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "sunradar/types.hpp"
+#include "almucantar/types.hpp"
 
-namespace sunradar::test {
+namespace almucantar::test {
 
 /// The sites in the reference data.
 Observer site(const std::string& name);
@@ -56,4 +56,4 @@ inline constexpr double kEventsEndUtc = 1798761600;    // 2027-01-01T00:00:00Z
 /// Returns the angle in degrees between two directions.
 double angular_separation_deg(Horizontal a, Horizontal b);
 
-}  // namespace sunradar::test
+}  // namespace almucantar::test

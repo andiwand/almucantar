@@ -9,7 +9,7 @@
 #   repository variable PYPI_ENABLED = true.
 # - Maven Central: the secrets MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD (a portal token),
 #   SIGNING_KEY, and SIGNING_PASSWORD (an ASCII-armored PGP key).
-# - Swift: no credentials. The job attaches SunradarC.xcframework.zip to the release. Then it
+# - Swift: no credentials. The job attaches AlmucantarC.xcframework.zip to the release. Then it
 #   tags X.Y.Z (the tag form that SwiftPM accepts) on a commit on top of the release, which puts
 #   the URL and the checksum of the zip into Package.swift. Main keeps the placeholder.
 name: publish-core
@@ -80,7 +80,7 @@ jobs:
           conan profile detect --force
           conan install . --build=missing -pr:h conan/profiles/emscripten -pr:b default \
             -o "&:with_tests=False" -o "&:with_wasm=True"
-          cmake --preset conan-emscripten-wasm-release -DSUNRADAR_NODE="$(which node)"
+          cmake --preset conan-emscripten-wasm-release -DALMUCANTAR_NODE="$(which node)"
           cmake --build --preset conan-emscripten-wasm-release
           ctest --test-dir build/emscripten-wasm-release --output-on-failure
 
@@ -230,7 +230,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build the AAR
-        run: ./gradlew assembleRelease -Psunradar.abis= -Psunradar.version=${{ needs.version.outputs.version }}
+        run: ./gradlew assembleRelease -Palmucantar.abis= -Palmucantar.version=${{ needs.version.outputs.version }}
 
       - name: Publish
         if: needs.version.outputs.publish == 'true'
@@ -244,7 +244,7 @@ jobs:
             echo "::notice::MAVEN_CENTRAL_USERNAME is not set; the AAR is not published"
             exit 0
           fi
-          ./gradlew publishToMavenCentral -Psunradar.abis= -Psunradar.version=${{ needs.version.outputs.version }}
+          ./gradlew publishToMavenCentral -Palmucantar.abis= -Palmucantar.version=${{ needs.version.outputs.version }}
 
       - name: Attach to the release
         if: needs.version.outputs.publish == 'true'
@@ -281,7 +281,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: swift-xcframework
-          path: core/apple/build/SunradarC.xcframework.zip*
+          path: core/apple/build/AlmucantarC.xcframework.zip*
 
       - name: Attach to the release and tag the Swift package
         if: needs.version.outputs.publish == 'true'
@@ -290,8 +290,8 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload "${TAG}" core/apple/build/SunradarC.xcframework.zip
-          checksum="$(cat core/apple/build/SunradarC.xcframework.zip.sha256)"
+          gh release upload "${TAG}" core/apple/build/AlmucantarC.xcframework.zip
+          checksum="$(cat core/apple/build/AlmucantarC.xcframework.zip.sha256)"
           sed -i '' \
             -e "s|releases/download/UNRELEASED/|releases/download/${TAG}/|" \
             -e "s|checksum: \"0\{64\}\"|checksum: \"${checksum}\"|" \

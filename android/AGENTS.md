@@ -1,6 +1,6 @@
 # AGENTS.md — the Android app
 
-The app `at.stefl.sunradar`. It uses the AAR `at.stefl.sunradar:core-android` from source:
+The app `at.stefl.sunradar`. It uses the AAR `at.stefl.almucantar:core-android` from source:
 `settings.gradle.kts` includes `../core/android` as a composite build. The app contains no
 C++ and no JNI code. Read [`../core/android/AGENTS.md`](../core/android/AGENTS.md) for the
 API of the AAR.
@@ -58,7 +58,7 @@ PLAN.md 13.3 (fully offline). The PWA has the same behavior (`pwa/src/basemap.ts
 ## Build and test
 
 Run these commands in `android/`. The composite build builds the native library of the AAR
-with Conan, unless `SUNRADAR_ABIS` is empty.
+with Conan, unless `ALMUCANTAR_ABIS` is empty.
 
 ```sh
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:spotlessCheck

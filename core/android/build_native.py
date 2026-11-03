@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Builds libsunradar_jni.so for each ABI into native/prebuilt/jniLibs/<abi>/.
+"""Builds libalmucantar_jni.so for each ABI into native/prebuilt/jniLibs/<abi>/.
 
     python3 build_native.py --abi armv8 --abi x86_64
 
 Gradle runs this script in the task `buildNative`. CI runs it once for each ABI in a
-separate job, and gives the results to the AAR job with `-Psunradar.abis=`.
+separate job, and gives the results to the AAR job with `-Palmucantar.abis=`.
 """
 
 import argparse
@@ -48,8 +48,8 @@ def main() -> None:
             ]
         )
         preset = f"conan-android-{abi}-release"
-        run(["cmake", "--preset", preset, "-DSUNRADAR_WARNINGS_AS_ERRORS=ON"])
-        run(["cmake", "--build", "--preset", preset, "--target", "sunradar_jni"])
+        run(["cmake", "--preset", preset, "-DALMUCANTAR_WARNINGS_AS_ERRORS=ON"])
+        run(["cmake", "--build", "--preset", preset, "--target", "almucantar_jni"])
 
         library = (
             CORE
@@ -57,7 +57,7 @@ def main() -> None:
             / f"android-{abi}-release"
             / "android"
             / "jni"
-            / "libsunradar_jni.so"
+            / "libalmucantar_jni.so"
         )
         target = OUT / ABIS[abi]
         target.mkdir(parents=True, exist_ok=True)

@@ -1,11 +1,11 @@
-import Sunradar
+import Almucantar
 import SwiftUI
 
 /// The drawn sky of the store screenshots: it replaces the camera image in the demo mode. It is the
 /// sky of the website (website/src/sky.ts), drawn with the projection of the app: the gradient from
 /// the altitude of the sun, the glow, the stars, and the skyline with its lit windows.
 struct DemoSky: SwiftUI.View {
-    let view: Sunradar.View
+    let view: Almucantar.View
     let sun: Horizontal?
 
     var body: some SwiftUI.View {
@@ -109,14 +109,14 @@ enum DemoSkyDrawing {
         return (stops[stops.count - 1].1, stops[stops.count - 1].2)
     }
 
-    private static func point(_ view: Sunradar.View, _ azimuth: Double, _ altitude: Double) -> CGPoint? {
+    private static func point(_ view: Almucantar.View, _ azimuth: Double, _ altitude: Double) -> CGPoint? {
         guard let p = try? project(view, Horizontal(azimuthDeg: azimuth, altitudeDeg: altitude)), p.valid else {
             return nil
         }
         return CGPoint(x: p.point.x, y: p.point.y)
     }
 
-    static func draw(_ context: inout GraphicsContext, size: CGSize, view: Sunradar.View, sun: Horizontal?) {
+    static func draw(_ context: inout GraphicsContext, size: CGSize, view: Almucantar.View, sun: Horizontal?) {
         let sunAltitude = sun?.altitudeDeg ?? -30
         let day = min(1, max(0, (sunAltitude + 6) / 12))
         let full = CGRect(origin: .zero, size: size)

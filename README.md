@@ -4,7 +4,7 @@
 
 # sunradar
 
-**Website and web app: <https://andiwand.github.io/sunradar/>**
+**Website and web app: <https://andiwand.github.io/almucantar/>**
 
 sunradar shows the path of the sun on top of the camera image. You can see when the
 sun is at a given place in the sky, for example when you visit a flat. See
@@ -27,23 +27,23 @@ The first pre-release is 0.1.0. It is not ready for all users yet.
 
 | What | Where |
 |---|---|
-| Android app | the APK of [android-v0.1.0](https://github.com/andiwand/sunradar/releases/tag/android-v0.1.0) (a debug build: allow the installation from this source) |
-| Web app | <https://andiwand.github.io/sunradar/app/> (also offline after the first visit) |
+| Android app | the APK of [android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/android-v0.2.0) (a debug build: allow the installation from this source) |
+| Web app | <https://andiwand.github.io/almucantar/app/> (also offline after the first visit) |
 | iOS app | build it from `ios/` (see [`ios/AGENTS.md`](ios/AGENTS.md)); it is not in the App Store |
-| Core packages | the wheels, the npm package, the Android AAR, and the xcframework of [core-v0.1.0](https://github.com/andiwand/sunradar/releases/tag/core-v0.1.0) |
+| Core packages | the wheels, the npm package, the Android AAR, and the xcframework of [core-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/core-v0.2.0) |
 
 The packages are not on PyPI, npm, or Maven Central yet. Install them from the release:
 
 ```sh
 # Wheels for Linux x86_64 and macOS arm64, Python 3.10 to 3.14.
-pip install sunradar --find-links https://github.com/andiwand/sunradar/releases/expanded_assets/core-v0.1.0
-npm install https://github.com/andiwand/sunradar/releases/download/core-v0.1.0/sunradar-core-0.1.0.tgz
+pip install sunradar --find-links https://github.com/andiwand/almucantar/releases/expanded_assets/core-v0.2.0
+npm install https://github.com/andiwand/almucantar/releases/download/core-v0.2.0/sunradar-core-0.1.0.tgz
 ```
 
 For Swift, add the package with the tag `0.1.0`:
 
 ```swift
-.package(url: "https://github.com/andiwand/sunradar.git", from: "0.1.0")
+.package(url: "https://github.com/andiwand/almucantar.git", from: "0.1.0")
 ```
 
 ## Repository layout
@@ -54,10 +54,10 @@ This repository is a monorepo. Each directory is a self-contained project.
 |---|---|
 | `core/` | the C++20 core: solar models, projection, search |
 | `core/python/` | the Python package `sunradar` |
-| `core/android/` | the Android AAR `at.stefl.sunradar:core-android` |
+| `core/android/` | the Android AAR `at.stefl.almucantar:core-android` |
 | `android/` | the Android app (Kotlin, Jetpack Compose) |
 | `core/apple/` | the Swift package `Sunradar` (`Package.swift` at the root) |
-| `core/wasm/` | the npm package `@sunradar/core` (WebAssembly) |
+| `core/wasm/` | the npm package `@almucantar/core` (WebAssembly) |
 | `pwa/` | the PWA (TypeScript, the core as WebAssembly) |
 | `website/` | the website on GitHub Pages; the PWA is under `/app/` |
 | `ios/` | the iOS app (SwiftUI) |

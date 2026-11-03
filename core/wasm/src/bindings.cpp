@@ -1,5 +1,5 @@
-// The WebAssembly binding of the public API (src/sunradar/*.hpp) for the npm package
-// @sunradar/core. It must not include an internal header.
+// The WebAssembly binding of the public API (src/almucantar/*.hpp) for the npm package
+// @almucantar/core. It must not include an internal header.
 //
 // Rules (from the WASM binding of OpenDocument.core):
 // - Values cross as plain JS objects (value_object) or arrays, so they can go through
@@ -17,12 +17,12 @@
 #include <string>
 #include <vector>
 
-#include "sunradar/sunradar.hpp"
+#include "almucantar/almucantar.hpp"
 
 namespace {
 
 using emscripten::val;
-using namespace sunradar;
+using namespace almucantar;
 
 template <typename F>
 auto guarded(F&& f) -> decltype(f()) {
@@ -500,7 +500,7 @@ val defaults_js() {
 
 }  // namespace
 
-EMSCRIPTEN_BINDINGS(sunradar) {
+EMSCRIPTEN_BINDINGS(almucantar) {
   using namespace emscripten;
 
   value_object<Observer>("Observer")

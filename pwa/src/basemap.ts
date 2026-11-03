@@ -1,7 +1,7 @@
 // The offline base map (assets/basemap/basemap.json, Natural Earth): the decode, the search of
 // the places, the time zone of a dropped place, and the drawing in Web Mercator.
 
-import type { Observer } from "@sunradar/core";
+import type { Observer } from "@almucantar/core";
 
 export interface Line {
   /** lon0, lat0, lon1, lat1, ... in degrees. */

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-// Also the Maven artifactId of the AAR: at.stefl.sunradar:core-android.
+// Also the Maven artifactId of the AAR: at.stefl.almucantar:core-android.
 rootProject.name = "core-android"

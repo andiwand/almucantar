@@ -45,7 +45,7 @@ jobs:
         run: conan install . --build=missing -s build_type=Release -s compiler.cppstd=20 -o "&:with_python=True"
 
       - name: Configure
-        run: cmake --preset conan-release -DSUNRADAR_WARNINGS_AS_ERRORS=ON -DPython_EXECUTABLE="$(which python)"
+        run: cmake --preset conan-release -DALMUCANTAR_WARNINGS_AS_ERRORS=ON -DPython_EXECUTABLE="$(which python)"
 
       - name: Build
         run: cmake --build --preset conan-release

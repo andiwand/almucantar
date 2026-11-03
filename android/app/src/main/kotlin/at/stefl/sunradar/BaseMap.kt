@@ -1,6 +1,6 @@
 package at.stefl.sunradar
 
-import at.stefl.sunradar.core.Observer
+import at.stefl.almucantar.core.Observer
 import java.text.Normalizer
 import java.time.DateTimeException
 import java.time.ZoneId

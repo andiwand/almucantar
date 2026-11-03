@@ -32,7 +32,7 @@ jobs:
         working-directory: android
     env:
       # The native libraries come from the native job, so the AAR build does not run Conan.
-      SUNRADAR_ABIS: ""
+      ALMUCANTAR_ABIS: ""
     steps:
       - uses: actions/checkout@v4
 
