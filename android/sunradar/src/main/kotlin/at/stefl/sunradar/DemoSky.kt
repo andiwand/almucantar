@@ -21,8 +21,8 @@ import kotlin.math.min
 
 /**
  * The drawn sky of the demo mode: it replaces the camera image in the store screenshots. It is the
- * sky of the website (`web/sunradar/site/src/sky.ts`) with the projection of the app: the same colors,
- * the same stars, and the same skyline, from the same random generator.
+ * sky of the website (`web/sunradar/site/src/sky.ts`) with the projection of the app: the same
+ * colors, the same stars, and the same skyline, from the same random generator.
  */
 @Composable
 fun DemoSky(modifier: Modifier, view: View, sun: Horizontal) {
