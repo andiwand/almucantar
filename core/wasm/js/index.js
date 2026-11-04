@@ -7,8 +7,19 @@ import createAlmucantarModule from "./almucantar.mjs";
 /** The model that calculates the position of the sun. */
 export const SolarModel = Object.freeze({ noaa: 0, astronomyEngine: 1 });
 
-/** The body of terrainEvents(). */
-export const Body = Object.freeze({ sun: 0, moon: 1 });
+/** The bodies of terrainEvents(), bodyPosition(), findAlignments(), and alignmentLine(). */
+export const Body = Object.freeze({
+  sun: 0,
+  moon: 1,
+  galacticCenter: 2,
+  mercury: 3,
+  venus: 4,
+  mars: 5,
+  jupiter: 6,
+  saturn: 7,
+  uranus: 8,
+  neptune: 9,
+});
 
 /** The planets of planetPosition() and planetMagnitude(). */
 export const Planet = Object.freeze({ mercury: 0, venus: 1, mars: 2, jupiter: 3, saturn: 4, uranus: 5, neptune: 6 });
@@ -35,6 +46,7 @@ function merge(defaults, value) {
   if (defaults.atmosphere) result.atmosphere = { ...defaults.atmosphere, ...(value?.atmosphere ?? {}) };
   if (defaults.camera) result.camera = { ...defaults.camera, ...(value?.camera ?? {}) };
   if (defaults.deviceToEnu) result.deviceToEnu = { ...defaults.deviceToEnu, ...(value?.deviceToEnu ?? {}) };
+  if (defaults.body) result.body = merge(defaults.body, value?.body);
   return result;
 }
 
@@ -75,6 +87,16 @@ export async function load(moduleOptions = {}) {
     terrainAltitudeDeg: (profile, azimuthDeg) => m.terrainAltitudeDeg(profile, azimuthDeg),
     terrainEvents: (observer, profile, startUtc, endUtc, options) =>
       m.terrainEvents(observer, profile, startUtc, endUtc, merge(d.terrainEventOptions, options)),
+    bodyPosition: (body, unixUtc, observer, options) =>
+      m.bodyPosition(body, unixUtc, observer, merge(d.bodyOptions, options)),
+    sight: (from, to, options) => m.sight(from, to, merge(d.sightOptions, options)),
+    findAlignments: (body, observer, direction, startUtc, endUtc, options) =>
+      m.findAlignments(body, observer, direction, startUtc, endUtc, merge(d.alignmentOptions, options)),
+    alignmentLine: (body, target, unixUtc, tiles = [], options) =>
+      m.alignmentLine(body, target, unixUtc, tiles, merge(d.alignmentLineOptions, options)),
+    lineOfSight: (from, to, tiles, options) => m.lineOfSight(from, to, tiles, merge(d.sightOptions, options)),
+    darkWindows: (observer, startUtc, endUtc, options, profile = null) =>
+      m.darkWindows(observer, startUtc, endUtc, merge(d.darkOptions, options), profile),
     magneticDeclinationDeg: (observer, unixUtc) => m.magneticDeclinationDeg(observer, unixUtc),
     cameraFromFov: (width, height, horizontalFovDeg) => m.cameraFromFov(width, height, horizontalFovDeg),
     project: (v, direction) => m.project(view(v), direction),

@@ -14,6 +14,16 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- The photo planner (`almucantar/plan.hpp`), for shotradar: `body_position()` gives the position
+  of any body. `sight()` gives the direction to a landmark with the curvature of the Earth.
+  `find_alignments()` finds the times when a body is behind a landmark ("I stand here"), one
+  year of the moon in a few milliseconds. `alignment_line()` gives the places from which a body
+  is behind a landmark at a time, and on a DEM the spots where the ground has the right height
+  ("where must I stand?"). `line_of_sight()` checks the view over the DEM, and `dark_windows()`
+  finds the dark hours without the sun and the moon, also with the galactic center up. In C++,
+  Python, and WASM.
+- `Body` has the galactic center and the planets after the sun and the moon, and
+  `terrain_events()` takes all of them. `Body` is in `types.hpp` now.
 - The stars: `star_positions()` gives the apparent positions of all stars of a `StarCatalog`
   (J2000 positions and proper motions, as columns) in one call, with the precession, the
   nutation, the annual aberration, and the refraction. 5080 stars take about 1 ms in WebAssembly.

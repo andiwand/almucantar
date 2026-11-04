@@ -26,6 +26,7 @@ set(ALMUCANTAR_SOURCE_FILES
   src/almucantar/magnetic.cpp
   src/almucantar/moon.cpp
   src/almucantar/search.cpp
+  src/almucantar/plan.cpp
   src/almucantar/sky.cpp
   src/almucantar/sun.cpp
   src/almucantar/terrain.cpp
@@ -39,6 +40,7 @@ set(ALMUCANTAR_SOURCE_FILES
   src/almucantar/internal/projection.cpp
   src/almucantar/internal/refraction.cpp
   src/almucantar/internal/search.cpp
+  src/almucantar/internal/dem.cpp
   src/almucantar/internal/solar_model.cpp
   src/almucantar/internal/time.cpp
   src/almucantar/internal/validate.cpp

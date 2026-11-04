@@ -202,7 +202,7 @@ test("terrain: the moon behind the terrain", () => {
   assert.ok(events.crossings.length >= 5 && events.crossings.length <= 7);
   const rise = events.crossings.find((c) => c.rising);
   assert.ok(almucantar.moonPosition(rise.unixUtc + 2, vienna).altitudeDeg + 0.2667 > 0);
-  assert.throws(() => almucantar.terrainEvents(vienna, flat, dayStart, dayStart + day, { body: 9 }), RangeError);
+  assert.throws(() => almucantar.terrainEvents(vienna, flat, dayStart, dayStart + day, { body: 10 }), RangeError);
 });
 
 test("planets, Milky Way, stars, and projectPoints", () => {
@@ -236,4 +236,43 @@ test("planets, Milky Way, stars, and projectPoints", () => {
   assert.equal(one.valid, !Number.isNaN(points[0]));
   if (one.valid) assert.equal(points[0], one.point.x);
   assert.ok(Number.isNaN(points[2]) || Number.isNaN(points[0]));
+});
+
+test("the planner: bodies, sight, alignments, line, line of sight, and darkness", () => {
+  assert.equal(Body.galacticCenter, 2);
+  assert.equal(Body.neptune, 9);
+  const moon = almucantar.bodyPosition(Body.moon, dayStart, vienna);
+  near(moon.azimuthDeg, almucantar.moonPosition(dayStart, vienna).azimuthDeg, 1e-12);
+  const eye = { latitudeDeg: 48.2082, longitudeDeg: 16.3738, elevationM: 170 };
+  const tower = { latitudeDeg: 48.25, longitudeDeg: 16.4, elevationM: 600 };
+  const s = almucantar.sight(eye, tower);
+  assert.ok(s.direction.altitudeDeg > 0 && s.distanceM > 5000);
+  // The moon of one time is found again at that time; the options merge the nested body options.
+  const t0 = dayStart + 3 * day;
+  const found = almucantar.findAlignments(Body.moon, vienna, almucantar.moonPosition(t0, vienna), t0 - day, t0 + day, {
+    maxSeparationDeg: 0.1,
+    body: { refraction: true },
+  });
+  assert.equal(found.length, 1);
+  near(found[0].unixUtc, t0, 2);
+  const line = almucantar.alignmentLine(Body.sun, tower, dayStart + 15 * 3600, [], { maxDistanceM: 5000, stepM: 500 });
+  assert.equal(line.points.length, 10);
+  assert.equal(line.spots.length, 0);
+  assert.ok(Number.isNaN(line.points[0].groundElevationM));
+  assert.deepEqual(structuredClone(line), line);
+  const grid = {
+    northLatitudeDeg: 48.5,
+    westLongitudeDeg: 16,
+    latitudeStepDeg: 1 / 120,
+    longitudeStepDeg: 1 / 120,
+    rows: 61,
+    columns: 91,
+    heightsM: new Float32Array(61 * 91),
+  };
+  assert.equal(almucantar.lineOfSight({ ...eye, elevationM: 2 }, { ...tower, elevationM: 100 }, [grid]).visible, true);
+  const windows = almucantar.darkWindows(vienna, dayStart - 180 * day, dayStart - 175 * day);
+  assert.ok(windows.length > 0 && windows.every((w) => w.endUtc > w.startUtc));
+  assert.ok(almucantar.darkWindows(vienna, dayStart, dayStart + day, { galacticCenter: true }, null).length >= 0);
+  assert.throws(() => almucantar.bodyPosition(10, dayStart, vienna), RangeError);
+  assert.throws(() => almucantar.sight(eye, eye), RangeError);
 });

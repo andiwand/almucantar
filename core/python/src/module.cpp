@@ -588,9 +588,17 @@ void bind_terrain(py::module_& m) {
   m.def("terrain_altitude_deg", &terrain_altitude_deg, "profile"_a, "azimuth_deg"_a,
         "Returns the altitude of the terrain horizon at an azimuth (linear interpolation).");
 
-  py::enum_<Body>(m, "Body", "A body that can rise and set behind the terrain.")
+  py::enum_<Body>(m, "Body", "A body of the sky, for the terrain and for the planner.")
       .value("sun", Body::sun)
-      .value("moon", Body::moon);
+      .value("moon", Body::moon)
+      .value("galactic_center", Body::galactic_center)
+      .value("mercury", Body::mercury)
+      .value("venus", Body::venus)
+      .value("mars", Body::mars)
+      .value("jupiter", Body::jupiter)
+      .value("saturn", Body::saturn)
+      .value("uranus", Body::uranus)
+      .value("neptune", Body::neptune);
 
   const TerrainEventOptions events;
   py::class_<TerrainEventOptions>(m, "TerrainEventOptions")
@@ -622,7 +630,7 @@ void bind_terrain(py::module_& m) {
       .def_readonly("crossings", &TerrainEvents::crossings, "rising is an appearance");
   m.def("terrain_events", &terrain_events, "observer"_a, "profile"_a, "start_utc"_a, "end_utc"_a,
         "options"_a = TerrainEventOptions{},
-        "Finds the times when the sun or the moon crosses the terrain horizon.");
+        "Finds the times when a body crosses the terrain horizon.");
 }
 
 void bind_sky(py::module_& m) {
@@ -681,6 +689,175 @@ void bind_sky(py::module_& m) {
         "Returns the apparent positions of all stars of the catalogue for the observer.");
 }
 
+void bind_plan(py::module_& m) {
+  using namespace almucantar;
+  const BodyOptions body_defaults;
+  py::class_<BodyOptions>(m, "BodyOptions")
+      .def(
+          py::init([](const SolarModel model, const bool refraction, const Atmosphere& atmosphere) {
+            return BodyOptions{.model = model, .refraction = refraction, .atmosphere = atmosphere};
+          }),
+          "model"_a = body_defaults.model, "refraction"_a = body_defaults.refraction,
+          "atmosphere"_a = body_defaults.atmosphere)
+      .def_readwrite("model", &BodyOptions::model)
+      .def_readwrite("refraction", &BodyOptions::refraction)
+      .def_readwrite("atmosphere", &BodyOptions::atmosphere);
+  m.def("body_position", &body_position, "body"_a, "unix_utc"_a, "observer"_a,
+        "options"_a = BodyOptions{}, "Returns the apparent topocentric position of a body.");
+
+  py::class_<Site>(m, "Site", "A point with its height above sea level.")
+      .def(py::init(
+               [](const double latitude_deg, const double longitude_deg, const double elevation_m) {
+                 return Site{.latitude_deg = latitude_deg,
+                             .longitude_deg = longitude_deg,
+                             .elevation_m = elevation_m};
+               }),
+           "latitude_deg"_a = 0.0, "longitude_deg"_a = 0.0, "elevation_m"_a = 0.0)
+      .def_readwrite("latitude_deg", &Site::latitude_deg)
+      .def_readwrite("longitude_deg", &Site::longitude_deg)
+      .def_readwrite("elevation_m", &Site::elevation_m)
+      .def("__repr__", [](const Site& s) {
+        return "Site(latitude_deg=" + num(s.latitude_deg) +
+               ", longitude_deg=" + num(s.longitude_deg) + ", elevation_m=" + num(s.elevation_m) +
+               ")";
+      });
+
+  const SightOptions sight_defaults;
+  py::class_<SightOptions>(m, "SightOptions")
+      .def(py::init([](const double refraction_coefficient) {
+             return SightOptions{.refraction_coefficient = refraction_coefficient};
+           }),
+           "refraction_coefficient"_a = sight_defaults.refraction_coefficient)
+      .def_readwrite("refraction_coefficient", &SightOptions::refraction_coefficient);
+  py::class_<Sight>(m, "Sight", "The direction from one site to another, and the distance.")
+      .def_readonly("direction", &Sight::direction)
+      .def_readonly("distance_m", &Sight::distance_m)
+      .def("__repr__", [](const Sight& s) {
+        return "Sight(direction=" + repr(s.direction) + ", distance_m=" + num(s.distance_m) + ")";
+      });
+  m.def("sight", &sight, "from_"_a, "to"_a, "options"_a = SightOptions{},
+        "Returns the direction in which one site sees another, with the curvature of the Earth.");
+
+  const AlignmentOptions alignment_defaults;
+  py::class_<AlignmentOptions>(m, "AlignmentOptions")
+      .def(py::init([](const BodyOptions& body, const double max_separation_deg,
+                       const double tolerance_s) {
+             return AlignmentOptions{.body = body,
+                                     .max_separation_deg = max_separation_deg,
+                                     .tolerance_s = tolerance_s};
+           }),
+           "body"_a = alignment_defaults.body,
+           "max_separation_deg"_a = alignment_defaults.max_separation_deg,
+           "tolerance_s"_a = alignment_defaults.tolerance_s)
+      .def_readwrite("body", &AlignmentOptions::body)
+      .def_readwrite("max_separation_deg", &AlignmentOptions::max_separation_deg)
+      .def_readwrite("tolerance_s", &AlignmentOptions::tolerance_s);
+  py::class_<Alignment>(m, "Alignment", "A time when a body is near a direction.")
+      .def_readonly("unix_utc", &Alignment::unix_utc)
+      .def_readonly("separation_deg", &Alignment::separation_deg)
+      .def_readonly("body", &Alignment::body)
+      .def("__repr__", [](const Alignment& a) {
+        return "Alignment(unix_utc=" + num(a.unix_utc) +
+               ", separation_deg=" + num(a.separation_deg) + ", body=" + repr(a.body) + ")";
+      });
+  m.def("find_alignments", &find_alignments, "body"_a, "observer"_a, "direction"_a, "start_utc"_a,
+        "end_utc"_a, "options"_a = AlignmentOptions{},
+        "Finds the times when a body is in a fixed direction, for example behind a landmark.");
+
+  const AlignmentLineOptions line_defaults;
+  py::class_<AlignmentLineOptions>(m, "AlignmentLineOptions")
+      .def(py::init([](const BodyOptions& body, const double min_distance_m,
+                       const double max_distance_m, const double step_m, const double eye_height_m,
+                       const double refraction_coefficient) {
+             return AlignmentLineOptions{.body = body,
+                                         .min_distance_m = min_distance_m,
+                                         .max_distance_m = max_distance_m,
+                                         .step_m = step_m,
+                                         .eye_height_m = eye_height_m,
+                                         .refraction_coefficient = refraction_coefficient};
+           }),
+           "body"_a = line_defaults.body, "min_distance_m"_a = line_defaults.min_distance_m,
+           "max_distance_m"_a = line_defaults.max_distance_m, "step_m"_a = line_defaults.step_m,
+           "eye_height_m"_a = line_defaults.eye_height_m,
+           "refraction_coefficient"_a = line_defaults.refraction_coefficient)
+      .def_readwrite("body", &AlignmentLineOptions::body)
+      .def_readwrite("min_distance_m", &AlignmentLineOptions::min_distance_m)
+      .def_readwrite("max_distance_m", &AlignmentLineOptions::max_distance_m)
+      .def_readwrite("step_m", &AlignmentLineOptions::step_m)
+      .def_readwrite("eye_height_m", &AlignmentLineOptions::eye_height_m)
+      .def_readwrite("refraction_coefficient", &AlignmentLineOptions::refraction_coefficient);
+  py::class_<LinePoint>(m, "LinePoint", "A place on the line of an alignment.")
+      .def_readonly("place", &LinePoint::place)
+      .def_readonly("distance_m", &LinePoint::distance_m)
+      .def_readonly("eye_elevation_m", &LinePoint::eye_elevation_m)
+      .def_readonly("ground_elevation_m", &LinePoint::ground_elevation_m)
+      .def_readonly("body", &LinePoint::body)
+      .def("__repr__", [](const LinePoint& p) {
+        return "LinePoint(place=" + repr(p.place) + ", distance_m=" + num(p.distance_m) +
+               ", eye_elevation_m=" + num(p.eye_elevation_m) +
+               ", ground_elevation_m=" + num(p.ground_elevation_m) + ", body=" + repr(p.body) + ")";
+      });
+  py::class_<AlignmentLine>(m, "AlignmentLine", "The places of an alignment, and the spots.")
+      .def_readonly("points", &AlignmentLine::points)
+      .def_readonly("spots", &AlignmentLine::spots);
+  m.def("alignment_line", &alignment_line, "body"_a, "target"_a, "unix_utc"_a,
+        "tiles"_a = std::vector<ElevationGrid>{}, "options"_a = AlignmentLineOptions{},
+        "Returns the places from which a body is behind a landmark at a time.");
+
+  py::class_<LineOfSight>(m, "LineOfSight", "Whether one site sees another over the terrain.")
+      .def_readonly("visible", &LineOfSight::visible)
+      .def_readonly("clearance_deg", &LineOfSight::clearance_deg)
+      .def_readonly("blocking_distance_m", &LineOfSight::blocking_distance_m)
+      .def_readonly("blocking", &LineOfSight::blocking)
+      .def("__repr__", [](const LineOfSight& l) {
+        return std::string("LineOfSight(visible=") + (l.visible ? "True" : "False") +
+               ", clearance_deg=" + num(l.clearance_deg) +
+               ", blocking_distance_m=" + num(l.blocking_distance_m) + ")";
+      });
+  m.def("line_of_sight", &line_of_sight, "from_"_a, "to"_a, "tiles"_a, "options"_a = SightOptions{},
+        "Checks whether one site sees another over the terrain.");
+
+  const DarkOptions dark_defaults;
+  py::class_<DarkOptions>(m, "DarkOptions")
+      .def(py::init([](const double max_sun_altitude_deg, const double max_moon_altitude_deg,
+                       const double max_moon_fraction, const bool galactic_center,
+                       const double min_galactic_center_altitude_deg, const double step_s,
+                       const double tolerance_s) {
+             return DarkOptions{
+                 .max_sun_altitude_deg = max_sun_altitude_deg,
+                 .max_moon_altitude_deg = max_moon_altitude_deg,
+                 .max_moon_fraction = max_moon_fraction,
+                 .galactic_center = galactic_center,
+                 .min_galactic_center_altitude_deg = min_galactic_center_altitude_deg,
+                 .step_s = step_s,
+                 .tolerance_s = tolerance_s};
+           }),
+           "max_sun_altitude_deg"_a = dark_defaults.max_sun_altitude_deg,
+           "max_moon_altitude_deg"_a = dark_defaults.max_moon_altitude_deg,
+           "max_moon_fraction"_a = dark_defaults.max_moon_fraction,
+           "galactic_center"_a = dark_defaults.galactic_center,
+           "min_galactic_center_altitude_deg"_a = dark_defaults.min_galactic_center_altitude_deg,
+           "step_s"_a = dark_defaults.step_s, "tolerance_s"_a = dark_defaults.tolerance_s)
+      .def_readwrite("max_sun_altitude_deg", &DarkOptions::max_sun_altitude_deg)
+      .def_readwrite("max_moon_altitude_deg", &DarkOptions::max_moon_altitude_deg)
+      .def_readwrite("max_moon_fraction", &DarkOptions::max_moon_fraction)
+      .def_readwrite("galactic_center", &DarkOptions::galactic_center)
+      .def_readwrite("min_galactic_center_altitude_deg",
+                     &DarkOptions::min_galactic_center_altitude_deg)
+      .def_readwrite("step_s", &DarkOptions::step_s)
+      .def_readwrite("tolerance_s", &DarkOptions::tolerance_s);
+  py::class_<TimeWindow>(m, "TimeWindow", "An interval of time.")
+      .def_readonly("start_utc", &TimeWindow::start_utc)
+      .def_readonly("end_utc", &TimeWindow::end_utc)
+      .def("__repr__", [](const TimeWindow& w) {
+        return "TimeWindow(start_utc=" + num(w.start_utc) + ", end_utc=" + num(w.end_utc) + ")";
+      });
+  m.def(
+      "dark_windows", &dark_windows, "observer"_a, "start_utc"_a, "end_utc"_a,
+      "options"_a = DarkOptions{}, "profile"_a = HorizonProfile{},
+      "Finds the windows when the sky is dark: no sun, no moon, and the galactic center if asked.");
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -693,6 +870,7 @@ PYBIND11_MODULE(_core, m) {
   bind_moon(m);
   bind_terrain(m);
   bind_sky(m);
+  bind_plan(m);
   m.def(
       "version", [] { return std::string(almucantar::version()); },
       "Returns the version of the core library.");

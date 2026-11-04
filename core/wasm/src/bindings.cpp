@@ -137,6 +137,43 @@ struct TerrainEventOptionsJs {
   }
 };
 
+struct BodyOptionsJs {
+  int model = to_int(BodyOptions{}.model);
+  bool refraction = BodyOptions{}.refraction;
+  Atmosphere atmosphere = BodyOptions{}.atmosphere;
+  [[nodiscard]] BodyOptions get() const {
+    return {.model = to_enum<SolarModel>(model, "model"),
+            .refraction = refraction,
+            .atmosphere = atmosphere};
+  }
+};
+
+struct AlignmentOptionsJs {
+  BodyOptionsJs body;
+  double maxSeparationDeg = AlignmentOptions{}.max_separation_deg;
+  double toleranceS = AlignmentOptions{}.tolerance_s;
+  [[nodiscard]] AlignmentOptions get() const {
+    return {.body = body.get(), .max_separation_deg = maxSeparationDeg, .tolerance_s = toleranceS};
+  }
+};
+
+struct AlignmentLineOptionsJs {
+  BodyOptionsJs body;
+  double minDistanceM = AlignmentLineOptions{}.min_distance_m;
+  double maxDistanceM = AlignmentLineOptions{}.max_distance_m;
+  double stepM = AlignmentLineOptions{}.step_m;
+  double eyeHeightM = AlignmentLineOptions{}.eye_height_m;
+  double refractionCoefficient = AlignmentLineOptions{}.refraction_coefficient;
+  [[nodiscard]] AlignmentLineOptions get() const {
+    return {.body = body.get(),
+            .min_distance_m = minDistanceM,
+            .max_distance_m = maxDistanceM,
+            .step_m = stepM,
+            .eye_height_m = eyeHeightM,
+            .refraction_coefficient = refractionCoefficient};
+  }
+};
+
 val horizontal(const Horizontal& h) {
   val o = val::object();
   o.set("azimuthDeg", h.azimuth_deg);
@@ -556,6 +593,108 @@ val terrain_events_js(const Observer& o, const val& profile, double start, doubl
   });
 }
 
+// The planner (plan.hpp).
+
+std::vector<ElevationGrid> grids_from_js(const val& tiles) {
+  std::vector<ElevationGrid> grids;
+  const auto count = tiles["length"].as<std::size_t>();
+  grids.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    grids.push_back(grid_from_js(tiles[i]));
+  }
+  return grids;
+}
+
+Horizontal body_position_js(int body, double t, const Observer& o, const BodyOptionsJs& opt) {
+  return guarded([&] { return body_position(to_enum<Body>(body, "body"), t, o, opt.get()); });
+}
+
+val sight_js(const Site& from, const Site& to, const SightOptions& opt) {
+  return guarded([&] {
+    const Sight s = sight(from, to, opt);
+    val o = val::object();
+    o.set("direction", horizontal(s.direction));
+    o.set("distanceM", s.distance_m);
+    return o;
+  });
+}
+
+val find_alignments_js(int body, const Observer& o, const Horizontal& direction, double start,
+                       double end, const AlignmentOptionsJs& opt) {
+  return guarded([&] {
+    val result = val::array();
+    for (const Alignment& a :
+         find_alignments(to_enum<Body>(body, "body"), o, direction, start, end, opt.get())) {
+      val x = val::object();
+      x.set("unixUtc", a.unix_utc);
+      x.set("separationDeg", a.separation_deg);
+      x.set("body", horizontal(a.body));
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val line_points_js(const std::vector<LinePoint>& points) {
+  val result = val::array();
+  for (const LinePoint& p : points) {
+    val x = val::object();
+    val place = val::object();
+    place.set("latitudeDeg", p.place.latitude_deg);
+    place.set("longitudeDeg", p.place.longitude_deg);
+    x.set("place", place);
+    x.set("distanceM", p.distance_m);
+    x.set("eyeElevationM", p.eye_elevation_m);
+    x.set("groundElevationM", p.ground_elevation_m);
+    x.set("body", horizontal(p.body));
+    result.call<void>("push", x);
+  }
+  return result;
+}
+
+val alignment_line_js(int body, const Site& target, double t, const val& tiles,
+                      const AlignmentLineOptionsJs& opt) {
+  return guarded([&] {
+    const AlignmentLine line =
+        alignment_line(to_enum<Body>(body, "body"), target, t, grids_from_js(tiles), opt.get());
+    val o = val::object();
+    o.set("points", line_points_js(line.points));
+    o.set("spots", line_points_js(line.spots));
+    return o;
+  });
+}
+
+val line_of_sight_js(const Site& from, const Site& to, const val& tiles, const SightOptions& opt) {
+  return guarded([&] {
+    const LineOfSight l = line_of_sight(from, to, grids_from_js(tiles), opt);
+    val o = val::object();
+    o.set("visible", l.visible);
+    o.set("clearanceDeg", l.clearance_deg);
+    o.set("blockingDistanceM", l.blocking_distance_m);
+    val blocking = val::object();
+    blocking.set("latitudeDeg", l.blocking.latitude_deg);
+    blocking.set("longitudeDeg", l.blocking.longitude_deg);
+    o.set("blocking", blocking);
+    return o;
+  });
+}
+
+val dark_windows_js(const Observer& o, double start, double end, const DarkOptions& opt,
+                    const val& profile) {
+  return guarded([&] {
+    const HorizonProfile p =
+        profile.isNull() || profile.isUndefined() ? HorizonProfile{} : profile_from_js(profile);
+    val result = val::array();
+    for (const TimeWindow& w : dark_windows(o, start, end, opt, p)) {
+      val x = val::object();
+      x.set("startUtc", w.start_utc);
+      x.set("endUtc", w.end_utc);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
 /// The C++ defaults of the option structs, the view, and the heading filter, for index.js.
 val defaults_js() {
   val d = val::object();
@@ -567,6 +706,11 @@ val defaults_js() {
   d.set("skyOptions", SkyOptions{});
   d.set("horizonOptions", HorizonOptions{});
   d.set("terrainEventOptions", TerrainEventOptionsJs{});
+  d.set("bodyOptions", BodyOptionsJs{});
+  d.set("sightOptions", SightOptions{});
+  d.set("alignmentOptions", AlignmentOptionsJs{});
+  d.set("alignmentLineOptions", AlignmentLineOptionsJs{});
+  d.set("darkOptions", DarkOptions{});
   d.set("magnetometerOptions", MagnetometerOptions{});
   d.set("headingEstimate", HeadingEstimate{});
   d.set("camera", Camera{});
@@ -645,6 +789,35 @@ EMSCRIPTEN_BINDINGS(almucantar) {
       .field("limbDeg", &TerrainEventOptionsJs::limbDeg)
       .field("searchStepS", &TerrainEventOptionsJs::searchStepS)
       .field("toleranceS", &TerrainEventOptionsJs::toleranceS);
+  value_object<BodyOptionsJs>("BodyOptions")
+      .field("model", &BodyOptionsJs::model)
+      .field("refraction", &BodyOptionsJs::refraction)
+      .field("atmosphere", &BodyOptionsJs::atmosphere);
+  value_object<Site>("Site")
+      .field("latitudeDeg", &Site::latitude_deg)
+      .field("longitudeDeg", &Site::longitude_deg)
+      .field("elevationM", &Site::elevation_m);
+  value_object<SightOptions>("SightOptions")
+      .field("refractionCoefficient", &SightOptions::refraction_coefficient);
+  value_object<AlignmentOptionsJs>("AlignmentOptions")
+      .field("body", &AlignmentOptionsJs::body)
+      .field("maxSeparationDeg", &AlignmentOptionsJs::maxSeparationDeg)
+      .field("toleranceS", &AlignmentOptionsJs::toleranceS);
+  value_object<AlignmentLineOptionsJs>("AlignmentLineOptions")
+      .field("body", &AlignmentLineOptionsJs::body)
+      .field("minDistanceM", &AlignmentLineOptionsJs::minDistanceM)
+      .field("maxDistanceM", &AlignmentLineOptionsJs::maxDistanceM)
+      .field("stepM", &AlignmentLineOptionsJs::stepM)
+      .field("eyeHeightM", &AlignmentLineOptionsJs::eyeHeightM)
+      .field("refractionCoefficient", &AlignmentLineOptionsJs::refractionCoefficient);
+  value_object<DarkOptions>("DarkOptions")
+      .field("maxSunAltitudeDeg", &DarkOptions::max_sun_altitude_deg)
+      .field("maxMoonAltitudeDeg", &DarkOptions::max_moon_altitude_deg)
+      .field("maxMoonFraction", &DarkOptions::max_moon_fraction)
+      .field("galacticCenter", &DarkOptions::galactic_center)
+      .field("minGalacticCenterAltitudeDeg", &DarkOptions::min_galactic_center_altitude_deg)
+      .field("stepS", &DarkOptions::step_s)
+      .field("toleranceS", &DarkOptions::tolerance_s);
   value_object<Camera>("Camera")
       .field("width", &Camera::width)
       .field("height", &Camera::height)
@@ -701,6 +874,12 @@ EMSCRIPTEN_BINDINGS(almucantar) {
   function("horizonProfile", &horizon_profile_js);
   function("terrainAltitudeDeg", &terrain_altitude_deg_js);
   function("terrainEvents", &terrain_events_js);
+  function("bodyPosition", &body_position_js);
+  function("sight", &sight_js);
+  function("findAlignments", &find_alignments_js);
+  function("alignmentLine", &alignment_line_js);
+  function("lineOfSight", &line_of_sight_js);
+  function("darkWindows", &dark_windows_js);
   function("magneticDeclinationDeg", &magnetic_declination_js);
   function("cameraFromFov", &camera_from_fov_js);
   function("project", &project_js);

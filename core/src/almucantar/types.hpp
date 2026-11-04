@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace almucantar {
 
 /// A place on the Earth, in geodetic coordinates (WGS 84).
@@ -42,6 +44,22 @@ struct ScreenPoint {
 struct Atmosphere {
   double pressure_hpa = 1010;
   double temperature_c = 10;
+};
+
+/// A body of the sky: for the rise and set behind the terrain (`terrain_events()`) and for the
+/// planner (`body_position()`, `find_alignments()`). New bodies come at the end, so the values of
+/// the bindings stay.
+enum class Body : std::uint8_t {
+  sun,
+  moon,
+  galactic_center,  ///< the center of the Milky Way (Sagittarius A*)
+  mercury,
+  venus,
+  mars,
+  jupiter,
+  saturn,
+  uranus,
+  neptune,
 };
 
 }  // namespace almucantar

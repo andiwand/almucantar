@@ -442,7 +442,7 @@ TEST_CASE("terrain_events finds the moon behind the terrain", "[terrain]") {
   REQUIRE(first(terrain_events(vienna, constant_profile(0), start, end), true) !=
           first(flat, true));
   REQUIRE_THROWS_AS(
-      terrain_events(vienna, constant_profile(0), start, end, {.body = static_cast<Body>(7)}),
+      terrain_events(vienna, constant_profile(0), start, end, {.body = static_cast<Body>(10)}),
       std::invalid_argument);
 }
 

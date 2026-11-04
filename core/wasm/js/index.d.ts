@@ -9,7 +9,11 @@ export interface Vector3 { x: number; y: number; z: number }
 export interface ScreenPoint { x: number; y: number }
 
 export declare const SolarModel: { readonly noaa: 0; readonly astronomyEngine: 1 };
-export declare const Body: { readonly sun: 0; readonly moon: 1 };
+/** The bodies of terrainEvents(), bodyPosition(), findAlignments(), and alignmentLine(). */
+export declare const Body: {
+  readonly sun: 0; readonly moon: 1; readonly galacticCenter: 2; readonly mercury: 3; readonly venus: 4;
+  readonly mars: 5; readonly jupiter: 6; readonly saturn: 7; readonly uranus: 8; readonly neptune: 9;
+};
 export declare const DayKind: { readonly normal: 0; readonly polarDay: 1; readonly polarNight: 2 };
 export declare const ScreenRotation: {
   readonly rotation0: 0; readonly rotation90: 1; readonly rotation180: 2; readonly rotation270: 3;
@@ -78,13 +82,41 @@ export interface HorizonProfile {
   observerElevationM: number;
 }
 export interface TerrainEventOptions {
-  /** Body.sun (the default) or Body.moon. */
+  /** A value of Body; Body.sun is the default. */
   body: number;
   model: number; refraction: boolean; atmosphere: Atmosphere; limbDeg: number; searchStepS: number;
   toleranceS: number;
 }
 /** The times when the body appears (rising) or goes away behind the terrain. */
 export interface TerrainEvents { kind: number; crossings: Crossing[] }
+
+/** The planner (shotradar): a body of the sky behind a landmark. */
+export interface BodyOptions { model: number; refraction: boolean; atmosphere: Atmosphere }
+/** A point with its height above sea level: the ground, an eye, or the top of a landmark. */
+export interface Site { latitudeDeg: number; longitudeDeg: number; elevationM: number }
+export interface SightOptions { refractionCoefficient: number }
+export interface Sight { direction: Horizontal; distanceM: number }
+export interface AlignmentOptions { body: BodyOptions; maxSeparationDeg: number; toleranceS: number }
+export interface Alignment { unixUtc: number; separationDeg: number; body: Horizontal }
+export interface AlignmentLineOptions {
+  body: BodyOptions; minDistanceM: number; maxDistanceM: number; stepM: number; eyeHeightM: number;
+  refractionCoefficient: number;
+}
+export interface LinePoint {
+  place: Observer; distanceM: number;
+  /** The elevation of the eye at which the landmark is in front of the body. */
+  eyeElevationM: number;
+  /** NaN without tiles. */
+  groundElevationM: number;
+  body: Horizontal;
+}
+export interface AlignmentLine { points: LinePoint[]; spots: LinePoint[] }
+export interface LineOfSight { visible: boolean; clearanceDeg: number; blockingDistanceM: number; blocking: Observer }
+export interface DarkOptions {
+  maxSunAltitudeDeg: number; maxMoonAltitudeDeg: number; maxMoonFraction: number; galacticCenter: boolean;
+  minGalacticCenterAltitudeDeg: number; stepS: number; toleranceS: number;
+}
+export interface TimeWindow { startUtc: number; endUtc: number }
 
 export interface Camera {
   width: number; height: number; fx: number; fy: number; cx: number; cy: number;
@@ -128,6 +160,11 @@ export interface Almucantar {
     readonly skyOptions: Readonly<SkyOptions>;
     readonly horizonOptions: Readonly<HorizonOptions>;
     readonly terrainEventOptions: Readonly<TerrainEventOptions>;
+    readonly bodyOptions: Readonly<BodyOptions>;
+    readonly sightOptions: Readonly<SightOptions>;
+    readonly alignmentOptions: Readonly<AlignmentOptions>;
+    readonly alignmentLineOptions: Readonly<AlignmentLineOptions>;
+    readonly darkOptions: Readonly<DarkOptions>;
     readonly magnetometerOptions: Readonly<MagnetometerOptions>;
     readonly headingEstimate: Readonly<HeadingEstimate>;
     readonly camera: Readonly<Camera>;
@@ -180,6 +217,18 @@ export interface Almucantar {
   horizonProfile(observer: Observer, tiles: ElevationGrid[], options?: Partial<HorizonOptions>): HorizonProfile;
   terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: number): number;
   terrainEvents(observer: Observer, profile: HorizonProfile, startUtc: number, endUtc: number, options?: Partial2<TerrainEventOptions>): TerrainEvents;
+  /** The apparent position of any body (a value of Body). */
+  bodyPosition(body: number, unixUtc: number, observer: Observer, options?: Partial2<BodyOptions>): Horizontal;
+  /** The direction in which one site sees another, with the curvature of the Earth and the refraction. */
+  sight(from: Site, to: Site, options?: Partial<SightOptions>): Sight;
+  /** "I stand here": the times when the body is in the direction, for example of a landmark. */
+  findAlignments(body: number, observer: Observer, direction: Horizontal, startUtc: number, endUtc: number, options?: Partial2<AlignmentOptions>): Alignment[];
+  /** "Where must I stand?": the places from which the body is behind the target at the time. */
+  alignmentLine(body: number, target: Site, unixUtc: number, tiles?: ElevationGrid[], options?: Partial2<AlignmentLineOptions>): AlignmentLine;
+  /** Whether the eye at from sees to over the terrain of the tiles. */
+  lineOfSight(from: Site, to: Site, tiles: ElevationGrid[], options?: Partial<SightOptions>): LineOfSight;
+  /** The windows when the sky is dark; the moon and the galactic center over the terrain of the profile. */
+  darkWindows(observer: Observer, startUtc: number, endUtc: number, options?: Partial<DarkOptions>, profile?: HorizonProfile | null): TimeWindow[];
   magneticDeclinationDeg(observer: Observer, unixUtc: number): number;
   cameraFromFov(width: number, height: number, horizontalFovDeg: number): Camera;
   project(view: Partial2<View>, direction: Horizontal): Projection;

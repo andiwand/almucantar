@@ -11,6 +11,7 @@ add_executable(almucantar_test
   src/test_moon.cpp
   src/test_path.cpp
   src/test_search.cpp
+  src/test_plan.cpp
   src/test_sky.cpp
   src/test_sun.cpp
   src/test_terrain.cpp

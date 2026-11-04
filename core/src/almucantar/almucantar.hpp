@@ -5,6 +5,7 @@
 #include "almucantar/heading.hpp"   // IWYU pragma: export
 #include "almucantar/magnetic.hpp"  // IWYU pragma: export
 #include "almucantar/moon.hpp"      // IWYU pragma: export
+#include "almucantar/plan.hpp"      // IWYU pragma: export
 #include "almucantar/search.hpp"    // IWYU pragma: export
 #include "almucantar/sky.hpp"       // IWYU pragma: export
 #include "almucantar/sun.hpp"       // IWYU pragma: export

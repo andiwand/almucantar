@@ -11,13 +11,12 @@
 #include <utility>
 #include <vector>
 
-#include "almucantar/internal/astronomy_engine.hpp"
+#include "almucantar/internal/dem.hpp"
 #include "almucantar/internal/geotiff.hpp"
 #include "almucantar/internal/math.hpp"
 #include "almucantar/internal/numeric.hpp"
-#include "almucantar/internal/refraction.hpp"
-#include "almucantar/internal/solar_model.hpp"
 #include "almucantar/internal/validate.hpp"
+#include "almucantar/plan.hpp"
 
 namespace almucantar {
 
@@ -29,33 +28,14 @@ using internal::require;
 using internal::require_finite;
 using internal::require_positive;
 
-/// The mean radius of the Earth (IUGG). The sphere is sufficient for the angles of the terrain:
-/// the ellipsoid changes a distance of 100 km by less than 0.5%.
-constexpr double kEarthRadiusM = 6'371'008.8;
+using internal::height_in_tiles;
+using internal::kEarthRadiusM;
+using internal::SortedTiles;
 constexpr double kMaxDistanceM = 500'000;
-constexpr double kMaxGridSamples = 200'000'000;
 constexpr double kMaxSearchSteps = 1'000'000;
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 /// The limit of the Web Mercator projection: the map is a square.
 constexpr double kMaxMercatorLatitudeDeg = 85.0511287798;
-
-void validate(const ElevationGrid& grid) {
-  require_finite(grid.north_latitude_deg, "north_latitude_deg");
-  require_finite(grid.west_longitude_deg, "west_longitude_deg");
-  require_positive(grid.latitude_step_deg, "latitude_step_deg");
-  require_positive(grid.longitude_step_deg, "longitude_step_deg");
-  require(grid.rows >= 2, "rows is less than 2");
-  require(grid.columns >= 2, "columns is less than 2");
-  require(static_cast<double>(grid.rows) * grid.columns <= kMaxGridSamples,
-          "the grid has more than 200,000,000 samples");
-  require(grid.heights_m.size() ==
-              static_cast<std::size_t>(grid.rows) * static_cast<std::size_t>(grid.columns),
-          "heights_m does not have rows * columns values");
-  require(grid.north_latitude_deg <= 90, "north_latitude_deg is greater than 90");
-  require(grid.north_latitude_deg - (grid.rows - 1) * grid.latitude_step_deg >= -90,
-          "the grid goes south of -90");
-  require((grid.columns - 1) * grid.longitude_step_deg < 360, "the grid is wider than 360°");
-}
 
 /// The number of azimuths of a profile with `step_deg`, or 0 if 360 is not a multiple of it.
 std::size_t azimuth_count(const double step_deg) {
@@ -71,63 +51,6 @@ void validate(const HorizonProfile& profile) {
   require_positive(profile.azimuth_step_deg, "azimuth_step_deg");
   require(azimuth_count(profile.azimuth_step_deg) == profile.altitude_deg.size(),
           "the profile does not have 360 / azimuth_step_deg values");
-}
-
-/// Returns the height at a place with a bilinear interpolation, or nothing if the place is
-/// outside the grid or a neighbor has no data. A place up to `margin` cells outside the edge uses
-/// the samples at the edge, so the gap between two tiles has data.
-std::optional<double> height_at(const ElevationGrid& grid, const double latitude_deg,
-                                const double longitude_deg, const double margin) {
-  double row = (grid.north_latitude_deg - latitude_deg) / grid.latitude_step_deg;
-  double column =
-      internal::wrap_360(longitude_deg - grid.west_longitude_deg) / grid.longitude_step_deg;
-  const double full_turn = 360 / grid.longitude_step_deg;
-  if (column > full_turn - margin) {
-    column -= full_turn;  // a place just west of the grid
-  }
-  const double last_row = grid.rows - 1;
-  const double last_column = grid.columns - 1;
-  if (row < -margin || row > last_row + margin || column < -margin ||
-      column > last_column + margin) {
-    return std::nullopt;
-  }
-  row = std::clamp(row, 0.0, last_row);
-  column = std::clamp(column, 0.0, last_column);
-  const int r = std::min(static_cast<int>(row), grid.rows - 2);
-  const int c = std::min(static_cast<int>(column), grid.columns - 2);
-  const double u = row - r;
-  const double v = column - c;
-  const auto at = [&grid](const int rr, const int cc) {
-    const std::size_t index =
-        (static_cast<std::size_t>(rr) * static_cast<std::size_t>(grid.columns)) +
-        static_cast<std::size_t>(cc);
-    return static_cast<double>(grid.heights_m[index]);
-  };
-  const double h = ((1 - u) * ((1 - v) * at(r, c) + v * at(r, c + 1))) +
-                   (u * ((1 - v) * at(r + 1, c) + v * at(r + 1, c + 1)));
-  if (std::isnan(h)) {
-    return std::nullopt;
-  }
-  return h;
-}
-
-/// The tiles of a profile, from the smallest cells to the largest.
-using SortedTiles = std::vector<const ElevationGrid*>;
-
-/// Returns the height at a place from the tile with the smallest cells that has data there. Tiles
-/// can overlap, for example a fine tile near the observer on top of a coarse one.
-std::optional<double> height_in_tiles(const SortedTiles& tiles, const double latitude_deg,
-                                      const double longitude_deg) {
-  // A margin of 1.5 cells, because the gap between two Web Mercator tiles in a grid with equal
-  // steps of latitude (see terrarium_grid()) can be a little larger than one step.
-  for (const double margin : {0.0, 1.5}) {
-    for (const ElevationGrid* tile : tiles) {
-      if (const auto h = height_at(*tile, latitude_deg, longitude_deg, margin)) {
-        return h;
-      }
-    }
-  }
-  return std::nullopt;
 }
 
 /// The distance from the observer to the nearest point of a box in latitude and longitude. The
@@ -207,16 +130,12 @@ RayResult trace_ray(const SortedTiles& tiles, const Observer& observer, const do
   return result;
 }
 
-/// The apparent altitude of the sun plus the limb, minus the terrain. Positive if the sun is
-/// visible.
-double clearance_deg(const internal::SolarModelImpl& model, const Observer& observer,
-                     const HorizonProfile& profile, const TerrainEventOptions& options,
-                     const double unix_utc) {
-  Horizontal body = options.body == Body::moon ? internal::moon_airless(unix_utc, observer)
-                                               : model.sun(unix_utc, observer);
-  if (options.refraction) {
-    body = internal::refracted(body, options.atmosphere);
-  }
+/// The altitude of the body plus the limb, minus the terrain. Positive if the body is visible.
+double clearance_deg(const Observer& observer, const HorizonProfile& profile,
+                     const TerrainEventOptions& options, const double unix_utc) {
+  const Horizontal body = body_position(
+      options.body, unix_utc, observer,
+      {.model = options.model, .refraction = options.refraction, .atmosphere = options.atmosphere});
   const double terrain = terrain_altitude_deg(profile, body.azimuth_deg);
   return body.altitude_deg + options.limb_deg - (std::isnan(terrain) ? 0.0 : terrain);
 }
@@ -353,25 +272,7 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
                                const HorizonOptions& options) {
   internal::validate(observer);
   require(!tiles.empty(), "tiles is empty");
-  require(tiles.size() <= 1000, "tiles has more than 1000 grids");
-  for (const ElevationGrid& grid : tiles) {
-    validate(grid);
-  }
-  // The tiles from the smallest cells to the largest, so a fine tile wins where tiles overlap.
-  // The cell size uses the latitude of the observer, which is good enough for an order.
-  const double cos_observer = std::max(std::cos(observer.latitude_deg * kDegToRad), 0.01);
-  SortedTiles sorted;
-  sorted.reserve(tiles.size());
-  for (const ElevationGrid& grid : tiles) {
-    sorted.push_back(&grid);
-  }
-  // Equal cells are ordered by their north-west corner, so the result does not depend on the
-  // order of the tiles (the edges of two tiles share the samples of the margin).
-  const auto key = [cos_observer](const ElevationGrid* g) {
-    return std::tuple{std::min(g->latitude_step_deg, g->longitude_step_deg * cos_observer),
-                      -g->north_latitude_deg, g->west_longitude_deg};
-  };
-  std::ranges::sort(sorted, {}, key);
+  const SortedTiles sorted = internal::sort_tiles(tiles, observer.latitude_deg);
   require_positive(options.azimuth_step_deg, "azimuth_step_deg");
   const std::size_t count = azimuth_count(options.azimuth_step_deg);
   require(count > 0, "360 is not a multiple of azimuth_step_deg");
@@ -401,15 +302,7 @@ HorizonProfile horizon_profile(const Observer& observer, const std::vector<Eleva
   }
   const double eye_m = profile.observer_elevation_m + options.eye_height_m;
 
-  // The size of a cell in meters, the smaller of the two directions. Near a pole the columns get
-  // narrow, so the cosine has a lower limit.
-  const double meters_per_degree = kEarthRadiusM * kDegToRad;
-  const double cos_lat = std::max(std::cos(observer.latitude_deg * kDegToRad), 0.01);
-  double cell_m = std::numeric_limits<double>::infinity();
-  for (const ElevationGrid& grid : tiles) {
-    cell_m = std::min({cell_m, grid.latitude_step_deg * meters_per_degree,
-                       grid.longitude_step_deg * meters_per_degree * cos_lat});
-  }
+  const double cell_m = internal::smallest_cell_m(tiles, observer.latitude_deg);
 
   profile.altitude_deg.resize(count);
   profile.distance_m.resize(count);
@@ -443,7 +336,7 @@ TerrainEvents terrain_events(const Observer& observer, const HorizonProfile& pro
   require_finite(end_utc, "end_utc");
   require(end_utc > start_utc, "end_utc is not after start_utc");
   validate(profile);
-  require(options.body == Body::sun || options.body == Body::moon, "body is not a Body");
+  require(static_cast<int>(options.body) <= static_cast<int>(Body::neptune), "body is not a Body");
   require_finite(options.limb_deg, "limb_deg");
   require_positive(options.search_step_s, "search_step_s");
   require_positive(options.tolerance_s, "tolerance_s");
@@ -453,10 +346,7 @@ TerrainEvents terrain_events(const Observer& observer, const HorizonProfile& pro
     internal::validate(options.atmosphere);
   }
 
-  const internal::SolarModelImpl& model = internal::solar_model(options.model);
-  const auto f = [&](const double t) {
-    return clearance_deg(model, observer, profile, options, t);
-  };
+  const auto f = [&](const double t) { return clearance_deg(observer, profile, options, t); };
 
   TerrainEvents events;
   double t0 = start_utc;
