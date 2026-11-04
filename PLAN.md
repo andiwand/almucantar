@@ -898,13 +898,14 @@ workspace: `web/home/`, `web/sunradar/{app,site}/`, `web/starradar/{app,site}/`,
 
 #### The order of the work
 
-**Status (2026-11-03):** steps 1 to 5 are done. The core has `star_positions()` and
+**Status (2026-11-04):** steps 1 to 5 are done. The core has `star_positions()` and
 `project_points()` (5080 stars in about 1 ms in WebAssembly, tested against an independent
 calculation and for the aberration and the proper motion). The PWA (`web/starradar/app`) and the
 website (`web/starradar/site`) are on GitHub Pages under `/starradar/`. The licenses of the star
 data are in `assets/stars/README.md`; the one of the Bright Star Catalogue rests on an answer of
 the ADC, not on a license text. The Android app (`android/starradar`) is done too, with the same
-features as the PWA. Next: the iOS app, and the field test of the alignment with a star.
+features as the PWA, and so is the iOS app (`ios/Starradar`). Next: the field test of the
+alignment with a star.
 
 1. The layout: the folders of the workspace, the page of the family, and sunradar under
    `/sunradar/`.

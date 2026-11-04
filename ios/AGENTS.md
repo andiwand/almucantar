@@ -10,6 +10,9 @@ for the features and the behavior.
   if the shared code uses a type of an app, and `AlmucantarSharedTests` tests it with
   `@testable import AlmucantarShared`.
 - `Sunradar/` is the app sunradar (target `SunradarApp`, bundle `at.stefl.sunradar`).
+- `Starradar/` is the app starradar (target `StarradarApp`, bundle `at.stefl.starradar`, PLAN.md
+  14.2): the stars, the constellations, the planets, the moon, and the Milky Way over the terrain.
+  `StarradarTests` tests its data code with `@testable import StarradarApp`.
 - A new app is a new application target with `sources: [Shared, <App>]`. Code goes to `Shared/`
   when a second app needs it, not before. `Shared/` never uses a type of an app: data that only an
   app knows goes in as a parameter, as `LocationProvider(loadsStoredPlace:)` does.
@@ -21,6 +24,8 @@ for the features and the behavior.
 | `project.yml` | The XcodeGen project. `xcodegen generate` writes `Almucantar.xcodeproj`, which is not in Git. |
 | `Sunradar/SunradarApp.swift` | The entry point. |
 | `Sunradar/SkyScreen.swift` | The sky view: the drawing, the readout, the time panel, the align menu, and the detected sun. |
+| `Shared/SkyDrawing.swift` | The drawing helpers of the sky views (`SkyDrawing`): the point and the lines of a projection, upright labels, the arrow at the border of the screen, the terrain fill, and the moon with its phase. `SkyOrientation` gives the screen rotation and the upright device of the drag view. `skyPanel()` is the dark panel over the sky. |
+| `Shared/TimePanel.swift` | The date and time sliders, and `TimePanel.time`, the selected time on the wall clock of the place. |
 | `Shared/MapPicker.swift` | The MapKit map to pick a landmark. |
 | `Shared/BaseMap.swift` | The offline base map (`assets/basemap/basemap.json`, Natural Earth, a resource of the app): the decode, the search, the nearest place and its time zone, and Web Mercator (`MapViewport`). `BaseMapStore` decodes it once, off the main thread. |
 | `Shared/PlacePanel.swift` | The place panel: the search and the offline map, drawn with a `Canvas` (`BaseMapDrawing`), where a tap drops the place. It also has "Keep offline" and the list of the kept places. |
@@ -37,6 +42,13 @@ for the features and the behavior.
 | `Sunradar/TerrainDay.swift` | The hidden parts of the sun path and the visible sunrise and sunset (`TerrainDay`, `TerrainDayCache`). |
 | `Shared/Settings.swift` | The keys of the settings in UserDefaults. |
 | `Sunradar/SettingsView.swift` | The settings (the terrain horizon) and the credits. |
+| `Starradar/StarradarApp.swift` | The entry point of starradar: it reads `stars.json` (`assets/stars/`, a resource of the app) and keeps the screen on. |
+| `Starradar/StarScreen.swift` | The sky view of starradar: the Milky Way, the constellation lines, the stars (size from the magnitude, color from B−V, down to the limit of the twilight), the names, the planets, the moon, the sun, the horizon, the terrain, and the selection or the arrow to it. The tap with the info card (rise and set over the terrain, in the background), Find (`FindPanel`), Align (a tap on an object to magnitude 2.5), the pinch zoom, the time panel, the place panel, and the red light. |
+| `Starradar/Sky.swift` | `SkyAt`: the sky at one time (`starPositions` for the stars, the names of the constellations, and the Milky Way, once per second in `SkyCache`), and the targets (`Target`) with their name, direction, and rise and set (samples every 10 minutes). `horizonAt` is the terrain altitude for a frame. |
+| `Starradar/StarData.swift` | The decoder of `stars.json`, the planets with their colors (`planetStyles`), and `StarLook` (size, color, limiting magnitude, twilight), the same rules as Android and `web/shared/src/stars.ts`. |
+| `Starradar/MilkyWay.swift` | The points of the Milky Way in the galactic system, with `JavaRandom`, so the points are the same as on Android. |
+| `Starradar/SettingsView.swift` | The settings (constellation lines, terrain, red light) and the credits of the data. |
+| `StarradarTests/` | The tests of the star data, the look of the stars, the Milky Way, the random numbers, the rise and set, and `horizonAt`. |
 | `SharedTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
 | `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
 | `fastlane/` | The lanes `screenshots` and `upload_listing`. |
@@ -48,23 +60,25 @@ for the features and the behavior.
 
 1. Build the xcframework: `python3 core/apple/build_xcframework.py` at the root.
 2. Make the project: `xcodegen generate` in `ios/`.
-3. Build for the simulator:
+3. Build for the simulator. For starradar, use the scheme `StarradarApp`:
 
    ```sh
    xcodebuild -project Almucantar.xcodeproj -scheme SunradarApp \
      -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd build
    ```
 
-4. Run the tests: use the scheme `AlmucantarShared`, replace `build` with `test`, and give a
-   simulator as the destination, for example `-destination 'platform=iOS Simulator,name=iPhone 15'`.
-5. Install it with `xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Sunradar.app`.
+4. Run the tests: use the scheme `AlmucantarShared` (or `StarradarApp` for the tests of
+   starradar), replace `build` with `test`, and give a simulator as the destination, for example
+   `-destination 'platform=iOS Simulator,name=iPhone 15'`.
+5. Install it with `xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Sunradar.app`
+   (or `Starradar.app`).
 
 The simulator has no motion sensors and no camera. The app then shows a sky view that you
 move with a drag. Set the location with `xcrun simctl location booted set <lat>,<lon>`.
 
 ## Rules
 
-- The module name of the app sunradar is `SunradarApp`. `View` is in both SwiftUI and the package
+- The module names of the apps are `SunradarApp` and `StarradarApp`. `View` is in both SwiftUI and the package
   `Almucantar`, so write `SwiftUI.View` and `Almucantar.View`.
 - The interface orientation gives the `ScreenRotation`: `landscapeRight` is `rotation90` (the
   top of the device is on the left), and `landscapeLeft` is `rotation270`. This is the same
@@ -121,7 +135,13 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
 - `DemCache` downloads an entry only once at the same time: a second request waits for the running
   download (`pending`) and gets its result.
 - `terrainAltitudeDeg()` converts the whole profile for each call. Call it when the profile or the
-  day changes (`TerrainDayCache`), not for each frame.
+  day changes (`TerrainDayCache`), not for each frame. A frame of starradar needs the terrain for
+  each star, so it uses `horizonAt`, the same interpolation in Swift. A test compares the two.
+- The sky of starradar changes once per second (`SkyCache`). A frame only projects it with
+  `projectPoints()`. The stars of the same brightness and color go into one path, because one fill
+  for each of 5000 stars is slow.
+- The alignment of starradar sets the time to now and takes the direction of the object now,
+  because the user points at the real sky.
 
 ## Screenshots
 

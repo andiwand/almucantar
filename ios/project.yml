@@ -84,6 +84,64 @@ targets:
         NSCameraUsageDescription: Sunradar shows the path of the sun on the camera image.
         NSLocationWhenInUseUsageDescription: Sunradar needs your place to calculate the position of the sun.
         NSMotionUsageDescription: Sunradar uses the motion sensors to know where the phone points.
+  StarradarApp:
+    type: application
+    platform: iOS
+    sources:
+      - Shared
+      - path: Starradar
+        excludes: [CHANGELOG.md]
+      - path: ../assets/basemap/basemap.json
+        buildPhase: resources
+      # The star data (PLAN.md 14.2), the same file as in the Android app and the web app.
+      - path: ../assets/stars/stars.json
+        buildPhase: resources
+    dependencies:
+      - package: Almucantar
+        product: Almucantar
+    settings:
+      base:
+        PRODUCT_NAME: Starradar
+        PRODUCT_MODULE_NAME: StarradarApp
+        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.starradar
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    scheme:
+      testTargets: [StarradarTests]
+    info:
+      path: Starradar/Info.plist
+      properties:
+        CFBundleDisplayName: Starradar
+        UILaunchScreen: {}
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: Starradar shows the stars on the camera image.
+        NSLocationWhenInUseUsageDescription: Starradar needs your place to calculate the positions of the stars.
+        NSMotionUsageDescription: Starradar uses the motion sensors to know where the phone points.
+  # The tests of the data of starradar. They run in the app, because the app owns the code.
+  StarradarTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - StarradarTests
+      - path: ../assets/stars/stars.json
+        buildPhase: resources
+    dependencies:
+      - target: StarradarApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: "5.0"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Starradar.app/Starradar"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
   # The store screenshots: a UI test that starts the app in its demo mode (screenshots/README.md).
   SunradarUITests:
     type: bundle.ui-testing

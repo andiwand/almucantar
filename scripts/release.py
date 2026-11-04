@@ -63,7 +63,7 @@ PROJECTS = {
         "stamps": [
             (
                 "ios/project.yml",
-                r'(MARKETING_VERSION: ")[^"]*(")',
+                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.sunradar\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )
         ],
@@ -95,6 +95,24 @@ PROJECTS = {
         ],
         "changelog": "android/starradar/CHANGELOG.md",
         "stamps": [],
+    },
+    "starradar-ios": {
+        "paths": [
+            "ios/Starradar/**",
+            "ios/StarradarTests/**",
+            "ios/Shared/**",
+            "ios/SharedTests/**",
+            "ios/project.yml",
+            "assets/stars/**",
+        ],
+        "changelog": "ios/Starradar/CHANGELOG.md",
+        "stamps": [
+            (
+                "ios/project.yml",
+                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.starradar\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
+                r"\g<1>{version}\g<2>",
+            )
+        ],
     },
     "starradar-pwa": {
         "paths": [

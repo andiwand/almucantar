@@ -18,8 +18,8 @@ a shared part and one part for each app.
 | Path | What | Has `AGENTS.md` |
 |---|---|---|
 | `core/` | The C++ library almucantar with all its bindings (Python, Android, WASM, and Apple). There is one core for all apps. | yes |
-| `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
-| `ios/` | The iOS apps: one XcodeGen project with `Shared/` and one folder per app (`Sunradar/`). It uses the Swift package of `core/apple`. | yes |
+| `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`, `starradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
+| `ios/` | The iOS apps: one XcodeGen project with `Shared/` and one folder per app (`Sunradar/`, `Starradar/`). It uses the Swift package of `core/apple`. | yes |
 | `web/` | One npm workspace: `shared/` (`@almucantar/web-shared`), the page of the family (`home/`), and for each app its PWA and its website (`sunradar/app/`, `sunradar/site/`, `starradar/app/`, `starradar/site/`). It uses `core/wasm`. The workflow `web.yml` deploys them to GitHub Pages: `/`, `/sunradar/`, `/sunradar/app/`, `/starradar/`, and `/starradar/app/`. | yes |
 | `assets/` | The logos, the offline base map (`assets/basemap/`), and the star data (`assets/stars/`). | no |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
@@ -68,8 +68,8 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 ## Releasing
 
 Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages), and one
-project for each app on each platform: `sunradar-android-vX.Y.Z`, `sunradar-ios-vX.Y.Z`, and
-`sunradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app and
+project for each app on each platform: `sunradar-android-vX.Y.Z`, `sunradar-ios-vX.Y.Z`,
+`sunradar-pwa-vX.Y.Z`, and the same three for starradar. The paths of a project in `scripts/release.py` are the paths of its app and
 the shared part of its platform. The flow is the one of OpenDocument.core.
 
 1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that
@@ -80,7 +80,7 @@ the shared part of its platform. The flow is the one of OpenDocument.core.
    draft release.
 4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
    Maven Central, and the Swift package) or `android-release.yml` (the APK). The PWA needs no publish step, because
-   GitHub Pages deploys `main`. The iOS app has no publish
+   GitHub Pages deploys `main`. The iOS apps have no publish
    workflow yet, because the App Store needs an Apple developer account.
 
 `scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,

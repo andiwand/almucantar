@@ -64,10 +64,10 @@ are grouped by platform: each platform is one build with a shared part and one p
 | Path | Content |
 |---|---|
 | `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
-| `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/` and `sunradar/` |
-| `ios/` | the iOS apps (SwiftUI): `Shared/` and `Sunradar/` |
+| `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/`, `sunradar/`, and `starradar/` |
+| `ios/` | the iOS apps (SwiftUI): `Shared/`, `Sunradar/`, and `Starradar/` |
 | `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and for each app `app/` and `site/` (on GitHub Pages under `/sunradar/` and `/starradar/`) |
-| `assets/` | the logo and the offline base map |
+| `assets/` | the logos, the offline base map, and the star data |
 
 ## License
 
