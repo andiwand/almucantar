@@ -3,89 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#2a1f3d" />
+    <meta name="theme-color" content="#f3ece1" />
     <title>Shotradar</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
-    <canvas id="map" role="img" aria-label="The map with the landmark and the places"></canvas>
-
-    <header id="top">
-      <div id="brand">
+    <header id="bar">
+      <button id="back" class="icon" aria-label="Back">←</button>
+      <button id="home" class="brand" aria-label="Start">
         <img src="./icon.svg" alt="" width="28" height="28" />
         <span>Shotradar</span>
-      </div>
-      <div id="search-box">
+      </button>
+      <ol id="trail" aria-label="The steps"></ol>
+    </header>
+
+    <main id="page"></main>
+
+    <section id="map-screen" class="hidden" aria-label="The map">
+      <canvas id="map" role="img" aria-label="The map of the terrain"></canvas>
+      <div id="map-search">
         <input id="search" type="search" placeholder="Search a place" autocomplete="off" />
         <div id="results" class="hidden"></div>
       </div>
-    </header>
-
-    <div id="hint" class="hidden"></div>
-
-    <section id="sheet" aria-label="The plan">
-      <nav id="steps">
-        <button data-step="subject"><b>1</b> Subject</button>
-        <button data-step="landmark"><b>2</b> Landmark</button>
-        <button data-step="plan"><b>3</b> Plan</button>
-      </nav>
-
-      <div id="step-subject" class="step">
-        <p class="lead">What do you want in the picture?</p>
-        <div id="subjects" class="chips"></div>
-      </div>
-
-      <div id="step-landmark" class="step hidden">
-        <p class="lead">Tap the landmark on the map: a peak, a tower, a church.</p>
-        <div id="landmark-info" class="card hidden"></div>
-        <label class="field">
-          Height above the ground
-          <input id="landmark-height" type="number" min="0" max="900" step="1" value="0" />
-          m
-        </label>
-        <button id="to-plan" class="primary" disabled>Plan the shot</button>
-      </div>
-
-      <div id="step-plan" class="step hidden">
-        <div class="tabs">
-          <button id="mode-here">I stand here</button>
-          <button id="mode-where">Where must I stand?</button>
-        </div>
-
-        <div id="here">
-          <div id="spot-info" class="card"></div>
-          <div class="row">
-            <button id="pick-spot">Pick my spot on the map</button>
-            <button id="use-location">Use my location</button>
-          </div>
-          <button id="find-dates" class="primary">Find the dates</button>
-          <ol id="matches"></ol>
-        </div>
-
-        <div id="where" class="hidden">
-          <div class="row">
-            <label class="field">Date <input id="date" type="date" /></label>
-            <span id="time-label" class="mono"></span>
-          </div>
-          <input id="time" type="range" min="0" max="1435" step="5" aria-label="The time" />
-          <div id="events" class="row"></div>
-          <div id="line-info" class="card"></div>
-          <div id="spot-card" class="card hidden"></div>
-        </div>
-      </div>
-
-      <p id="credits">
-        Terrain:
-        <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md"
-          >Terrain Tiles on AWS</a
-        >. Map: Natural Earth. Calculations:
-        <a href="https://github.com/andiwand/almucantar">almucantar</a>.
-      </p>
+      <div id="map-card" class="card"></div>
     </section>
 
-    <noscript><p class="panel">Shotradar needs JavaScript.</p></noscript>
+    <noscript><p class="card">Shotradar needs JavaScript.</p></noscript>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

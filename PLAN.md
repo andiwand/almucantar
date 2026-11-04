@@ -822,6 +822,22 @@ plans a shot. A web search found no app with this name.
 5. **The map** is the main view: the place, the landmark, the line to the subject, and the line
    of the spots. The AR view (the camera view of sunradar and starradar) is the check at the place.
 
+**Revised (2026-11-04), after the first prototype:** every way ends in the shot, the photo in
+first person from the spot (the terrain, the landmark, the subject and its path, a time slider,
+and a lens). There are two ways in:
+
+- **A: I have a landmark**: the subject, the landmark, then "I know my spot" (the dates) or "Find
+  me a spot" (a moment, then the spots on the map).
+- **B: From where I am**, now or on some days: the subjects over the real horizon of the place,
+  without a landmark, and the peaks of the horizon that they pass.
+
+**Next: the eclipses.** The solar and the lunar eclipses, both seen from a place: where and when
+they are visible, the path of the totality of a solar eclipse, the times of the phases (the
+contacts), the part of the sun that the moon covers, and the eclipse over the real horizon (an
+eclipse at sunrise behind a mountain). Astronomy Engine has the searches (the local solar
+eclipse, the lunar eclipse, the global solar eclipse); the core gets them in `plan.hpp`, and the app
+a third way in (C: an eclipse) and the eclipse in the photo.
+
 #### The core
 
 A new public header `almucantar/plan.hpp`, with tests against independent calculations. C++,
@@ -836,6 +852,7 @@ Python, and WASM first (the PWA needs it); the AAR and the Swift package follow 
 | `alignment_line()` | "Where must I stand?": for a time, the places behind the landmark (in the opposite direction of the body) and the height of the eye that puts the landmark on the body. With DEM tiles, also the ground on the line and the spots where the ground plus the eye has that height. The direction of the moon changes with the place (the parallax, up to 1°), so the function calculates the moon for each point. |
 | `line_of_sight()` | whether the landmark is visible from a spot over the DEM, the clearance, and the point that blocks the view. |
 | `dark_windows()` | the windows of darkness: the sun below a limit (−18° by default), the moon below the horizon or nearly new, and, if asked, the galactic center above the terrain. |
+| `SightOptions.target_margin_m` | `line_of_sight()` ignores the flanks of a summit just below its top: a DEM smooths a summit. |
 
 #### The order of the work
 

@@ -7,31 +7,46 @@ planet behind a landmark. Vite, TypeScript, the core `@almucantar/core`, and the
 
 ## The workflow
 
-1. **Subject**: the moon, the Milky Way (its center), the sun, Venus, Jupiter, Saturn, or Mars.
-2. **Landmark**: a tap on the map. The landmark snaps to the highest point within 14 pixels (at
-   most 300 m), because a tap is a few pixels off a summit. The height of the ground comes from the
-   Terrarium tile of zoom 13; the user adds the height of a building.
-3. **Plan**, in two modes:
-   - "I stand here": the spot is a tap on the map or the location of the device. `sight()` gives the
-     direction of the landmark, `findAlignments()` the dates and times of the next 12 months, and
-     `lineOfSight()` checks the view. A match shows the phase of the moon, the light of the sky, and
-     a button to the spots of its time. Without a match, the app says why, if the direction is out
-     of the declinations of the subject.
-   - "Where must I stand?": a date and a time (with buttons for the rise and the set of the
-     subject), `alignmentLine()` up to 30 km, its spots, and `lineOfSight()` for each spot. A spot
-     with a clear view is a full dot, a blocked one is a ring. "Stand here" makes a spot the spot of
-     "I stand here".
+Every way through the app ends in **the shot**: the first-person photo from the spot
+(`@almucantar/web-shared/photo`, the same drawing as the website), with the terrain of the spot in
+layers, the landmark, the subject and its path with the hours, the stars and the Milky Way at night,
+the frame of a lens (24 to 600 mm), and a time slider.
+
+- **A: I have a landmark.** The subject (seven boxes: the moon, the Milky Way, the sun, and four
+  planets), then the landmark on the map (a tap snaps to the highest point within 14 pixels, at
+  most 300 m), then one of two ways:
+  - **I know my spot**: the spot on the map or the location of the device. `findAlignments()` gives
+    the dates of the next 12 months as a contact sheet of photos; `lineOfSight()` checks the view.
+    Without a match, the app compares the declination of the landmark with the range of the subject
+    in that year (`noMatchReason`).
+  - **Find me a spot**: a moment (the next times when the subject is low over the horizon, near the
+    full moon or in a dark sky, or a time of the user), then the line of `alignmentLine()` on the
+    map, with the spots (a full dot has a clear view). A spot opens its shot.
+- **B: From where I am.** The place, then the days (now: 14 days; or a first day and a number of
+  days). The app calculates the horizon of the place and gives two contact sheets:
+  - **The sky from here**: each subject while it is over the real terrain (`terrainEvents()` with
+    the skyline) and the sky is dark enough for it (`darkWindows()`), without a landmark. With all
+    subjects, the sheet has the first night of each subject and "+ N more nights".
+  - **Behind a peak**: the prominent peaks of the skyline (`findPeaks`) and the subjects that pass
+    them (`findAlignments()`).
+
+A moon below 10 % lit is not a shot, and each subject has a limit of the light of the sky (the
+Milky Way at −15°, the planets at −4° to −8°).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/main.ts` | The app: the state (in localStorage, `shotradar-state-v1`), the map (the shaded relief, the base map of `@almucantar/web-shared/basemap` with a light style, the gestures), the steps, the two modes, and the search of the places. |
-| `src/relief.ts` | Pure functions: the Terrarium height of a pixel and between pixels, the latitude of a tile row, and the shaded relief of a tile (the color of the height, times the light from the north-west). |
-| `src/style.css` | The look: warm paper, the dusk colors of the logo, monospace numbers, and the sheet (at the bottom on a phone, a column at the left on a desktop). |
+| `src/main.ts` | The screens and the navigation (a stack of screens with the history of the browser, and the strip of film of the steps), the contact sheets, and the shot. |
+| `src/search.ts` | The searches without the screens: the subjects, `datesFor`, `momentsFor`, `peakTargets`, `shotsFromPlace`, `skyFromPlace`, and `noMatchReason`. |
+| `src/horizon.ts` | The horizon of a spot: four bands of distance (0.25 to 2.5 km, to 9 km, to 30 km, to 90 km) of `horizonProfile()` with their own tiles, the skyline, and the peaks of a skyline. |
+| `src/tiles.ts` | The Terrarium tiles: the cache, the decoded tiles, the height of the ground, the summit near a tap, and the grids of the core. |
+| `src/mapview.ts` | The map: the shaded relief, the base map with a light style, the gestures, and the marks (the landmark, the spot, lines, and dots). |
+| `src/relief.ts` | Pure functions: the Terrarium height, the latitude of a tile row, and the shaded relief of a tile. |
+| `src/style.css` | The look of the website: paper with a grain, serif titles, monospace numbers, cards with the corners of a viewfinder, and the strip of film. |
 | `public/` | The manifest, the icon (`assets/shotradar-logo.svg`), and the service worker (cache prefix `shotradar:`). |
-| `index.html` | The page: the map, the top bar with the search, and the sheet with the steps. |
-| `test/` | The relief functions, and the offline cache of the service worker. |
+| `index.html` | The bar, the page of the screens, and the map screen. |
+| `test/` | The relief, the horizon and the peaks, and the offline cache of the service worker. |
 
 ## Build and test
 
@@ -53,8 +68,13 @@ npm run format:check -w shotradar/app
   draws the tiles of the nearest whole zoom (2 to 13) and scales them; while a tile loads, a part of
   a tile of a lower zoom stands in.
 - The grids of the core have zoom 11 (about 50 m per pixel in the Alps). The line, the spots, and
-  the line of sight of "Where must I stand?" use the tiles within 30 km of the landmark; the line of
-  sight of "I stand here" uses the tiles around the middle of the way, up to 40 km.
+  the line of sight of "Find me a spot" use the tiles within 30 km of the landmark; the line of
+  sight of "I know my spot" uses the tiles around the middle of the way, up to 40 km. The line of
+  sight ignores the ground just before the landmark (`targetMarginM`, 8 % of the distance, 300 m
+  to 1.5 km), because a DEM smooths a summit.
+- The horizon of a spot takes about a second in WebAssembly, so the app keeps it for each spot and
+  shows its progress. The photos of a contact sheet are drawn one after the other.
 - Terrarium is a surface model in many places (buildings and forests), so a spot in a forest can be
   "blocked" by the trees of the model.
-- All dates and times are in the time zone of the landmark (the nearest place of the base map).
+- All dates and times of a shot are in the time zone of its spot (the nearest place of the base
+  map).
