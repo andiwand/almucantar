@@ -839,6 +839,9 @@ Python, and WASM first (the PWA needs it); the AAR and the Swift package follow 
 
 #### The order of the work
 
+**Status (2026-11-04):** step 1 is done (`plan.hpp` in C++, Python, and WASM). A prototype of the
+PWA (`web/shotradar/app`) and the website (`web/shotradar/site`) exist.
+
 1. The core (`plan.hpp`), with the Python and the WASM bindings.
 2. The PWA (`web/shotradar/app`): the workflow above, on the map of `web/shared`.
 3. The website (`web/shotradar/site`): a scroll story like the other two, with its own design. It

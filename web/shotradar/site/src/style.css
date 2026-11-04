@@ -1,0 +1,675 @@
+/* The website of shotradar. The scroll story has the form of the websites of sunradar and
+   starradar, with its own look: a warm paper like a contact sheet, one print that develops while
+   you scroll, serif headings like a photo book, the numbers of a camera in a monospace face, and
+   cards like prints with the corners of a viewfinder. The colors come from the logo. */
+
+:root {
+  --paper: #f3ece1;
+  --paper-deep: #e9dfcf;
+  --print: #fffaf2;
+  --ink: #2a1f3d;
+  --ink-soft: #5d5170;
+  --muted: #7a6d7f;
+  --rose: #8a4a55;
+  --apricot: #e8955e;
+  --cream: #fff3d6;
+  --night: #1d1426;
+  --line: rgba(42, 31, 61, 0.12);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* The column of the cards. src/scene.ts puts the print next to it with the same values. */
+  --margin: clamp(20px, 4vw, 64px);
+  --column: min(400px, 34vw);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The paper: a warm tone with a fine grain (an SVG noise in the page, not a download). */
+html {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(255, 250, 240, 0.9), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(232, 149, 94, 0.1), transparent 55%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.12 0 0 0 0 0.24 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font: 17px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--rose);
+  text-underline-offset: 3px;
+}
+
+/* The print is behind the page. Only the cards and the links take the pointer. */
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+.hero,
+main {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.card,
+.rest,
+.hero-inner {
+  pointer-events: auto;
+}
+
+/* --- The hero ------------------------------------------------------------------------------ */
+
+.hero {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  padding: 6vh var(--margin);
+}
+.hero-inner {
+  width: calc(var(--column) + 40px);
+  max-width: 100%;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 28px;
+  font: 600 13px/1 var(--mono);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.brand img {
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(42, 31, 61, 0.25);
+}
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(46px, 5.6vw, 84px);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  margin: 0 0 22px;
+  color: var(--ink);
+}
+.lead {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 18px;
+}
+.actions {
+  margin-top: 28px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.button {
+  display: inline-block;
+  padding: 11px 20px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  text-decoration: none;
+  color: var(--ink);
+  background: transparent;
+  font: 600 14px/1.2 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
+}
+.button:hover,
+.button:focus-visible {
+  background: rgba(42, 31, 61, 0.06);
+}
+.button.primary {
+  background: var(--ink);
+  color: var(--cream);
+  box-shadow: 0 8px 24px rgba(42, 31, 61, 0.22);
+}
+.button.primary:hover,
+.button.primary:focus-visible {
+  background: var(--rose);
+  border-color: var(--rose);
+}
+
+/* The data of the shot, like the strip under a slide. */
+.exif {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+  margin: 36px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.exif div {
+  min-width: 0;
+}
+.exif dt {
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--rose);
+}
+.exif dd {
+  margin: 2px 0 0;
+  font: 14px/1.4 var(--mono);
+  color: var(--ink);
+}
+.scroll-hint {
+  margin: 30px 0 0;
+  font: 12px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.scroll-hint::after {
+  content: " ↓";
+}
+
+/* --- The chapters ---------------------------------------------------------------------------- */
+
+/* A chapter is taller than the screen. Its card stays while the print changes. */
+.chapter {
+  height: 250vh;
+  padding: 12vh var(--margin) 0;
+}
+.card {
+  position: sticky;
+  top: max(64px, 16vh);
+  width: var(--column);
+  padding: 26px 28px 24px;
+  background: var(--print);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 18px 50px rgba(42, 31, 61, 0.14),
+    0 2px 6px rgba(42, 31, 61, 0.06);
+}
+/* The corners of a viewfinder, in ink. */
+.card::before,
+.card::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  pointer-events: none;
+}
+.card::before {
+  top: 9px;
+  left: 9px;
+  border-right: none;
+  border-bottom: none;
+}
+.card::after {
+  bottom: 9px;
+  right: 9px;
+  border-left: none;
+  border-top: none;
+}
+.card p {
+  margin: 0 0 12px;
+}
+/* The number of the frame, like the edge of a film. */
+.step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--rose);
+}
+.step span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--cream);
+  letter-spacing: 0.06em;
+}
+.step b {
+  font-weight: 600;
+}
+.step::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 10px);
+}
+h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(27px, 2.6vw, 34px);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 16px 0 12px;
+}
+.card p:not(.step) {
+  color: var(--ink-soft);
+}
+.readout {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.big {
+  font: 500 24px/1.2 var(--mono);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.readout .muted + .muted {
+  margin-top: 8px;
+}
+.small {
+  font-size: 14px;
+}
+
+/* The subjects: chips like the labels on a box of film. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.chips li {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  transition:
+    background 0.25s,
+    color 0.25s,
+    border-color 0.25s;
+}
+.chips li.active {
+  background: var(--apricot);
+  border-color: var(--apricot);
+  color: var(--night);
+}
+
+/* The calendar: a strip of frames, like a contact sheet. */
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 8px;
+  list-style: none;
+  background: var(--night);
+  border-radius: 2px;
+}
+.sheet li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 2px 6px;
+  border: 1px solid rgba(255, 243, 214, 0.12);
+  color: rgba(255, 243, 214, 0.55);
+  font: 10px/1.2 var(--mono);
+  text-align: center;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
+}
+.sheet li span {
+  display: flex;
+  flex-direction: column;
+}
+.sheet li b {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.sheet svg {
+  width: 22px;
+  height: 22px;
+}
+.sheet .dark {
+  fill: rgba(255, 243, 214, 0.12);
+}
+.sheet .lit {
+  fill: var(--cream);
+}
+.sheet li.story {
+  border-color: rgba(232, 149, 94, 0.6);
+}
+.sheet li.active {
+  background: rgba(255, 243, 214, 0.1);
+  border-color: var(--apricot);
+  color: var(--cream);
+}
+
+/* --- The rail: a strip of film with one frame for each chapter ------------------------------- */
+
+#rail {
+  position: fixed;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 5px;
+  background: var(--night);
+  border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(42, 31, 61, 0.25);
+}
+#rail button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 243, 214, 0.18);
+  border-radius: 1px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+#rail button i {
+  font: normal 600 9px/1 var(--mono);
+  color: rgba(255, 243, 214, 0.5);
+}
+#rail button.done {
+  border-color: rgba(255, 243, 214, 0.35);
+}
+#rail button.done i {
+  color: rgba(255, 243, 214, 0.8);
+}
+#rail button.active {
+  background: var(--apricot);
+  border-color: var(--apricot);
+}
+#rail button.active i {
+  color: var(--night);
+}
+#rail button span {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--print);
+  border: 1px solid var(--line);
+  padding: 5px 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+/* The names show only when the pointer is on the rail, so they never cover the print. */
+#rail:hover button span,
+#rail button:focus-visible span {
+  opacity: 1;
+}
+
+/* --- The playground -------------------------------------------------------------------------- */
+
+.play {
+  height: 170vh;
+  padding: 0 var(--margin);
+}
+.play label {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rose);
+}
+.play label[hidden] {
+  display: none;
+}
+select {
+  width: 100%;
+  min-width: 0;
+  font: 14px/1.3 var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 8px 10px;
+}
+.actions.left {
+  margin-top: 18px;
+}
+
+/* --- The rest of the page -------------------------------------------------------------------- */
+
+.rest {
+  position: relative;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12vh 24px 0;
+}
+.rest section {
+  margin: 0 0 80px;
+}
+.rest h2 {
+  font-size: clamp(32px, 4vw, 46px);
+  max-width: 16em;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+.tile {
+  display: block;
+  background: var(--print);
+  border: 1px solid var(--line);
+  padding: 20px 20px 18px;
+  box-shadow: 0 10px 30px rgba(42, 31, 61, 0.08);
+}
+.tile h3 {
+  margin: 0 0 8px;
+  font: 600 12px/1.4 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rose);
+}
+.tile p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 16px;
+}
+a.tile {
+  text-decoration: none;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+a.tile:hover,
+a.tile:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(42, 31, 61, 0.14);
+}
+a.tile h3::after {
+  content: " →";
+}
+table {
+  border-collapse: collapse;
+  margin: 32px 0 16px;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  width: 34%;
+}
+td {
+  font-family: var(--mono);
+  font-size: 14px;
+}
+footer {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 36px 0 56px;
+  border-top: 1px solid var(--line);
+}
+footer p {
+  max-width: 52em;
+}
+
+/* --- A narrow screen: the print at the top, the card at the bottom --------------------------- */
+
+@media (max-width: 859px) {
+  .hero {
+    align-items: flex-end;
+    padding: 48vh 18px 28px;
+  }
+  .hero-inner {
+    width: auto;
+  }
+  .brand {
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 44px;
+    margin-bottom: 12px;
+  }
+  .lead {
+    font-size: 16px;
+  }
+  .exif {
+    margin-top: 22px;
+    gap: 10px 16px;
+  }
+  .scroll-hint {
+    display: none;
+  }
+  .chapter,
+  .play {
+    padding: 0 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .card {
+    top: auto;
+    bottom: 10px;
+    width: auto;
+    margin-bottom: 10px;
+    padding: 16px 18px 14px;
+  }
+  .card::before,
+  .card::after {
+    width: 12px;
+    height: 12px;
+  }
+  .card::before {
+    top: 6px;
+    left: 6px;
+  }
+  .card::after {
+    bottom: 6px;
+    right: 6px;
+  }
+  h2 {
+    font-size: 24px;
+    margin: 10px 0 8px;
+  }
+  .card p:not(.step) {
+    font-size: 15px;
+    line-height: 1.45;
+    margin-bottom: 8px;
+  }
+  .readout {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  .big {
+    font-size: 19px;
+  }
+  .muted {
+    font-size: 14px;
+  }
+  .sheet {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 3px;
+    padding: 5px;
+    margin-top: 10px;
+  }
+  .sheet li {
+    padding: 5px 0 4px;
+    font-size: 8px;
+  }
+  .sheet li span {
+    display: none;
+  }
+  .sheet svg {
+    width: 16px;
+    height: 16px;
+  }
+  .chips {
+    margin-top: 8px;
+  }
+  #rail {
+    display: none;
+  }
+  /* The rest covers the print, so it has the paper as its background. */
+  .rest {
+    padding-top: 8vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
