@@ -225,6 +225,68 @@ final class AlmucantarTests: XCTestCase {
         XCTAssertThrowsError(try terrainEvents(observer: vienna, profile: flat, startUtc: 10, endUtc: 10))
     }
 
+    // MARK: - The sky
+
+    /// The angle between two directions, in degrees.
+    private func angleDeg(_ a: Horizontal, _ b: Horizontal) -> Double {
+        let r = Double.pi / 180
+        let c = sin(a.altitudeDeg * r) * sin(b.altitudeDeg * r)
+            + cos(a.altitudeDeg * r) * cos(b.altitudeDeg * r) * cos((a.azimuthDeg - b.azimuthDeg) * r)
+        return acos(min(1, max(-1, c))) / r
+    }
+
+    func testPlanetsAndMilkyWay() throws {
+        let venus = try planetPosition(.venus, unixUtc: dayStart, observer: vienna)
+        XCTAssertTrue((0..<360).contains(venus.azimuthDeg))
+        let airless = try planetPosition(.venus, unixUtc: dayStart, observer: vienna, options: SkyOptions(refraction: false))
+        XCTAssertGreaterThanOrEqual(venus.altitudeDeg, airless.altitudeDeg)
+        XCTAssertLessThan(try planetMagnitude(.venus, unixUtc: dayStart), -3)
+        XCTAssertEqual(Planet.allCases.count, 7)
+        let center = try galacticPosition(
+            longitudeDeg: galacticCenterLongitudeDeg, latitudeDeg: galacticCenterLatitudeDeg, unixUtc: dayStart,
+            observer: vienna)
+        let plane = try galacticPlane(unixUtc: dayStart, observer: vienna, stepDeg: 2)
+        XCTAssertEqual(plane.count, 180)
+        XCTAssertEqual(plane[0].azimuthDeg, center.azimuthDeg, accuracy: 1e-9)
+        XCTAssertThrowsError(try galacticPlane(unixUtc: dayStart, observer: vienna, stepDeg: 0))
+        XCTAssertEqual(SkyOptions().refraction, sr_default_sky_options().refraction)
+        XCTAssertEqual(SkyOptions().atmosphere.pressureHpa, sr_default_sky_options().atmosphere.pressure_hpa)
+    }
+
+    func testStarPositionsAndProjectPoints() throws {
+        // The north celestial pole is at the latitude of the observer; Sirius is a normal star.
+        let catalog = StarCatalog(raDeg: [0, 101.28708], decDeg: [90, -16.71611])
+        let stars = try starPositions(catalog, unixUtc: dayStart, observer: vienna, options: SkyOptions(refraction: false))
+        XCTAssertEqual(stars.count, 2)
+        XCTAssertEqual(stars[0].altitudeDeg, vienna.latitudeDeg, accuracy: 0.5)
+        // Sirius is at l = 227.23°, b = -8.89°. Both are airless, because the refraction is large near the horizon.
+        let sirius = try galacticPosition(
+            longitudeDeg: 227.23, latitudeDeg: -8.89, unixUtc: dayStart, observer: vienna, options: SkyOptions(refraction: false))
+        XCTAssertEqual(angleDeg(stars[1], sirius), 0, accuracy: 0.1)
+        // The proper motion moves a star; an empty column is 0.
+        let moving = StarCatalog(raDeg: [101.28708], decDeg: [-16.71611], pmRaArcsecPerYear: [-0.546], pmDecArcsecPerYear: [-1.223])
+        let moved = try starPositions(moving, unixUtc: dayStart, observer: vienna)
+        let still = try starPositions(StarCatalog(raDeg: [101.28708], decDeg: [-16.71611]), unixUtc: dayStart, observer: vienna)
+        XCTAssertGreaterThan(angleDeg(moved[0], still[0]), 0.005)
+        XCTAssertThrowsError(try starPositions(StarCatalog(raDeg: [1, 2], decDeg: [1]), unixUtc: dayStart, observer: vienna)) {
+            XCTAssertEqual(($0 as? AlmucantarError)?.kind, .invalidArgument)
+        }
+        XCTAssertThrowsError(
+            try starPositions(
+                StarCatalog(raDeg: [1], decDeg: [1], pmRaArcsecPerYear: [0]), unixUtc: dayStart, observer: vienna))
+        XCTAssertEqual(try starPositions(StarCatalog(raDeg: [], decDeg: []), unixUtc: dayStart, observer: vienna).count, 0)
+
+        let view = View(deviceToEnu: northUpright)
+        let points = try projectPoints(
+            view, [Horizontal(azimuthDeg: 0, altitudeDeg: 0), Horizontal(azimuthDeg: 180, altitudeDeg: 0)])
+        XCTAssertEqual(points.count, 2)
+        XCTAssertTrue(points[0].valid)
+        XCTAssertEqual(points[0].point.x, try project(view, Horizontal(azimuthDeg: 0, altitudeDeg: 0)).point.x, accuracy: 1e-9)
+        XCTAssertFalse(points[1].valid)
+        XCTAssertEqual(try projectPoints(view, []).count, 0)
+        XCTAssertThrowsError(try projectPoints(view, [Horizontal(azimuthDeg: .nan, altitudeDeg: 0)]))
+    }
+
     func testTerrainDefaultsComeFromCpp() {
         XCTAssertEqual(HorizonOptions().c.azimuth_step_deg, sr_default_horizon_options().azimuth_step_deg)
         XCTAssertEqual(HorizonOptions().c.max_distance_m, sr_default_horizon_options().max_distance_m)

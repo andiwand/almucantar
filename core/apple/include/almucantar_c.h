@@ -171,6 +171,22 @@ typedef struct sr_terrain_events {
   size_t crossing_count;
 } sr_terrain_events;
 
+/* The planets, the Milky Way, and the stars (almucantar/sky.hpp). */
+typedef struct sr_sky_options {
+  bool refraction;
+  sr_atmosphere atmosphere;
+} sr_sky_options;
+/* A catalogue of stars as columns with count values each: J2000 positions at the epoch 2000.0, and
+   the proper motions in arcseconds per year (pm_ra is d(ra)/dt * cos(dec)). Both proper motion
+   columns can be NULL, which means 0 for all stars. A function only borrows the columns. */
+typedef struct sr_star_catalog {
+  const double* ra_deg;
+  const double* dec_deg;
+  const double* pm_ra_arcsec_per_year;
+  const double* pm_dec_arcsec_per_year;
+  size_t count;
+} sr_star_catalog;
+
 /* The C++ defaults. */
 sr_sun_options sr_default_sun_options(void);
 sr_event_options sr_default_event_options(void);
@@ -184,7 +200,11 @@ sr_camera sr_default_camera(void);
 sr_view sr_default_view(void);
 sr_horizon_options sr_default_horizon_options(void);
 sr_terrain_event_options sr_default_terrain_event_options(void);
+sr_sky_options sr_default_sky_options(void);
 double sr_sunrise_altitude_deg(void);
+/* The center of the Milky Way (Sagittarius A*) in galactic coordinates. */
+double sr_galactic_center_longitude_deg(void);
+double sr_galactic_center_latitude_deg(void);
 double sr_unknown_heading_variance_deg2(void);
 double sr_default_heading_drift_deg2_per_s(void);
 
@@ -208,6 +228,9 @@ sr_status sr_project(sr_view view, sr_horizontal direction, sr_projection* out);
 sr_status sr_unproject(sr_view view, sr_screen_point point, sr_horizontal* out);
 sr_status sr_project_line(sr_view view, const sr_horizontal* line, size_t count, sr_polylines* out);
 sr_status sr_horizon_line(sr_view view, sr_polylines* out);
+/* Projects count directions in one call. On success, free *out with sr_free(). */
+sr_status sr_project_points(sr_view view, const sr_horizontal* directions, size_t count,
+                            sr_projection** out);
 void sr_free_polylines(sr_polylines* lines);
 sr_status sr_find_time(sr_observer observer, sr_horizontal direction, double start_utc,
                        double end_utc, sr_search_options options, sr_time_match* out);
@@ -261,6 +284,21 @@ sr_status sr_terrain_altitude_deg(const sr_horizon_profile* profile, double azim
 sr_status sr_find_terrain_events(sr_observer observer, const sr_horizon_profile* profile,
                                  double start_utc, double end_utc, sr_terrain_event_options options,
                                  sr_terrain_events* out);
+
+/* The planet is the value of the C++ enum: 0 Mercury, 1 Venus, 2 Mars, 3 Jupiter, 4 Saturn,
+   5 Uranus, 6 Neptune. */
+sr_status sr_planet_position(int planet, double unix_utc, sr_observer observer,
+                             sr_sky_options options, sr_horizontal* out);
+sr_status sr_planet_magnitude(int planet, double unix_utc, double* out);
+sr_status sr_galactic_position(double galactic_longitude_deg, double galactic_latitude_deg,
+                               double unix_utc, sr_observer observer, sr_sky_options options,
+                               sr_horizontal* out);
+/* On success, free *out with sr_free(). */
+sr_status sr_galactic_plane(double unix_utc, sr_observer observer, double step_deg,
+                            sr_sky_options options, sr_horizontal** out, size_t* count);
+/* The positions in the order of the catalogue. On success, free *out with sr_free(). */
+sr_status sr_star_positions(const sr_star_catalog* catalog, double unix_utc, sr_observer observer,
+                            sr_sky_options options, sr_horizontal** out, size_t* count);
 
 #ifdef __cplusplus
 }

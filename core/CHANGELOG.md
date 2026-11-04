@@ -20,7 +20,11 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   `project_points()` projects many directions in one call. In C++, Python, WASM, and the AAR.
 - The AAR has the planets, the Milky Way, and the stars: `planetPosition()`, `planetMagnitude()`,
   `galacticPosition()`, `galacticPlane()`, `starPositions()`, and `projectPoints()`, with
-  `Planet`, `SkyOptions`, and `StarCatalog`. The Swift package does not have them yet.
+  `Planet`, `SkyOptions`, and `StarCatalog`.
+- The Swift package has the planets, the Milky Way, and the stars: `planetPosition()`,
+  `planetMagnitude()`, `galacticPosition()`, `galacticPlane()`, `starPositions()`, and
+  `projectPoints()`, with `Planet`, `SkyOptions`, `StarCatalog`, and the galactic center. The C API
+  has the same functions with the prefix `sr_`.
 - The WASM package has the planets and the Milky Way: `planetPosition()`, `planetMagnitude()`,
   `galacticPosition()`, and `galacticPlane()`, with `Planet` and `GALACTIC_CENTER`. In
   `starPositions()` and `projectPoints()`, the stars and the points cross as flat `Float64Array`s.

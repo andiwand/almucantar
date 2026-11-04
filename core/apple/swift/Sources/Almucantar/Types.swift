@@ -523,6 +523,50 @@ public struct TerrainEvents: Sendable {
     public var crossings: [Crossing]
 }
 
+/// The planets of planetPosition() and planetMagnitude(), in the order of the C++ enum.
+public enum Planet: Int32, CaseIterable, Sendable {
+    case mercury = 0
+    case venus = 1
+    case mars = 2
+    case jupiter = 3
+    case saturn = 4
+    case uranus = 5
+    case neptune = 6
+}
+
+public struct SkyOptions: Sendable {
+    /// Add the refraction, to get the position that the observer sees.
+    public var refraction: Bool
+    /// Used only if refraction is true.
+    public var atmosphere: Atmosphere
+    public init(refraction: Bool = SkyOptions.c.refraction, atmosphere: Atmosphere = Atmosphere(SkyOptions.c.atmosphere)) {
+        self.refraction = refraction
+        self.atmosphere = atmosphere
+    }
+    @usableFromInline static let c = sr_default_sky_options()
+}
+
+/// The galactic longitude and latitude of the center of the Milky Way (Sagittarius A*).
+public let galacticCenterLongitudeDeg = sr_galactic_center_longitude_deg()
+public let galacticCenterLatitudeDeg = sr_galactic_center_latitude_deg()
+
+/// A catalogue of stars as columns of the same length: J2000 positions at the epoch 2000.0, and the
+/// proper motions in arcseconds per year (pmRaArcsecPerYear is d(ra)/dt * cos(dec)). Empty proper
+/// motion columns mean 0 for all stars.
+public struct StarCatalog: Sendable {
+    public var raDeg: [Double]
+    public var decDeg: [Double]
+    public var pmRaArcsecPerYear: [Double]
+    public var pmDecArcsecPerYear: [Double]
+    public var count: Int { raDeg.count }
+    public init(raDeg: [Double], decDeg: [Double], pmRaArcsecPerYear: [Double] = [], pmDecArcsecPerYear: [Double] = []) {
+        self.raDeg = raDeg
+        self.decDeg = decDeg
+        self.pmRaArcsecPerYear = pmRaArcsecPerYear
+        self.pmDecArcsecPerYear = pmDecArcsecPerYear
+    }
+}
+
 /// An error of the core: an invalid argument, or another error. The message names the argument.
 public struct AlmucantarError: Error, CustomStringConvertible, Sendable {
     public enum Kind: Sendable { case invalidArgument, other }
@@ -593,6 +637,10 @@ extension PathOptions {
 
 extension MoonOptions {
     var c: sr_moon_options { sr_moon_options(refraction: refraction, atmosphere: atmosphere.c) }
+}
+
+extension SkyOptions {
+    var c: sr_sky_options { sr_sky_options(refraction: refraction, atmosphere: atmosphere.c) }
 }
 
 extension HeadingMeasurement {

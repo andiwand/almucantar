@@ -147,6 +147,15 @@ public func findAzimuthTimes(
     return take(crossings, count) { AzimuthCrossing(unixUtc: $0.unix_utc, sun: Horizontal($0.sun)) }
 }
 
+/// Projects many directions in one call, for example all stars of a catalogue. The result has the
+/// order of `directions`.
+public func projectPoints(_ view: View, _ directions: [Horizontal]) throws -> [Projection] {
+    var out: UnsafeMutablePointer<sr_projection>?
+    let c = directions.map(\.c)
+    try c.withUnsafeBufferPointer { try check(sr_project_points(view.c, $0.baseAddress, $0.count, &out)) }
+    return take(out, directions.count) { Projection(valid: $0.valid, point: ScreenPoint(x: $0.point.x, y: $0.point.y)) }
+}
+
 /// The variance of a heading that is not known at all, in square degrees.
 public let unknownHeadingVarianceDeg2 = sr_unknown_heading_variance_deg2()
 
@@ -363,4 +372,76 @@ public func terrainEvents(
     return TerrainEvents(
         kind: kind,
         crossings: take(out.crossings, out.crossing_count) { Crossing(unixUtc: $0.unix_utc, rising: $0.rising) })
+}
+
+// MARK: - The planets, the Milky Way, and the stars
+
+/// Returns the apparent topocentric position of the center of `planet`.
+public func planetPosition(
+    _ planet: Planet, unixUtc: Double, observer: Observer, options: SkyOptions = SkyOptions()
+) throws -> Horizontal {
+    var out = sr_horizontal()
+    try check(sr_planet_position(planet.rawValue, unixUtc, observer.c, options.c, &out))
+    return Horizontal(out)
+}
+
+/// Returns the visual magnitude of `planet`, seen from the center of the Earth. Smaller is brighter.
+public func planetMagnitude(_ planet: Planet, unixUtc: Double) throws -> Double {
+    var out = 0.0
+    try check(sr_planet_magnitude(planet.rawValue, unixUtc, &out))
+    return out
+}
+
+/// Returns the position of a direction of the galactic system, for example the galactic center.
+public func galacticPosition(
+    longitudeDeg: Double, latitudeDeg: Double, unixUtc: Double, observer: Observer, options: SkyOptions = SkyOptions()
+) throws -> Horizontal {
+    var out = sr_horizontal()
+    try check(sr_galactic_position(longitudeDeg, latitudeDeg, unixUtc, observer.c, options.c, &out))
+    return Horizontal(out)
+}
+
+/// Returns the center line of the Milky Way: the point i is at the galactic longitude i * `stepDeg`.
+public func galacticPlane(
+    unixUtc: Double, observer: Observer, stepDeg: Double = 1, options: SkyOptions = SkyOptions()
+) throws -> [Horizontal] {
+    var out: UnsafeMutablePointer<sr_horizontal>?
+    var count = 0
+    try check(sr_galactic_plane(unixUtc, observer.c, stepDeg, options.c, &out, &count))
+    return take(out, count) { Horizontal($0) }
+}
+
+/// Returns the apparent positions of all stars of `catalog`, in its order. One call per second for
+/// all stars is enough; a frame projects the result with projectPoints().
+public func starPositions(
+    _ catalog: StarCatalog, unixUtc: Double, observer: Observer, options: SkyOptions = SkyOptions()
+) throws -> [Horizontal] {
+    // The C API reads count values of each column, so the lengths must match before the call.
+    let count = catalog.raDeg.count
+    if catalog.decDeg.count != count {
+        throw AlmucantarError(kind: .invalidArgument, message: "dec_deg does not have the length of ra_deg")
+    }
+    let moves = !catalog.pmRaArcsecPerYear.isEmpty || !catalog.pmDecArcsecPerYear.isEmpty
+    if moves && catalog.pmRaArcsecPerYear.count != count {
+        throw AlmucantarError(kind: .invalidArgument, message: "pm_ra_arcsec_per_year does not have the length of ra_deg")
+    }
+    if moves && catalog.pmDecArcsecPerYear.count != count {
+        throw AlmucantarError(kind: .invalidArgument, message: "pm_dec_arcsec_per_year does not have the length of ra_deg")
+    }
+    var out: UnsafeMutablePointer<sr_horizontal>?
+    var outCount = 0
+    try catalog.raDeg.withUnsafeBufferPointer { ra in
+        try catalog.decDeg.withUnsafeBufferPointer { dec in
+            try catalog.pmRaArcsecPerYear.withUnsafeBufferPointer { pmRa in
+                try catalog.pmDecArcsecPerYear.withUnsafeBufferPointer { pmDec in
+                    var c = sr_star_catalog(
+                        ra_deg: ra.baseAddress, dec_deg: dec.baseAddress,
+                        pm_ra_arcsec_per_year: moves ? pmRa.baseAddress : nil,
+                        pm_dec_arcsec_per_year: moves ? pmDec.baseAddress : nil, count: count)
+                    try check(sr_star_positions(&c, unixUtc, observer.c, options.c, &out, &outCount))
+                }
+            }
+        }
+    }
+    return take(out, outCount) { Horizontal($0) }
 }

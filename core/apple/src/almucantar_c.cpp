@@ -185,6 +185,47 @@ TerrainEventOptions to_cpp(const sr_terrain_event_options& o) {
           .tolerance_s = o.tolerance_s};
 }
 
+SkyOptions to_cpp(const sr_sky_options& o) {
+  return {.refraction = o.refraction, .atmosphere = to_cpp(o.atmosphere)};
+}
+
+/// Copies count values of the caller into a column. A null column with a count is an error.
+std::vector<double> column(const double* values, const size_t count, const char* name) {
+  if (count == 0) {
+    return {};
+  }
+  if (values == nullptr) {
+    throw std::invalid_argument(std::string(name) + " is null");
+  }
+  return {values, values + count};
+}
+
+StarCatalog to_cpp(const sr_star_catalog* c) {
+  if (c == nullptr) {
+    throw std::invalid_argument("catalog is null");
+  }
+  // Null proper motions are empty columns, which C++ reads as 0 for all stars.
+  const bool moves = c->pm_ra_arcsec_per_year != nullptr || c->pm_dec_arcsec_per_year != nullptr;
+  const size_t pm_count = moves ? c->count : 0;
+  return {
+      .ra_deg = column(c->ra_deg, c->count, "ra_deg"),
+      .dec_deg = column(c->dec_deg, c->count, "dec_deg"),
+      .pm_ra_arcsec_per_year = column(c->pm_ra_arcsec_per_year, pm_count, "pm_ra_arcsec_per_year"),
+      .pm_dec_arcsec_per_year =
+          column(c->pm_dec_arcsec_per_year, pm_count, "pm_dec_arcsec_per_year")};
+}
+
+/// Writes a list of directions into an array that the caller frees with sr_free().
+void fill(const std::vector<Horizontal>& directions, sr_horizontal** out, size_t* count) {
+  std::vector<sr_horizontal> c;
+  c.reserve(directions.size());
+  for (const Horizontal& h : directions) {
+    c.push_back(to_c(h));
+  }
+  *out = copy_out(c);
+  *count = c.size();
+}
+
 /// Copies a grid of the caller into C++. The C++ API takes a std::vector, so this copy of the
 /// heights is necessary.
 ElevationGrid to_cpp(const sr_elevation_grid& g) {
@@ -284,7 +325,13 @@ sr_view sr_default_view(void) {
           d.heading_offset_deg,
           to_c(d.camera)};
 }
+sr_sky_options sr_default_sky_options(void) {
+  const SkyOptions d;
+  return {d.refraction, to_c(d.atmosphere)};
+}
 double sr_sunrise_altitude_deg(void) { return kSunriseAltitudeDeg; }
+double sr_galactic_center_longitude_deg(void) { return kGalacticCenterLongitudeDeg; }
+double sr_galactic_center_latitude_deg(void) { return kGalacticCenterLatitudeDeg; }
 double sr_unknown_heading_variance_deg2(void) { return kUnknownHeadingVarianceDeg2; }
 double sr_default_heading_drift_deg2_per_s(void) { return kDefaultHeadingDriftDeg2PerS; }
 
@@ -404,6 +451,27 @@ sr_status sr_horizon_line(sr_view v, sr_polylines* out) {
   return guarded([&] {
     require_out(out);
     fill(horizon_line(to_cpp(v)), out);
+  });
+}
+
+sr_status sr_project_points(sr_view v, const sr_horizontal* directions, size_t count,
+                            sr_projection** out) {
+  return guarded([&] {
+    require_out(out);
+    if (directions == nullptr && count > 0) {
+      throw std::invalid_argument("directions is null");
+    }
+    std::vector<Horizontal> d;
+    d.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      d.push_back(to_cpp(directions[i]));
+    }
+    std::vector<sr_projection> c;
+    c.reserve(count);
+    for (const Projection& p : project_points(to_cpp(v), d)) {
+      c.push_back({p.valid, {p.point.x, p.point.y}});
+    }
+    *out = copy_out(c);
   });
 }
 
@@ -643,6 +711,47 @@ sr_status sr_find_terrain_events(sr_observer o, const sr_horizon_profile* profil
       crossings.push_back({c.unix_utc, c.rising});
     }
     *out = {static_cast<int>(e.kind), copy_out(crossings), crossings.size()};
+  });
+}
+
+sr_status sr_planet_position(int planet, double t, sr_observer o, sr_sky_options opt,
+                             sr_horizontal* out) {
+  return guarded([&] {
+    require_out(out);
+    *out = to_c(planet_position(to_enum<Planet>(planet, "planet"), t, to_cpp(o), to_cpp(opt)));
+  });
+}
+
+sr_status sr_planet_magnitude(int planet, double t, double* out) {
+  return guarded([&] {
+    require_out(out);
+    *out = planet_magnitude(to_enum<Planet>(planet, "planet"), t);
+  });
+}
+
+sr_status sr_galactic_position(double l, double b, double t, sr_observer o, sr_sky_options opt,
+                               sr_horizontal* out) {
+  return guarded([&] {
+    require_out(out);
+    *out = to_c(galactic_position(l, b, t, to_cpp(o), to_cpp(opt)));
+  });
+}
+
+sr_status sr_galactic_plane(double t, sr_observer o, double step, sr_sky_options opt,
+                            sr_horizontal** out, size_t* count) {
+  return guarded([&] {
+    require_out(out);
+    require_out(count);
+    fill(galactic_plane(t, to_cpp(o), step, to_cpp(opt)), out, count);
+  });
+}
+
+sr_status sr_star_positions(const sr_star_catalog* catalog, double t, sr_observer o,
+                            sr_sky_options opt, sr_horizontal** out, size_t* count) {
+  return guarded([&] {
+    require_out(out);
+    require_out(count);
+    fill(star_positions(to_cpp(catalog), t, to_cpp(o), to_cpp(opt)), out, count);
   });
 }
 

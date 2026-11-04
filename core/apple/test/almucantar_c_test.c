@@ -145,6 +145,42 @@ int main(void) {
                                sr_default_terrain_event_options(),
                                &terrain) == SR_INVALID_ARGUMENT);
 
+  /* The sky: Venus is bright, the galactic plane has 180 points for a step of 2°, and a star at
+     the north celestial pole is at the latitude of the observer. */
+  const sr_sky_options sky = sr_default_sky_options();
+  CHECK(sky.refraction);
+  sr_horizontal venus;
+  CHECK(sr_planet_position(1, day_start, vienna, sky, &venus) == SR_OK);
+  CHECK(venus.azimuth_deg >= 0 && venus.azimuth_deg < 360);
+  double magnitude = 0;
+  CHECK(sr_planet_magnitude(1, day_start, &magnitude) == SR_OK && magnitude < -3);
+  CHECK(sr_planet_magnitude(7, day_start, &magnitude) == SR_INVALID_ARGUMENT);
+  sr_horizontal center;
+  CHECK(sr_galactic_position(sr_galactic_center_longitude_deg(), sr_galactic_center_latitude_deg(),
+                             day_start, vienna, sky, &center) == SR_OK);
+  sr_horizontal* plane = NULL;
+  CHECK(sr_galactic_plane(day_start, vienna, 2, sky, &plane, &count) == SR_OK && count == 180);
+  sr_free(plane);
+  const double ra[2] = {0, 101.28708};
+  const double dec[2] = {90, -16.71611};
+  sr_star_catalog catalog = {ra, dec, NULL, NULL, 2};
+  sr_horizontal* stars = NULL;
+  sr_sky_options airless = sky;
+  airless.refraction = false;
+  CHECK(sr_star_positions(&catalog, day_start, vienna, airless, &stars, &count) == SR_OK);
+  CHECK(count == 2 && fabs(stars[0].altitude_deg - vienna.latitude_deg) < 0.5);
+  sr_free(stars);
+  /* The view looks north at the horizon: north is at the center, and south is behind it. */
+  const sr_horizontal directions[2] = {{0, 0}, {180, 0}};
+  sr_projection* points = NULL;
+  CHECK(sr_project_points(view, directions, 2, &points) == SR_OK);
+  CHECK(points != NULL && points[0].valid && fabs(points[0].point.x - 500) < 1e-6);
+  CHECK(points != NULL && !points[1].valid);
+  sr_free(points);
+  catalog.dec_deg = NULL;
+  CHECK(sr_star_positions(&catalog, day_start, vienna, sky, &stars, &count) == SR_INVALID_ARGUMENT);
+  CHECK(sr_project_points(view, NULL, 1, &points) == SR_INVALID_ARGUMENT);
+
   /* An invalid argument gives a status and a message, not an exception. */
   const sr_observer invalid = {91, 0};
   CHECK(sr_sun_position(0, invalid, sr_default_sun_options(), &sun) == SR_INVALID_ARGUMENT);
