@@ -18,19 +18,23 @@ import {
 } from "@almucantar/web-shared/basemap";
 import type { BaseMap, MapView } from "@almucantar/web-shared/basemap";
 import { milkyWayDust } from "@almucantar/web-shared/milkyway";
-import { drawPhoto, lensSpanDeg } from "@almucantar/web-shared/photo";
+import { discCoverage, drawPhoto, lensSpanDeg } from "@almucantar/web-shared/photo";
 import type { PhotoFrame } from "@almucantar/web-shared/photo";
 import { decodeStars, limitingMagnitude } from "@almucantar/web-shared/stars";
 import type { Stars, StarsJson } from "@almucantar/web-shared/stars";
 import { browserTimeZone, fromWallTime, wallTime } from "@almucantar/web-shared/zone";
 import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
 import starsUrl from "../../../../assets/stars/stars.json?url";
-import { computeHorizon } from "./horizon";
+import { computeHorizon, profileAltitude } from "./horizon";
 import type { Horizon } from "./horizon";
 import { MapCanvas, destination } from "./mapview";
 import {
+  ECLIPSE_NAMES,
   SUBJECTS,
   datesFor,
+  localEclipse,
+  lunarUmbra,
+  upcomingEclipses,
   light,
   momentsFor,
   noMatchReason,
@@ -39,7 +43,7 @@ import {
   skyFromPlace,
   subjectOf,
 } from "./search";
-import type { Shot, SubjectId, Target } from "./search";
+import type { Eclipse, Shot, SubjectId, Target } from "./search";
 import { groundAt, gridsAround, metersPerPixel, summitNear } from "./tiles";
 
 const almucantar = await load();
@@ -138,8 +142,10 @@ const isoDay = (zone: string) => {
 };
 
 /** A small picture of a subject, like the label on a box of film. */
-function icon(id: SubjectId): string {
+function icon(id: SubjectId | "eclipse"): string {
   switch (id) {
+    case "eclipse":
+      return `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#f0f2ff" opacity="0.25"/><circle cx="20" cy="20" r="10" fill="#fffaf0"/><circle cx="22.5" cy="19" r="10" fill="#1d1426"/></svg>`;
     case "moon":
       return `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="11" fill="#fff3d6"/><circle cx="16" cy="17" r="2.5" fill="#e9dcc0"/><circle cx="23" cy="23" r="3" fill="#e9dcc0"/></svg>`;
     case "milkyway":
@@ -180,7 +186,9 @@ type Screen =
   | { kind: "subject" }
   | { kind: "landmark" }
   | { kind: "from" }
-  | { kind: "spot"; purpose: "dates" | "place" }
+  | { kind: "spot"; purpose: "dates" | "place" | "eclipse" }
+  | { kind: "eclipses" }
+  | { kind: "eclipse"; event: Eclipse }
   | { kind: "dates" }
   | { kind: "moments" }
   | { kind: "spots"; moment: number }
@@ -193,6 +201,7 @@ type Screen =
 const TRAILS = {
   landmark: ["Subject", "Landmark", "From where", "Shots"],
   place: ["Place", "Days", "Shots"],
+  eclipse: ["Eclipses", "The map", "Shot"],
 };
 const TRAIL_INDEX = {
   landmark: { subject: 0, landmark: 1, from: 2, spot: 2, moments: 2, spots: 3, dates: 3 } as Record<
@@ -200,10 +209,11 @@ const TRAIL_INDEX = {
     number
   >,
   place: { spot: 0, when: 1, place: 2 } as Record<string, number>,
+  eclipse: { eclipses: 0, spot: 0, eclipse: 1 } as Record<string, number>,
 };
 
 let stack: Screen[] = [];
-let flow: "landmark" | "place" = "landmark";
+let flow: "landmark" | "place" | "eclipse" = "landmark";
 
 function go(screen: Screen) {
   stack.push(screen);
@@ -242,7 +252,7 @@ function render() {
   const screen = stack[stack.length - 1];
   renderGeneration++;
   trail(screen);
-  const onMap = ["landmark", "spot", "spots", "shot-map"].includes(screen.kind);
+  const onMap = ["landmark", "spot", "spots", "shot-map", "eclipse"].includes(screen.kind);
   mapScreen.classList.toggle("hidden", !onMap);
   page.classList.toggle("hidden", onMap);
   document.body.classList.toggle("on-map", onMap);
@@ -272,6 +282,10 @@ function render() {
       return void shotScreen(screen.shot);
     case "shot-map":
       return shotMapScreen(screen.shot);
+    case "eclipses":
+      return eclipsesScreen();
+    case "eclipse":
+      return void eclipseScreen(screen.event);
   }
 }
 
@@ -293,25 +307,39 @@ function home() {
       <p class="lead">The full moon behind a summit, the Milky Way over a ridge, the sun in the gap of
         the mountains. Start from what you want in the frame, or from where you are.</p>
       <div class="choices">
-        <button class="choice" data-go="landmark">
-          <span class="art">${icon("moon")}</span>
-          ${head("A", "Behind a landmark")}
-          <h2>I have a landmark</h2>
-          <p>Pick the subject and the peak or the tower. Shotradar finds when the subject is behind
-            it, and where to stand.</p>
-        </button>
         <button class="choice" data-go="place">
           <span class="art">${icon("milkyway")}</span>
-          ${head("B", "From where I am")}
+          ${head("A", "From where I am")}
           <h2>I am here, or I will be</h2>
           <p>Shotradar reads the real horizon of the place: when the moon, the Milky Way, the sun,
             and the planets rise over it, and which peaks they pass.</p>
         </button>
+        <button class="choice" data-go="landmark">
+          <span class="art">${icon("moon")}</span>
+          ${head("B", "Behind a landmark")}
+          <h2>I have a landmark</h2>
+          <p>Pick the subject and the peak or the tower. Shotradar finds when the subject is behind
+            it, and where to stand.</p>
+        </button>
+        <button class="choice" data-go="eclipse">
+          <span class="art">${icon("eclipse")}</span>
+          ${head("C", "An eclipse")}
+          <h2>The next eclipses</h2>
+          <p>The solar and the lunar eclipses: the path of the shadow on the map of the Earth, and
+            how much your place sees of them, over the real horizon.</p>
+        </button>
       </div>
     </section>`;
   on("[data-go]", (el) => {
-    flow = el.dataset.go === "place" ? "place" : "landmark";
-    go(flow === "place" ? { kind: "spot", purpose: "place" } : { kind: "subject" });
+    const way = el.dataset.go;
+    flow = way === "place" ? "place" : way === "eclipse" ? "eclipse" : "landmark";
+    go(
+      flow === "place"
+        ? { kind: "spot", purpose: "place" }
+        : flow === "eclipse"
+          ? { kind: "eclipses" }
+          : { kind: "subject" },
+    );
   });
 }
 
@@ -426,7 +454,7 @@ function fromScreen() {
   );
 }
 
-function spotScreen(purpose: "dates" | "place") {
+function spotScreen(purpose: "dates" | "place" | "eclipse") {
   showMap({
     landmark: purpose === "dates" && state.landmark ? observerOf(state.landmark) : null,
     spot: state.spot && observerOf(state.spot),
@@ -453,8 +481,15 @@ function spotScreen(purpose: "dates" | "place") {
           : `<p class="muted" id="spot-hint">Tap the map, or use the location of your phone.</p>`
       }
       <div class="row"><button class="button" id="locate">Use my location</button>
-        <button class="button primary" id="next" ${s && s.groundM !== null ? "" : "disabled"}>${purpose === "dates" ? "Find the dates" : "Next: the days"}</button></div>`;
-    on("#next", () => go(purpose === "dates" ? { kind: "dates" } : { kind: "when" }), mapCard);
+        <button class="button primary" id="next" ${s && s.groundM !== null ? "" : "disabled"}>${purpose === "dates" ? "Find the dates" : purpose === "eclipse" ? "Use this place" : "Next: the days"}</button></div>`;
+    on(
+      "#next",
+      () =>
+        purpose === "eclipse"
+          ? history.back()
+          : go(purpose === "dates" ? { kind: "dates" } : { kind: "when" }),
+      mapCard,
+    );
     on(
       "#locate",
       () =>
@@ -515,12 +550,22 @@ function loadStars() {
 }
 
 /** A frame of the photo of a shot at the time `t`, with the lens `focalMm`. */
+/** The pan of the photo: the change of the direction of the view, and a zoom of the view. */
+interface Pan {
+  azimuthDeg: number;
+  altitudeDeg: number;
+  zoom: number;
+}
+
+const NO_PAN: Pan = { azimuthDeg: 0, altitudeDeg: 0, zoom: 1 };
+
 function frameOf(
   shot: Shot,
   horizon: Horizon,
   t: number,
   focalMm: number,
   thumb: boolean,
+  pan: Pan = NO_PAN,
 ): PhotoFrame {
   const at = shot.spot;
   const sun = almucantar.sunPosition(t, at);
@@ -530,13 +575,20 @@ function frameOf(
   // The view: on the landmark, or on the subject alone at the time of the shot; a little wider
   // than the lens, so the frame of the lens shows.
   const center = shot.target?.direction ?? almucantar.bodyPosition(s.body, shot.unixUtc, at);
-  const span = lensSpanDeg(focalMm) * (thumb ? 1 : 1.3);
+  const span = (lensSpanDeg(focalMm) * (thumb ? 1 : 1.3)) / pan.zoom;
   // A subject alone: the horizon stays in the lower part of the photo, if the subject is low
   // enough for that; a high subject stays in the photo.
-  const altitude = shot.target
-    ? Math.max(center.altitudeDeg, -1) + span * 0.12
-    : Math.max(span * 0.22, center.altitudeDeg - span * 0.3);
-  const view = { azimuthDeg: center.azimuthDeg, altitudeDeg: altitude, spanDeg: span };
+  // An eclipse aims at the sun or the moon itself.
+  const altitude = shot.eclipse
+    ? center.altitudeDeg
+    : shot.target
+      ? Math.max(center.altitudeDeg, -1) + span * 0.12
+      : Math.max(span * 0.22, center.altitudeDeg - span * 0.3);
+  const view = {
+    azimuthDeg: center.azimuthDeg + pan.azimuthDeg,
+    altitudeDeg: Math.min(89, Math.max(-30, altitude + pan.altitudeDeg)),
+    spanDeg: span,
+  };
   const sunAlt = almucantar.sunPosition(t, at, { refraction: false }).altitudeDeg;
   const limit = limitingMagnitude(sunAlt);
   const night = sunAlt < -8;
@@ -552,7 +604,22 @@ function frameOf(
     }
   }
   const fraction = almucantar.moonIlluminatedFraction(t);
+  const eclipse = shot.eclipse;
+  const solarEclipse =
+    eclipse?.event.type === "solar"
+      ? {
+          sunRadiusDeg: eclipse.local.sunRadiusDeg,
+          moonRadiusDeg: eclipse.local.moonRadiusDeg,
+          coverage: discCoverage(
+            angleDeg(sun, moon),
+            eclipse.local.sunRadiusDeg,
+            eclipse.local.moonRadiusDeg,
+          ),
+        }
+      : null;
   return {
+    solarEclipse,
+    lunarUmbra: eclipse?.event.lunar ? lunarUmbra(eclipse.event.lunar, t) : 0,
     view,
     sun,
     moon,
@@ -595,6 +662,16 @@ function frameOf(
           bottom: formatTime(t, zone).toUpperCase(),
         },
   };
+}
+
+/** The angle between two directions, with the haversine formula. */
+function angleDeg(a: { azimuthDeg: number; altitudeDeg: number }, b: typeof a): number {
+  const rad = Math.PI / 180;
+  const h1 = a.altitudeDeg * rad;
+  const h2 = b.altitudeDeg * rad;
+  const dz = (b.azimuthDeg - a.azimuthDeg) * rad;
+  const s = Math.sin((h2 - h1) / 2) ** 2 + Math.cos(h1) * Math.cos(h2) * Math.sin(dz / 2) ** 2;
+  return (2 * Math.asin(Math.min(1, Math.sqrt(s)))) / rad;
 }
 
 /** Draws a frame into a canvas of its CSS size. */
@@ -1052,20 +1129,23 @@ async function placeScreen() {
 async function shotScreen(shot: Shot) {
   const zone = zoneAt(shot.spot);
   const s = subjectOf(shot.subject);
-  let focal = shot.target ? 300 : 24;
+  let focal = shot.eclipse ? 600 : shot.target ? 300 : 24;
   let t = shot.unixUtc;
   const minutes = Math.round((shot.pathEndUtc - shot.pathStartUtc) / 60);
   const offset = Math.round((shot.unixUtc - shot.pathStartUtc) / 60);
-  const title = shot.target
-    ? `${s.name} behind ${shot.target.name.startsWith("Peak") ? shot.target.name : "the landmark"}`
-    : `${s.name} over the horizon`;
+  const title = shot.eclipse
+    ? `${ECLIPSE_NAMES[shot.eclipse.local.kind]} ${shot.eclipse.event.type} eclipse`
+    : shot.target
+      ? `${s.name} behind ${shot.target.name.startsWith("Peak") ? shot.target.name : "the landmark"}`
+      : `${s.name} over the horizon`;
   page.innerHTML = `
     <section class="shot-page">
-      <div class="print"><canvas id="photo"></canvas><div id="photo-status">${developing("Developing the shot…")}</div></div>
+      <div class="print"><canvas id="photo"></canvas><div id="photo-status">${developing("Developing the shot…")}</div>
+        <p class="hint">Drag to look around · pinch or scroll to zoom · double tap to aim again</p></div>
       <div class="shot-card">
-        ${head("◉", shot.target ? "The shot" : "The sky")}
+        ${head("◉", shot.eclipse ? "The eclipse" : shot.target ? "The shot" : "The sky")}
         <h2 class="title">${escape(title)}</h2>
-        <label class="slider"><span>Time</span><input id="when" type="range" min="0" max="${minutes}" step="1" value="${offset}" aria-label="The time" /></label>
+        <label class="slider"><span>Time</span><input id="when" type="range" min="0" max="${minutes}" step="1" value="${offset}" aria-label="The time" /><output id="when-label"></output></label>
         <div class="lenses chips">${LENSES.map((l) => `<button data-lens="${l}" class="${l === focal ? "active" : ""}">${l} mm</button>`).join("")}</div>
         <dl class="exif" id="exif"></dl>
         <div class="row">
@@ -1091,15 +1171,17 @@ async function shotScreen(shot: Shot) {
   await loadStars();
   if (generation !== renderGeneration) return;
   $("photo-status").innerHTML = "";
+  let pan: Pan = { ...NO_PAN };
   const draw = () => {
     if (generation !== renderGeneration) return;
-    paint(canvas, frameOf(shot, horizon, t, focal, false));
+    paint(canvas, frameOf(shot, horizon, t, focal, false, pan));
+    $("when-label").textContent = formatTime(t, zone, "time");
     const body = almucantar.bodyPosition(s.body, t, shot.spot);
     const sky = light(almucantar, t, shot.spot);
     const fraction = almucantar.moonIlluminatedFraction(t);
     const rows: [string, string][] = [
       ["When", formatTime(t, zone)],
-      ["Light", sky.label],
+      ["Light", totality(shot, t) ? "Totality: the sky is dark" : sky.label],
       [
         s.name,
         `${deg(body.azimuthDeg)} · ${deg(body.altitudeDeg)} up${s.id === "moon" ? ` · ${Math.round(fraction * 100)} % lit` : ""}`,
@@ -1111,6 +1193,26 @@ async function shotScreen(shot: Shot) {
         "Landmark",
         `${km(shot.target.distanceM)} · ${deg(shot.target.direction.azimuthDeg)} · ${deg(shot.target.direction.altitudeDeg, 2)} up`,
       ]);
+    }
+    if (shot.eclipse) {
+      const e = shot.eclipse;
+      const now =
+        e.event.type === "solar"
+          ? discCoverage(
+              angleDeg(almucantar.sunPosition(t, shot.spot), almucantar.moonPosition(t, shot.spot)),
+              e.local.sunRadiusDeg,
+              e.local.moonRadiusDeg,
+            )
+          : e.event.lunar
+            ? lunarUmbra(e.event.lunar, t)
+            : 0;
+      rows.push([
+        e.event.type === "solar" ? "Covered now" : "In the umbra now",
+        `${Math.round(now * 100)} %`,
+      ]);
+      for (const p of e.local.phases) {
+        rows.push([p.label, `${formatTime(p.unixUtc, zone, "time")} · ${deg(p.altitudeDeg)} up`]);
+      }
     }
     if (shot.riseUtc) {
       rows.push(["Rises", `${formatTime(shot.riseUtc, zone, "time")} over the terrain`]);
@@ -1127,6 +1229,53 @@ async function shotScreen(shot: Shot) {
     t = shot.pathStartUtc + Number((e.target as HTMLInputElement).value) * 60;
     draw();
   });
+  // Look around: a drag turns the view, two fingers or the wheel zoom it, a double tap aims again.
+  const degreesPerPixel = () =>
+    (lensSpanDeg(focal) * 1.3) / pan.zoom / Math.max(1, canvas.clientWidth);
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinch: { distance: number; zoom: number } | null = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: pan.zoom };
+    }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const last = pointers.get(e.pointerId);
+    if (!last) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2 && pinch) {
+      const [a, b] = [...pointers.values()];
+      const zoom = pinch.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.distance));
+      pan.zoom = Math.min(4, Math.max(0.25, zoom));
+    } else {
+      const k = degreesPerPixel();
+      pan.azimuthDeg -= (e.clientX - last.x) * k;
+      pan.altitudeDeg += (e.clientY - last.y) * k;
+    }
+    draw();
+  });
+  const release = (e: PointerEvent) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+  };
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      pan.zoom = Math.min(4, Math.max(0.25, pan.zoom * Math.exp(-e.deltaY / 400)));
+      draw();
+    },
+    { passive: false },
+  );
+  canvas.addEventListener("dblclick", () => {
+    pan = { ...NO_PAN };
+    draw();
+  });
   on("[data-lens]", (el) => {
     focal = Number(el.dataset.lens);
     for (const b of document.querySelectorAll("[data-lens]")) {
@@ -1136,6 +1285,18 @@ async function shotScreen(shot: Shot) {
   });
   new ResizeObserver(() => draw()).observe(canvas);
   draw();
+}
+
+/** True in the total phase of a solar eclipse. */
+function totality(shot: Shot, t: number): boolean {
+  const e = shot.eclipse;
+  if (!e || e.event.type !== "solar" || e.local.kind !== 3) return false;
+  const covered = discCoverage(
+    angleDeg(almucantar.sunPosition(t, shot.spot), almucantar.moonPosition(t, shot.spot)),
+    e.local.sunRadiusDeg,
+    e.local.moonRadiusDeg,
+  );
+  return covered >= 0.999;
 }
 
 /** The map of a shot: the spot, the landmark, and the direction of the subject. */
@@ -1166,6 +1327,197 @@ function shotMapScreen(shot: Shot) {
       ${escape(s.name.toLowerCase())}, at the azimuth ${deg(body.azimuthDeg)}.</p>
     <button class="button wide" id="to-shot">Back to the shot</button>`;
   on("#to-shot", () => history.back(), mapCard);
+}
+
+// --- The eclipses -------------------------------------------------------------------------------
+
+/** The name of an eclipse, for example "Total solar eclipse". */
+const eclipseName = (e: Eclipse, kind = e.kind) =>
+  `${ECLIPSE_NAMES[kind]} ${e.type === "solar" ? "solar" : "lunar"} eclipse`;
+
+function eclipsesScreen() {
+  const spot = state.spot;
+  const at = spot ? observerOf(spot) : null;
+  const zone = zoneAt(at);
+  const events = upcomingEclipses(almucantar, Date.now() / 1000);
+  const where = spot ? (spot.name ? `near ${spot.name}` : "your place") : "no place yet";
+  page.innerHTML = `
+    <section class="sheet-page">
+      ${head("01", "The eclipses")}
+      <h2 class="title">The next eclipses</h2>
+      <div class="row"><span class="muted">Seen from</span><b>${escape(where)}</b>
+        <button class="button" id="place">${spot ? "Change the place" : "Pick your place"}</button></div>
+      <ol class="moments eclipses">
+        ${events
+          .map((e, i) => {
+            const local = at ? localEclipse(almucantar, e, at) : null;
+            let here = "Pick a place to see more";
+            let good = false;
+            if (at && !local) here = "Not visible here";
+            else if (local && !local.visible) {
+              here = e.type === "solar" ? "The sun is down here" : "The moon is down here";
+            } else if (local) {
+              good = true;
+              const what =
+                e.type === "solar"
+                  ? `${Math.round(local.coverage * 100)} % of the sun`
+                  : ECLIPSE_NAMES[local.kind].toLowerCase();
+              here = `${what} · ${deg(local.peak.altitudeDeg, 0)} up at the peak`;
+            }
+            return `<li><button data-e="${i}">
+              <b>${formatTime(e.peakUtc, zone, "date")}</b>
+              <span>${eclipseName(e)}</span>
+              <small class="${good ? "good" : ""}">${escape(here)}</small>
+            </button></li>`;
+          })
+          .join("")}
+      </ol>
+    </section>`;
+  on("#place", () => go({ kind: "spot", purpose: "eclipse" }));
+  on("[data-e]", (el) => go({ kind: "eclipse", event: events[Number(el.dataset.e)] }));
+}
+
+/** The point under the moon at a time: the moon is up within 90° of it. */
+function subLunarPoint(t: number): Observer {
+  let best = { latitudeDeg: 0, longitudeDeg: 0 };
+  let high = -Infinity;
+  const search = (lat0: number, lon0: number, span: number, step: number) => {
+    for (let lat = Math.max(-89, lat0 - span); lat <= Math.min(89, lat0 + span); lat += step) {
+      for (let lon = lon0 - span; lon <= lon0 + span; lon += step) {
+        const at = { latitudeDeg: lat, longitudeDeg: ((((lon + 180) % 360) + 360) % 360) - 180 };
+        const a = almucantar.moonPosition(t, at, { refraction: false }).altitudeDeg;
+        if (a > high) {
+          high = a;
+          best = at;
+        }
+      }
+    }
+  };
+  search(0, 0, 180, 10);
+  search(best.latitudeDeg, best.longitudeDeg, 10, 1);
+  return best;
+}
+
+async function eclipseScreen(e: Eclipse) {
+  const generation = renderGeneration;
+  const lines: typeof map.marks.lines = [];
+  const dots: typeof map.marks.dots = [];
+  let center: Observer = state.spot ? observerOf(state.spot) : { latitudeDeg: 30, longitudeDeg: 0 };
+  if (e.type === "solar" && e.peakPlace) {
+    const path = almucantar.eclipseCentralLine(e.peakUtc, 60);
+    if (path.length > 1) {
+      const radius = path.reduce((sum, p) => sum + Math.abs(p.umbraRadiusKm), 0) / path.length;
+      const places = path.map((p) => p.place);
+      lines.push({
+        points: places,
+        color: e.kind === 3 ? "rgba(29, 20, 38, 0.32)" : "rgba(138, 74, 85, 0.3)",
+        width: 4,
+        widthM: 2 * radius * 1000,
+      });
+      lines.push({ points: places, color: "#2a1f3d", width: 1.5 });
+    }
+    dots.push({ at: e.peakPlace, full: true, selected: false });
+    center = e.peakPlace;
+  } else if (e.type === "lunar") {
+    // The moon is up in the half of the Earth around the point under the moon.
+    const under = subLunarPoint(e.peakUtc);
+    const ring = Array.from({ length: 73 }, (_, i) =>
+      destination(under, i * 5, (Math.PI / 2) * 6_371_008.8),
+    );
+    lines.push({ points: ring, color: "rgba(138, 74, 85, 0.75)", width: 2, dash: [6, 5] });
+    dots.push({ at: under, full: true, selected: false });
+    center = under;
+  }
+  showMap({ spot: state.spot && observerOf(state.spot), lines, dots });
+  map.view = {
+    lon: center.longitudeDeg,
+    lat: Math.max(-60, Math.min(60, center.latitudeDeg)),
+    zoom: 2.4,
+  };
+  map.draw();
+
+  const draw = async () => {
+    const spot = state.spot;
+    const at = spot ? observerOf(spot) : null;
+    const zone = zoneAt(at);
+    const local = at ? localEclipse(almucantar, e, at) : null;
+    const path =
+      e.type === "solar"
+        ? e.peakPlace
+          ? `The dark line is the center of the shadow, the band its ${e.kind === 3 ? "total" : "annular"} part.`
+          : "No place sees the sun fully covered."
+        : "The moon is up inside the dashed line at the peak.";
+    let body = `<p class="muted">Tap the map to choose your place.</p>`;
+    if (at && !local) body = `<p class="muted">Your place sees no part of this eclipse.</p>`;
+    else if (local) {
+      body = `<dl class="exif">
+          <div><dt>Here</dt><dd>${ECLIPSE_NAMES[local.kind]}${e.type === "solar" ? ` · ${Math.round(local.coverage * 100)} %` : ""}</dd></div>
+          <div><dt>Peak</dt><dd>${formatTime(local.peak.unixUtc, zone, "time")} · ${deg(local.peak.altitudeDeg)} up</dd></div>
+          <div><dt>Terrain</dt><dd id="terrain">${local.visible ? "checking…" : "below the horizon"}</dd></div>
+        </dl>
+        <button class="button primary wide" id="see" ${local.visible ? "" : "disabled"}>See the shot</button>`;
+    }
+    mapCard.innerHTML = `
+      ${head("02", formatTime(e.peakUtc, zone, "date"))}
+      <h2>${eclipseName(e)}</h2>
+      <p class="muted small">${path}</p>
+      ${body}`;
+    if (!at || !local) return;
+    on(
+      "#see",
+      () => {
+        const up = local.phases.filter((p) => p.altitudeDeg > 0);
+        const best = local.peak.altitudeDeg > 0 ? local.peak : up[0];
+        const s: SubjectId = e.type === "solar" ? "sun" : "moon";
+        go({
+          kind: "shot",
+          shot: {
+            subject: s,
+            unixUtc: best.unixUtc,
+            spot: at,
+            target: null,
+            separationDeg: 0,
+            body: almucantar.bodyPosition(subjectOf(s).body, best.unixUtc, at),
+            pathStartUtc: local.phases[0].unixUtc,
+            pathEndUtc: local.phases[local.phases.length - 1].unixUtc,
+            eclipse: { event: e, local },
+          },
+        });
+      },
+      mapCard,
+    );
+    if (!local.visible) return;
+    // Over the real horizon: the peak, or the first phase that is up.
+    const horizon = await horizonOf(at);
+    if (generation !== renderGeneration || state.spot !== spot) return;
+    const s = subjectOf(e.type === "solar" ? "sun" : "moon");
+    const free = local.phases.filter((p) => {
+      const d = almucantar.bodyPosition(s.body, p.unixUtc, at);
+      const ground = profileAltitude(horizon.skyline, d.azimuthDeg);
+      return d.altitudeDeg > (Number.isFinite(ground) ? ground : 0);
+    });
+    const cell = document.getElementById("terrain");
+    if (cell) {
+      cell.textContent =
+        free.length === 0
+          ? "behind the terrain"
+          : free.length === local.phases.length
+            ? "all phases over it"
+            : `${free.length} of ${local.phases.length} phases over it`;
+    }
+  };
+  map.onTap = (at) => {
+    state.spot = { ...at, name: nameNear(at), groundM: null };
+    save();
+    map.marks.spot = at;
+    map.draw();
+    void groundAt(at).then((g) => {
+      if (state.spot) state.spot.groundM = g;
+      save();
+    });
+    void draw();
+  };
+  await draw();
 }
 
 // --- The search of the map ----------------------------------------------------------------------

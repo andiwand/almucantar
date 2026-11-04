@@ -3,7 +3,7 @@
 // from a place ("I am here"). The core finds the alignments; this module chooses and sorts.
 
 import { Body } from "@almucantar/core";
-import type { Almucantar, Horizontal, Observer, Site } from "@almucantar/core";
+import type { Almucantar, Horizontal, LunarEclipse, Observer, Site } from "@almucantar/core";
 import type { Horizon, Peak } from "./horizon";
 import { findPeaks } from "./horizon";
 import { destination } from "./mapview";
@@ -75,6 +75,8 @@ export interface Shot {
   /** For the subject alone: the times when it comes out of and goes behind the terrain. */
   riseUtc?: number | null;
   setUtc?: number | null;
+  /** An eclipse: the event, and what the spot sees of it. */
+  eclipse?: { event: Eclipse; local: LocalEclipse } | null;
 }
 
 /** The path of an alignment: an hour before and after it. */
@@ -411,4 +413,164 @@ export function skyFromPlace(
     }
   }
   return shots.sort((p, q) => p.unixUtc - q.unixUtc);
+}
+
+// --- The eclipses -------------------------------------------------------------------------------
+
+type EclipseCore = Pick<
+  Almucantar,
+  "solarEclipses" | "lunarEclipses" | "localSolarEclipses" | "sunPosition" | "moonPosition"
+>;
+
+export interface Eclipse {
+  type: "solar" | "lunar";
+  /** A value of EclipseKind. */
+  kind: number;
+  peakUtc: number;
+  /** A solar eclipse: the center of the shadow at the peak (NaN for a partial one). */
+  peakPlace: Observer | null;
+  lunar: LunarEclipse | null;
+}
+
+/** The next solar eclipses (10 years) and lunar eclipses (5 years), in time order. */
+export function upcomingEclipses(core: EclipseCore, startUtc: number): Eclipse[] {
+  const year = 365.25 * 86_400;
+  const solar = core.solarEclipses(startUtc, startUtc + 10 * year).map((e): Eclipse => ({
+    type: "solar",
+    kind: e.kind,
+    peakUtc: e.peakUtc,
+    peakPlace: Number.isFinite(e.peakPlace.latitudeDeg) ? e.peakPlace : null,
+    lunar: null,
+  }));
+  const lunar = core.lunarEclipses(startUtc, startUtc + 5 * year).map((e): Eclipse => ({
+    type: "lunar",
+    kind: e.kind,
+    peakUtc: e.peakUtc,
+    peakPlace: null,
+    lunar: e,
+  }));
+  return [...solar, ...lunar].sort((a, b) => a.peakUtc - b.peakUtc);
+}
+
+export const ECLIPSE_NAMES = ["Penumbral", "Partial", "Annular", "Total"];
+
+/** A phase of an eclipse at a place: the time and the altitude of the sun or the moon. */
+export interface Phase {
+  label: string;
+  unixUtc: number;
+  altitudeDeg: number;
+}
+
+/** An eclipse seen from one place. */
+export interface LocalEclipse {
+  /** The kind at this place: a total eclipse can be partial here. */
+  kind: number;
+  /** The part of the sun (or of the moon in the umbra) that is covered at the peak. */
+  coverage: number;
+  phases: Phase[];
+  peak: Phase;
+  /** True if the sun or the moon is over the horizon of 0° in a phase. */
+  visible: boolean;
+  /** The radii of the sun and the moon in degrees, from the contacts, for the photo. */
+  sunRadiusDeg: number;
+  moonRadiusDeg: number;
+}
+
+/** The angle between two directions, with the haversine formula. */
+function separationDeg(a: Horizontal, b: Horizontal): number {
+  const rad = Math.PI / 180;
+  const h1 = a.altitudeDeg * rad;
+  const h2 = b.altitudeDeg * rad;
+  const dz = (b.azimuthDeg - a.azimuthDeg) * rad;
+  const s = Math.sin((h2 - h1) / 2) ** 2 + Math.cos(h1) * Math.cos(h2) * Math.sin(dz / 2) ** 2;
+  return (2 * Math.asin(Math.min(1, Math.sqrt(s)))) / rad;
+}
+
+/** What a place sees of an eclipse, or null if it sees no part of a solar eclipse. */
+export function localEclipse(core: EclipseCore, e: Eclipse, at: Observer): LocalEclipse | null {
+  if (e.type === "solar") {
+    const local = core
+      .localSolarEclipses(at, e.peakUtc - 86_400, e.peakUtc + 86_400)
+      .find((l) => Math.abs(l.peakUtc - e.peakUtc) < 6 * 3600);
+    if (!local) return null;
+    const sun = (t: number) => core.sunPosition(t, at, { refraction: false });
+    const moon = (t: number) => core.moonPosition(t, at, { refraction: false });
+    const phase = (label: string, t: number): Phase => ({
+      label,
+      unixUtc: t,
+      altitudeDeg: core.sunPosition(t, at).altitudeDeg,
+    });
+    const central = Number.isFinite(local.totalBeginUtc);
+    const name = local.kind === 2 ? "annular" : "total";
+    const phases = [
+      phase("First contact", local.partialBeginUtc),
+      ...(central ? [phase(`The ${name} phase begins`, local.totalBeginUtc)] : []),
+      phase("The peak", local.peakUtc),
+      ...(central ? [phase(`The ${name} phase ends`, local.totalEndUtc)] : []),
+      phase("Last contact", local.partialEndUtc),
+    ];
+    // The radii from the contacts: at the first contact the discs touch outside (the sum of the
+    // radii), at the second inside (the difference).
+    const outside = separationDeg(sun(local.partialBeginUtc), moon(local.partialBeginUtc));
+    let sunRadiusDeg = 0.2666;
+    let moonRadiusDeg = outside - sunRadiusDeg;
+    if (central) {
+      const inside = separationDeg(sun(local.totalBeginUtc), moon(local.totalBeginUtc));
+      sunRadiusDeg = local.kind === 3 ? (outside - inside) / 2 : (outside + inside) / 2;
+      moonRadiusDeg = local.kind === 3 ? (outside + inside) / 2 : (outside - inside) / 2;
+    }
+    return {
+      kind: local.kind,
+      coverage: local.obscuration,
+      phases,
+      peak: phases.find((p) => p.label === "The peak")!,
+      visible: phases.some((p) => p.altitudeDeg > 0),
+      sunRadiusDeg,
+      moonRadiusDeg,
+    };
+  }
+  const l = e.lunar!;
+  const phase = (label: string, t: number): Phase => ({
+    label,
+    unixUtc: t,
+    altitudeDeg: core.moonPosition(t, at).altitudeDeg,
+  });
+  const phases = [
+    phase("Into the penumbra", l.penumbralBeginUtc),
+    ...(Number.isFinite(l.partialBeginUtc) ? [phase("Into the umbra", l.partialBeginUtc)] : []),
+    ...(Number.isFinite(l.totalBeginUtc) ? [phase("The total phase begins", l.totalBeginUtc)] : []),
+    phase("The peak", l.peakUtc),
+    ...(Number.isFinite(l.totalEndUtc) ? [phase("The total phase ends", l.totalEndUtc)] : []),
+    ...(Number.isFinite(l.partialEndUtc) ? [phase("Out of the umbra", l.partialEndUtc)] : []),
+    phase("Out of the penumbra", l.penumbralEndUtc),
+  ];
+  return {
+    kind: l.kind,
+    coverage: l.obscuration,
+    phases,
+    peak: phases.find((p) => p.label === "The peak")!,
+    visible: phases.some((p) => p.altitudeDeg > 0),
+    sunRadiusDeg: 0.2666,
+    moonRadiusDeg: 0.26,
+  };
+}
+
+/**
+ * The part of the moon in the umbra at a time, for the photo: up from the entry into the umbra to
+ * the total phase (or to the peak of a partial eclipse), and down again. The penumbra dims a
+ * little.
+ */
+export function lunarUmbra(l: LunarEclipse, t: number): number {
+  const ramp = (a: number, b: number) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+  if (!Number.isFinite(l.partialBeginUtc)) {
+    return (
+      0.12 * Math.min(ramp(l.penumbralBeginUtc, l.peakUtc), 1 - ramp(l.peakUtc, l.penumbralEndUtc))
+    );
+  }
+  const top = Number.isFinite(l.totalBeginUtc) ? 1 : l.obscuration;
+  const into = Number.isFinite(l.totalBeginUtc) ? l.totalBeginUtc : l.peakUtc;
+  const out = Number.isFinite(l.totalEndUtc) ? l.totalEndUtc : l.peakUtc;
+  if (t < into) return top * ramp(l.partialBeginUtc, into);
+  if (t > out) return top * (1 - ramp(out, l.partialEndUtc));
+  return top;
 }

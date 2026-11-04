@@ -59,6 +59,29 @@ export interface PhotoFrame {
   hud?: { topLeft: string; topRight: string; bottom: string } | null;
   /** The opacity of the stars and the Milky Way, for a print that fades in. */
   alpha?: number;
+  /**
+   * A solar eclipse: the sun and the moon at their apparent radii, the moon dark in front of the
+   * sun, and the part of the sun that the moon covers now (it darkens the sky).
+   */
+  solarEclipse?: { sunRadiusDeg: number; moonRadiusDeg: number; coverage: number } | null;
+  /** A lunar eclipse: the part of the moon in the umbra of the Earth, 0 to 1. */
+  lunarUmbra?: number;
+}
+
+/**
+ * The part of the area of the sun that the moon covers, from the angle between their centers and
+ * their radii: the area of the overlap of two discs, divided by the area of the sun.
+ */
+export function discCoverage(separationDeg: number, sunRadiusDeg: number, moonRadiusDeg: number) {
+  const d = separationDeg;
+  const r = sunRadiusDeg;
+  const m = moonRadiusDeg;
+  if (d >= r + m) return 0;
+  if (d <= Math.abs(m - r)) return m >= r ? 1 : (m * m) / (r * r);
+  const a = r * r * Math.acos((d * d + r * r - m * m) / (2 * d * r));
+  const b = m * m * Math.acos((d * d + m * m - r * r) / (2 * d * m));
+  const c = 0.5 * Math.sqrt((-d + r + m) * (d + r - m) * (d - r + m) * (d + r + m));
+  return (a + b - c) / (Math.PI * r * r);
 }
 
 export interface Rect {
@@ -208,6 +231,13 @@ export function drawPhoto(ctx: CanvasRenderingContext2D, r: Rect, f: PhotoFrame,
   }
   ctx.fillStyle = sky;
   ctx.fillRect(r.x, r.y, r.w, r.h);
+  // In a solar eclipse, the sky gets dark only when the moon covers most of the sun.
+  const coverage = f.solarEclipse?.coverage ?? 0;
+  const dim = coverage > 0.8 ? Math.pow((coverage - 0.8) / 0.2, 2) * 0.82 : 0;
+  if (dim > 0) {
+    ctx.fillStyle = `rgba(14, 12, 30, ${dim})`;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
   const haze = skyColor(1, sunAlt, opposite);
 
   // The glow of the sun, also when it is just below the horizon.
@@ -262,8 +292,10 @@ export function drawPhoto(ctx: CanvasRenderingContext2D, r: Rect, f: PhotoFrame,
     ctx.restore();
   }
 
-  if (f.body)
+  if (f.solarEclipse) drawSolarEclipse(ctx, f, x, y, k, dim);
+  else if (f.body) {
     drawBody(ctx, f.body, x(f.body.direction.azimuthDeg), y(f.body.direction.altitudeDeg));
+  }
   if (f.moonFraction > 0.01 && f.moon.altitudeDeg > -2) moonDisc(ctx, f, x, y, k);
 
   // The terrain, from the far layer to the near one.
@@ -422,10 +454,12 @@ function moonDisc(
   // The apparent radius of the moon is about 0.26°. In a wide view it stays visible.
   const radius = Math.max(3.5, 0.259 * k);
   const warm = clamp((9 - f.moon.altitudeDeg) / 9);
-  const color = mix(CREAM, [255, 200, 150], warm * 0.8);
+  // The umbra of the Earth makes the moon dark and copper red: the light of all the sunsets.
+  const umbra = clamp(f.lunarUmbra ?? 0);
+  const color = mix(mix(CREAM, [255, 200, 150], warm * 0.8), [150, 52, 34], 0.88 * umbra);
   const glow = ctx.createRadialGradient(mx, my, radius * 0.8, mx, my, radius * 7);
-  glow.addColorStop(0, css(color, 0.38 * f.moonFraction));
-  glow.addColorStop(0.35, css(color, 0.1 * f.moonFraction));
+  glow.addColorStop(0, css(color, 0.38 * f.moonFraction * (1 - 0.8 * umbra)));
+  glow.addColorStop(0.35, css(color, 0.1 * f.moonFraction * (1 - 0.8 * umbra)));
   glow.addColorStop(1, css(color, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(mx - radius * 7, my - radius * 7, radius * 14, radius * 14);
@@ -472,6 +506,54 @@ function moonDisc(
     }
   }
   ctx.restore();
+}
+
+/** A solar eclipse: the sun at its true size, its corona at totality, and the dark moon on it. */
+function drawSolarEclipse(
+  ctx: CanvasRenderingContext2D,
+  f: PhotoFrame,
+  x: (az: number) => number,
+  y: (alt: number) => number,
+  k: number,
+  dim: number,
+) {
+  const e = f.solarEclipse!;
+  const sx = x(f.sun.azimuthDeg);
+  const sy = y(f.sun.altitudeDeg);
+  const mx = x(f.moon.azimuthDeg);
+  const my = y(f.moon.altitudeDeg);
+  // In a wide view the discs stay visible: both grow by the same factor, and the moon moves
+  // away from the sun by that factor, so the overlap looks as it is.
+  const scale = Math.max(1, 6 / (e.sunRadiusDeg * k));
+  const rs = e.sunRadiusDeg * k * scale;
+  const rm = e.moonRadiusDeg * k * scale;
+  const ox = sx + (mx - sx) * scale;
+  const oy = sy + (my - sy) * scale;
+  // The glow of the sun fades as the moon covers it; the corona appears at totality.
+  const light = 1 - e.coverage;
+  const glow = ctx.createRadialGradient(sx, sy, rs, sx, sy, rs * 9);
+  glow.addColorStop(0, `rgba(255, 236, 200, ${0.55 * Math.max(light, 0.05)})`);
+  glow.addColorStop(1, "rgba(255, 220, 170, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(sx - rs * 9, sy - rs * 9, rs * 18, rs * 18);
+  if (dim > 0.4) {
+    const corona = ctx.createRadialGradient(sx, sy, rs * 0.95, sx, sy, rs * 3.2);
+    corona.addColorStop(0, `rgba(240, 244, 255, ${0.85 * dim})`);
+    corona.addColorStop(0.35, `rgba(220, 228, 255, ${0.3 * dim})`);
+    corona.addColorStop(1, "rgba(220, 228, 255, 0)");
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(sx, sy, rs * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#fffaf0";
+  ctx.beginPath();
+  ctx.arc(sx, sy, rs, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#120d1c";
+  ctx.beginPath();
+  ctx.arc(ox, oy, rm, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 /** The label of the landmark: a ring on the summit and a tag above it. */

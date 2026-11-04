@@ -12,5 +12,9 @@ The changes in the PWA shotradar that a user notices. Each release has the tag
   (the dates of the next 12 months as a contact sheet of photos, with a check of the view) or "Find
   me a spot" (a moment, then the spots on the map; a full dot has a clear view). Without a match,
   the app says if the subject never comes to that direction in the year.
-- "From where I am", now or on some days: the moon, the Milky Way, the sun, and the planets while
+- The eclipses: the next solar and lunar eclipses with what your place sees, the path of the
+  shadow on the map of the Earth, the phases over the real terrain, and the eclipse in the shot:
+  the moon in front of the sun, the corona at totality, or the red moon in the umbra.
+- In the shot, drag to look around and pinch or scroll to zoom; the time is next to its slider.
+- "From where I am" (the first way), now or on some days: the moon, the Milky Way, the sun, and the planets while
   they are over the real horizon of the place, and the peaks of the horizon that they pass.

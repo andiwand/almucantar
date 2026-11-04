@@ -705,8 +705,26 @@ input[type="range"] {
   color: var(--muted);
 }
 
+.moments small.good {
+  color: #3f6b33;
+}
+
 .custom {
   margin-top: 26px;
+}
+
+/* The lenses: five equal columns on one line. */
+.chips.lenses {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.chips.lenses button {
+  padding: 8px 0;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-align: center;
 }
 
 /* --- The shot ------------------------------------------------------------------------------- */
@@ -737,9 +755,27 @@ input[type="range"] {
 
 .print canvas {
   display: block;
+  touch-action: none;
+  cursor: grab;
   width: 100%;
   aspect-ratio: 3 / 2;
   background: #2a1f3d;
+}
+
+.print .hint {
+  margin: 8px 2px 0;
+  font: 11px var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.slider output {
+  min-width: 5.5em;
+  text-align: right;
+  font: 600 13px var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
 }
 
 #photo-status {

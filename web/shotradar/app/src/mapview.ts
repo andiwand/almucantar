@@ -6,7 +6,7 @@ import type { Observer } from "@almucantar/core";
 import { drawBaseMap, fromWorld, toWorld } from "@almucantar/web-shared/basemap";
 import type { BaseMap, BaseMapStyle, MapView as View } from "@almucantar/web-shared/basemap";
 import { shadeTile } from "./relief";
-import { decodedTile } from "./tiles";
+import { decodedTile, metersPerPixel } from "./tiles";
 
 /** The base map over the light relief: dark lines and names with a light halo. */
 const LIGHT_MAP: BaseMapStyle = {
@@ -23,7 +23,9 @@ const LIGHT_MAP: BaseMapStyle = {
 export interface MapLine {
   points: Observer[];
   color: string;
+  /** The width in pixels, or in meters on the ground if `widthM` is given. */
   width: number;
+  widthM?: number;
   dash?: number[];
 }
 
@@ -196,15 +198,28 @@ export class MapCanvas {
       if (line.points.length < 2) continue;
       ctx.save();
       ctx.strokeStyle = line.color;
-      ctx.lineWidth = line.width;
+      // A width on the ground: the pixels of the middle of the line, at least the pixel width.
+      const middle = line.points[Math.floor(line.points.length / 2)];
+      ctx.lineWidth = line.widthM
+        ? Math.max(line.width, line.widthM / metersPerPixel(this.view.zoom, middle.latitudeDeg))
+        : line.width;
       ctx.setLineDash(line.dash ?? []);
       ctx.lineCap = "round";
       ctx.beginPath();
-      line.points.forEach((p, i) => {
-        const [x, y] = this.screen(p);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
+      const world = 256 * 2 ** this.view.zoom;
+      let last: number | null = null;
+      for (const p of line.points) {
+        let [x, y] = this.screen(p);
+        // Across the date line, the next point is on the next copy of the world.
+        if (last !== null) {
+          while (x - last > world / 2) x -= world;
+          while (last - x > world / 2) x += world;
+          ctx.lineTo(x, y);
+        } else {
+          ctx.moveTo(x, y);
+        }
+        last = x;
+      }
       ctx.stroke();
       ctx.restore();
     }

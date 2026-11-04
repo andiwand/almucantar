@@ -831,12 +831,10 @@ and a lens). There are two ways in:
 - **B: From where I am**, now or on some days: the subjects over the real horizon of the place,
   without a landmark, and the peaks of the horizon that they pass.
 
-**Next: the eclipses.** The solar and the lunar eclipses, both seen from a place: where and when
-they are visible, the path of the totality of a solar eclipse, the times of the phases (the
-contacts), the part of the sun that the moon covers, and the eclipse over the real horizon (an
-eclipse at sunrise behind a mountain). Astronomy Engine has the searches (the local solar
-eclipse, the lunar eclipse, the global solar eclipse); the core gets them in `plan.hpp`, and the app
-a third way in (C: an eclipse) and the eclipse in the photo.
+**The eclipses (2026-11-04):** the core has `eclipse.hpp` (the solar and the lunar eclipses, the
+phases at a place, and the central line of a solar eclipse), and the app a third way in (C: an
+eclipse) with the map of the Earth and the eclipse in the shot. The order on the start page is A:
+I am here, B: I have a landmark, C: an eclipse.
 
 #### The core
 

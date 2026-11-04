@@ -51,7 +51,7 @@ compile them. `npm run build -w shared` only type-checks it.
 | `shared/src/moon.ts` | The lit part of the moon and its direction to the sun. |
 | `shared/src/milkyway.ts` | A picture of the Milky Way as soft points in the galactic system (brighter to the center, the star clouds, the Great Rift), as J2000 directions for `starPositions()`. A picture for the eye, not a measurement. |
 | `shared/src/panorama.ts` | The panorama of the websites (azimuth to x, altitude to y, with a layout for each site) and the colors of the sky for an altitude of the sun. |
-| `shared/src/photo.ts` | The first-person photo of shotradar: the sky in the light of the sun, the stars and the Milky Way, the sun or a planet, the moon in its phase, the terrain in layers, the label of a landmark, the frame of a lens, and the viewfinder. The website and the PWA of shotradar draw with it. |
+| `shared/src/photo.ts` | The first-person photo of shotradar: the sky in the light of the sun, the stars and the Milky Way, the sun or a planet, the moon in its phase, the terrain in layers, the label of a landmark, the frame of a lens, and the viewfinder; for an eclipse, the sun and the moon at their radii (`discCoverage`) and the moon in the umbra. The website and the PWA of shotradar draw with it. |
 | `shared/src/stars.ts` | The star data of starradar (`assets/stars/stars.json`) as typed columns, and how a star looks: the size from the magnitude, the color from B−V, and the faintest magnitude of a sky (`limitingMagnitude`). |
 | `shared/test/` | The Vitest tests of the shared code. |
 
