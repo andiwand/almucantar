@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const dist = process.env.ALMUCANTAR_WASM_DIST;
 assert.ok(dist, "ALMUCANTAR_WASM_DIST is not set");
-const { load, SolarModel, DayKind, Body, Planet, GALACTIC_CENTER } = await import(pathToFileURL(path.join(dist, "index.js")).href);
+const { load, SolarModel, DayKind, Body, Planet, GALACTIC_CENTER, EclipseKind } = await import(pathToFileURL(path.join(dist, "index.js")).href);
 const almucantar = await load();
 
 const vienna = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 };
@@ -275,4 +275,21 @@ test("the planner: bodies, sight, alignments, line, line of sight, and darkness"
   assert.ok(almucantar.darkWindows(vienna, dayStart, dayStart + day, { galacticCenter: true }, null).length >= 0);
   assert.throws(() => almucantar.bodyPosition(10, dayStart, vienna), RangeError);
   assert.throws(() => almucantar.sight(eye, eye), RangeError);
+});
+
+test("the eclipses", () => {
+  const start = 1767225600; // 2026-01-01
+  const end = 1830297600; // 2028-01-01
+  const solar = almucantar.solarEclipses(start, end);
+  assert.equal(solar.length, 4);
+  const total = solar.filter((e) => e.kind === EclipseKind.total);
+  assert.equal(total.length, 2);
+  const line = almucantar.eclipseCentralLine(total[0].peakUtc, 120);
+  assert.ok(line.length > 30 && line.every((p) => p.umbraRadiusKm > 0));
+  assert.deepEqual(structuredClone(line), line);
+  const local = almucantar.localSolarEclipses(vienna, start, end);
+  assert.ok(local.length >= 1 && local.every((e) => e.kind === EclipseKind.partial));
+  const lunar = almucantar.lunarEclipses(start, end);
+  assert.equal(lunar[0].kind, EclipseKind.total);
+  assert.throws(() => almucantar.lunarEclipses(10, 10), RangeError);
 });

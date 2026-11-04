@@ -4,6 +4,7 @@ include(Catch)
 add_executable(almucantar_test
   src/poses.cpp
   src/reference_data.cpp
+  src/test_eclipse.cpp
   src/test_events.cpp
   src/test_geotiff.cpp
   src/test_heading.cpp

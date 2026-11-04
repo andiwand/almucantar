@@ -695,6 +695,82 @@ val dark_windows_js(const Observer& o, double start, double end, const DarkOptio
   });
 }
 
+// The eclipses (eclipse.hpp). The kind crosses as the number of EclipseKind.
+
+val lunar_eclipses_js(double start, double end) {
+  return guarded([&] {
+    val result = val::array();
+    for (const LunarEclipse& e : lunar_eclipses(start, end)) {
+      val x = val::object();
+      x.set("kind", static_cast<int>(e.kind));
+      x.set("peakUtc", e.peak_utc);
+      x.set("obscuration", e.obscuration);
+      x.set("penumbralBeginUtc", e.penumbral_begin_utc);
+      x.set("partialBeginUtc", e.partial_begin_utc);
+      x.set("totalBeginUtc", e.total_begin_utc);
+      x.set("totalEndUtc", e.total_end_utc);
+      x.set("partialEndUtc", e.partial_end_utc);
+      x.set("penumbralEndUtc", e.penumbral_end_utc);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val solar_eclipses_js(double start, double end) {
+  return guarded([&] {
+    val result = val::array();
+    for (const SolarEclipse& e : solar_eclipses(start, end)) {
+      val x = val::object();
+      x.set("kind", static_cast<int>(e.kind));
+      x.set("peakUtc", e.peak_utc);
+      val place = val::object();
+      place.set("latitudeDeg", e.peak_place.latitude_deg);
+      place.set("longitudeDeg", e.peak_place.longitude_deg);
+      x.set("peakPlace", place);
+      x.set("obscuration", e.obscuration);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val local_solar_eclipses_js(const Observer& o, double start, double end) {
+  return guarded([&] {
+    val result = val::array();
+    for (const LocalSolarEclipse& e : local_solar_eclipses(o, start, end)) {
+      val x = val::object();
+      x.set("kind", static_cast<int>(e.kind));
+      x.set("obscuration", e.obscuration);
+      x.set("partialBeginUtc", e.partial_begin_utc);
+      x.set("totalBeginUtc", e.total_begin_utc);
+      x.set("peakUtc", e.peak_utc);
+      x.set("totalEndUtc", e.total_end_utc);
+      x.set("partialEndUtc", e.partial_end_utc);
+      x.set("peakSunAltitudeDeg", e.peak_sun_altitude_deg);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
+val eclipse_central_line_js(double peak, double step) {
+  return guarded([&] {
+    val result = val::array();
+    for (const ShadowPoint& p : eclipse_central_line(peak, step)) {
+      val x = val::object();
+      x.set("unixUtc", p.unix_utc);
+      val place = val::object();
+      place.set("latitudeDeg", p.place.latitude_deg);
+      place.set("longitudeDeg", p.place.longitude_deg);
+      x.set("place", place);
+      x.set("umbraRadiusKm", p.umbra_radius_km);
+      result.call<void>("push", x);
+    }
+    return result;
+  });
+}
+
 /// The C++ defaults of the option structs, the view, and the heading filter, for index.js.
 val defaults_js() {
   val d = val::object();
@@ -881,6 +957,10 @@ EMSCRIPTEN_BINDINGS(almucantar) {
   function("alignmentLine", &alignment_line_js);
   function("lineOfSight", &line_of_sight_js);
   function("darkWindows", &dark_windows_js);
+  function("lunarEclipses", &lunar_eclipses_js);
+  function("solarEclipses", &solar_eclipses_js);
+  function("localSolarEclipses", &local_solar_eclipses_js);
+  function("eclipseCentralLine", &eclipse_central_line_js);
   function("magneticDeclinationDeg", &magnetic_declination_js);
   function("cameraFromFov", &camera_from_fov_js);
   function("project", &project_js);

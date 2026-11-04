@@ -27,6 +27,9 @@ export const Planet = Object.freeze({ mercury: 0, venus: 1, mars: 2, jupiter: 3,
 /** The galactic coordinates of the center of the Milky Way (Sagittarius A*). */
 export const GALACTIC_CENTER = Object.freeze({ longitudeDeg: 0, latitudeDeg: 0 });
 
+/** The kind of an eclipse. */
+export const EclipseKind = Object.freeze({ penumbral: 0, partial: 1, annular: 2, total: 3 });
+
 /** The result kind of sunEvents(). */
 export const DayKind = Object.freeze({ normal: 0, polarDay: 1, polarNight: 2 });
 
@@ -97,6 +100,10 @@ export async function load(moduleOptions = {}) {
     lineOfSight: (from, to, tiles, options) => m.lineOfSight(from, to, tiles, merge(d.sightOptions, options)),
     darkWindows: (observer, startUtc, endUtc, options, profile = null) =>
       m.darkWindows(observer, startUtc, endUtc, merge(d.darkOptions, options), profile),
+    lunarEclipses: (startUtc, endUtc) => m.lunarEclipses(startUtc, endUtc),
+    solarEclipses: (startUtc, endUtc) => m.solarEclipses(startUtc, endUtc),
+    localSolarEclipses: (observer, startUtc, endUtc) => m.localSolarEclipses(observer, startUtc, endUtc),
+    eclipseCentralLine: (peakUtc, stepS = 60) => m.eclipseCentralLine(peakUtc, stepS),
     magneticDeclinationDeg: (observer, unixUtc) => m.magneticDeclinationDeg(observer, unixUtc),
     cameraFromFov: (width, height, horizontalFovDeg) => m.cameraFromFov(width, height, horizontalFovDeg),
     project: (v, direction) => m.project(view(v), direction),

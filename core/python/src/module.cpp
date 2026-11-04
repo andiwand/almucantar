@@ -861,6 +861,52 @@ void bind_plan(py::module_& m) {
       "Finds the windows when the sky is dark: no sun, no moon, and the galactic center if asked.");
 }
 
+void bind_eclipse(py::module_& m) {
+  using namespace almucantar;
+  py::enum_<EclipseKind>(m, "EclipseKind")
+      .value("penumbral", EclipseKind::penumbral)
+      .value("partial", EclipseKind::partial)
+      .value("annular", EclipseKind::annular)
+      .value("total", EclipseKind::total);
+  py::class_<LunarEclipse>(m, "LunarEclipse",
+                           "A lunar eclipse; NaN for a phase that does not happen.")
+      .def_readonly("kind", &LunarEclipse::kind)
+      .def_readonly("peak_utc", &LunarEclipse::peak_utc)
+      .def_readonly("obscuration", &LunarEclipse::obscuration)
+      .def_readonly("penumbral_begin_utc", &LunarEclipse::penumbral_begin_utc)
+      .def_readonly("partial_begin_utc", &LunarEclipse::partial_begin_utc)
+      .def_readonly("total_begin_utc", &LunarEclipse::total_begin_utc)
+      .def_readonly("total_end_utc", &LunarEclipse::total_end_utc)
+      .def_readonly("partial_end_utc", &LunarEclipse::partial_end_utc)
+      .def_readonly("penumbral_end_utc", &LunarEclipse::penumbral_end_utc);
+  m.def("lunar_eclipses", &lunar_eclipses, "start_utc"_a, "end_utc"_a,
+        "Returns the lunar eclipses with the peak between start_utc and end_utc.");
+  py::class_<SolarEclipse>(m, "SolarEclipse", "A solar eclipse for the whole Earth.")
+      .def_readonly("kind", &SolarEclipse::kind)
+      .def_readonly("peak_utc", &SolarEclipse::peak_utc)
+      .def_readonly("peak_place", &SolarEclipse::peak_place)
+      .def_readonly("obscuration", &SolarEclipse::obscuration);
+  m.def("solar_eclipses", &solar_eclipses, "start_utc"_a, "end_utc"_a,
+        "Returns the solar eclipses with the peak between start_utc and end_utc.");
+  py::class_<LocalSolarEclipse>(m, "LocalSolarEclipse", "A solar eclipse seen from one place.")
+      .def_readonly("kind", &LocalSolarEclipse::kind)
+      .def_readonly("obscuration", &LocalSolarEclipse::obscuration)
+      .def_readonly("partial_begin_utc", &LocalSolarEclipse::partial_begin_utc)
+      .def_readonly("total_begin_utc", &LocalSolarEclipse::total_begin_utc)
+      .def_readonly("peak_utc", &LocalSolarEclipse::peak_utc)
+      .def_readonly("total_end_utc", &LocalSolarEclipse::total_end_utc)
+      .def_readonly("partial_end_utc", &LocalSolarEclipse::partial_end_utc)
+      .def_readonly("peak_sun_altitude_deg", &LocalSolarEclipse::peak_sun_altitude_deg);
+  m.def("local_solar_eclipses", &local_solar_eclipses, "observer"_a, "start_utc"_a, "end_utc"_a,
+        "Returns the solar eclipses of a place with the peak between start_utc and end_utc.");
+  py::class_<ShadowPoint>(m, "ShadowPoint", "A point of the central line of a solar eclipse.")
+      .def_readonly("unix_utc", &ShadowPoint::unix_utc)
+      .def_readonly("place", &ShadowPoint::place)
+      .def_readonly("umbra_radius_km", &ShadowPoint::umbra_radius_km);
+  m.def("eclipse_central_line", &eclipse_central_line, "peak_utc"_a, "step_s"_a = 60.0,
+        "Returns the central line of the solar eclipse with the peak at peak_utc.");
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -874,6 +920,7 @@ PYBIND11_MODULE(_core, m) {
   bind_terrain(m);
   bind_sky(m);
   bind_plan(m);
+  bind_eclipse(m);
   m.def(
       "version", [] { return std::string(almucantar::version()); },
       "Returns the version of the core library.");

@@ -14,6 +14,8 @@ export declare const Body: {
   readonly sun: 0; readonly moon: 1; readonly galacticCenter: 2; readonly mercury: 3; readonly venus: 4;
   readonly mars: 5; readonly jupiter: 6; readonly saturn: 7; readonly uranus: 8; readonly neptune: 9;
 };
+/** The kind of an eclipse. */
+export declare const EclipseKind: { readonly penumbral: 0; readonly partial: 1; readonly annular: 2; readonly total: 3 };
 export declare const DayKind: { readonly normal: 0; readonly polarDay: 1; readonly polarNight: 2 };
 export declare const ScreenRotation: {
   readonly rotation0: 0; readonly rotation90: 1; readonly rotation180: 2; readonly rotation270: 3;
@@ -121,6 +123,21 @@ export interface DarkOptions {
   minGalacticCenterAltitudeDeg: number; stepS: number; toleranceS: number;
 }
 export interface TimeWindow { startUtc: number; endUtc: number }
+
+/** A lunar eclipse. A phase that does not happen has NaN. */
+export interface LunarEclipse {
+  kind: number; peakUtc: number; obscuration: number; penumbralBeginUtc: number; partialBeginUtc: number;
+  totalBeginUtc: number; totalEndUtc: number; partialEndUtc: number; penumbralEndUtc: number;
+}
+/** A solar eclipse for the whole Earth. peakPlace and obscuration are NaN for a partial one. */
+export interface SolarEclipse { kind: number; peakUtc: number; peakPlace: Observer; obscuration: number }
+/** A solar eclipse seen from one place. totalBeginUtc and totalEndUtc are NaN for a partial one. */
+export interface LocalSolarEclipse {
+  kind: number; obscuration: number; partialBeginUtc: number; totalBeginUtc: number; peakUtc: number;
+  totalEndUtc: number; partialEndUtc: number; peakSunAltitudeDeg: number;
+}
+/** A point of the central line: the umbra radius is negative for an annular eclipse. */
+export interface ShadowPoint { unixUtc: number; place: Observer; umbraRadiusKm: number }
 
 export interface Camera {
   width: number; height: number; fx: number; fy: number; cx: number; cy: number;
@@ -233,6 +250,14 @@ export interface Almucantar {
   lineOfSight(from: Site, to: Site, tiles: ElevationGrid[], options?: Partial<SightOptions>): LineOfSight;
   /** The windows when the sky is dark; the moon and the galactic center over the terrain of the profile. */
   darkWindows(observer: Observer, startUtc: number, endUtc: number, options?: Partial<DarkOptions>, profile?: HorizonProfile | null): TimeWindow[];
+  /** The lunar eclipses with the peak between startUtc and endUtc. */
+  lunarEclipses(startUtc: number, endUtc: number): LunarEclipse[];
+  /** The solar eclipses with the peak between startUtc and endUtc, for the whole Earth. */
+  solarEclipses(startUtc: number, endUtc: number): SolarEclipse[];
+  /** The solar eclipses of a place; check peakSunAltitudeDeg for the night. */
+  localSolarEclipses(observer: Observer, startUtc: number, endUtc: number): LocalSolarEclipse[];
+  /** The central line of a total or annular solar eclipse, every stepS seconds. */
+  eclipseCentralLine(peakUtc: number, stepS?: number): ShadowPoint[];
   magneticDeclinationDeg(observer: Observer, unixUtc: number): number;
   cameraFromFov(width: number, height: number, horizontalFovDeg: number): Camera;
   project(view: Partial2<View>, direction: Horizontal): Projection;

@@ -22,6 +22,7 @@ include(GNUInstallDirs)
 include(cmake/compiler_options.cmake)
 
 set(ALMUCANTAR_SOURCE_FILES
+  src/almucantar/eclipse.cpp
   src/almucantar/heading.cpp
   src/almucantar/magnetic.cpp
   src/almucantar/moon.cpp

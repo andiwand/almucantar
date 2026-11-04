@@ -2,6 +2,7 @@
 
 /// The public API of the almucantar core. Include this header, or the single headers.
 
+#include "almucantar/eclipse.hpp"   // IWYU pragma: export
 #include "almucantar/heading.hpp"   // IWYU pragma: export
 #include "almucantar/magnetic.hpp"  // IWYU pragma: export
 #include "almucantar/moon.hpp"      // IWYU pragma: export

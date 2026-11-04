@@ -14,6 +14,11 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- The eclipses (`almucantar/eclipse.hpp`): `solar_eclipses()` and `lunar_eclipses()` give the
+  eclipses of an interval with their kind, peak, and coverage; `local_solar_eclipses()` gives the
+  phases of a solar eclipse at a place, with the altitude of the sun; `eclipse_central_line()` gives
+  the central line of a total or annular eclipse with the radius of the shadow, for a map. From
+  Astronomy Engine; in C++, Python, and WASM.
 - The photo planner (`almucantar/plan.hpp`), for shotradar: `body_position()` gives the position
   of any body. `sight()` gives the direction to a landmark with the curvature of the Earth.
   `find_alignments()` finds the times when a body is behind a landmark ("I stand here"), one
