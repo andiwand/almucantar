@@ -94,7 +94,11 @@ export interface TerrainEvents { kind: number; crossings: Crossing[] }
 export interface BodyOptions { model: number; refraction: boolean; atmosphere: Atmosphere }
 /** A point with its height above sea level: the ground, an eye, or the top of a landmark. */
 export interface Site { latitudeDeg: number; longitudeDeg: number; elevationM: number }
-export interface SightOptions { refractionCoefficient: number }
+export interface SightOptions {
+  refractionCoefficient: number;
+  /** lineOfSight(): the terrain nearer than this to the target is the target itself. */
+  targetMarginM: number;
+}
 export interface Sight { direction: Horizontal; distanceM: number }
 export interface AlignmentOptions { body: BodyOptions; maxSeparationDeg: number; toleranceS: number }
 export interface Alignment { unixUtc: number; separationDeg: number; body: Horizontal }

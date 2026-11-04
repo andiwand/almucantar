@@ -35,6 +35,11 @@ struct Site {
 struct SightOptions {
   /// The coefficient of the terrestrial refraction, as in `HorizonOptions`. 0 gives none.
   double refraction_coefficient = 0.13;
+  /// Used only by `line_of_sight()`: the terrain nearer than this to the target does not count,
+  /// because it is the target itself. A DEM smooths a summit, so its flanks just below the top can
+  /// be higher than the line of sight to the top. The terrain within 1.5 cells always counts as
+  /// the target.
+  double target_margin_m = 0;
 };
 
 /// The direction from one site to another, and the distance on the ground.
@@ -133,10 +138,10 @@ struct LineOfSight {
 };
 
 /// Checks whether the eye at `from` sees `to` over the terrain of `tiles`, with the model of
-/// `sight()`. The terrain within 1.5 cells of the target is the target itself, so it does not
-/// count. Buildings and trees are not in a bare-earth DEM; a surface model has them, smeared over
-/// its cells. Throws `std::invalid_argument` if `tiles` is empty, if the sites are at the same
-/// place or more than 500 km apart, or if an argument is not valid.
+/// `sight()`. The terrain within 1.5 cells of the target, or within `target_margin_m`, is the
+/// target itself, so it does not count. Buildings and trees are not in a bare-earth DEM; a surface
+/// model has them, smeared over its cells. Throws `std::invalid_argument` if `tiles` is empty, if
+/// the sites are at the same place or more than 500 km apart, or if an argument is not valid.
 [[nodiscard]] LineOfSight line_of_sight(const Site& from, const Site& to,
                                         const std::vector<ElevationGrid>& tiles,
                                         const SightOptions& options = {});

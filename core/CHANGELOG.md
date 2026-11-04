@@ -21,7 +21,8 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   is behind a landmark at a time, and on a DEM the spots where the ground has the right height
   ("where must I stand?"). `line_of_sight()` checks the view over the DEM, and `dark_windows()`
   finds the dark hours without the sun and the moon, also with the galactic center up. In C++,
-  Python, and WASM.
+  Python, and WASM. `SightOptions.target_margin_m` makes `line_of_sight()` ignore the flanks of a
+  summit just below its top.
 - `Body` has the galactic center and the planets after the sun and the moon, and
   `terrain_events()` takes all of them. `Body` is in `types.hpp` now.
 - The stars: `star_positions()` gives the apparent positions of all stars of a `StarCatalog`

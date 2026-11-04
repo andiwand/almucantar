@@ -798,7 +798,8 @@ EMSCRIPTEN_BINDINGS(almucantar) {
       .field("longitudeDeg", &Site::longitude_deg)
       .field("elevationM", &Site::elevation_m);
   value_object<SightOptions>("SightOptions")
-      .field("refractionCoefficient", &SightOptions::refraction_coefficient);
+      .field("refractionCoefficient", &SightOptions::refraction_coefficient)
+      .field("targetMarginM", &SightOptions::target_margin_m);
   value_object<AlignmentOptionsJs>("AlignmentOptions")
       .field("body", &AlignmentOptionsJs::body)
       .field("maxSeparationDeg", &AlignmentOptionsJs::maxSeparationDeg)

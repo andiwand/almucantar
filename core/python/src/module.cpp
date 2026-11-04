@@ -724,11 +724,14 @@ void bind_plan(py::module_& m) {
 
   const SightOptions sight_defaults;
   py::class_<SightOptions>(m, "SightOptions")
-      .def(py::init([](const double refraction_coefficient) {
-             return SightOptions{.refraction_coefficient = refraction_coefficient};
+      .def(py::init([](const double refraction_coefficient, const double target_margin_m) {
+             return SightOptions{.refraction_coefficient = refraction_coefficient,
+                                 .target_margin_m = target_margin_m};
            }),
-           "refraction_coefficient"_a = sight_defaults.refraction_coefficient)
-      .def_readwrite("refraction_coefficient", &SightOptions::refraction_coefficient);
+           "refraction_coefficient"_a = sight_defaults.refraction_coefficient,
+           "target_margin_m"_a = sight_defaults.target_margin_m)
+      .def_readwrite("refraction_coefficient", &SightOptions::refraction_coefficient)
+      .def_readwrite("target_margin_m", &SightOptions::target_margin_m);
   py::class_<Sight>(m, "Sight", "The direction from one site to another, and the distance.")
       .def_readonly("direction", &Sight::direction)
       .def_readonly("distance_m", &Sight::distance_m)

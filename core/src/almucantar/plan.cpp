@@ -293,6 +293,8 @@ LineOfSight line_of_sight(const Site& from, const Site& to, const std::vector<El
   validate(from);
   validate(to);
   validate_refraction(options.refraction_coefficient);
+  require_finite(options.target_margin_m, "target_margin_m");
+  require(options.target_margin_m >= 0, "target_margin_m is negative");
   require(!tiles.empty(), "tiles is empty");
   const internal::SortedTiles sorted = internal::sort_tiles(tiles, from.latitude_deg);
   const double total = internal::distance_m(place(from), place(to));
@@ -309,7 +311,7 @@ LineOfSight line_of_sight(const Site& from, const Site& to, const std::vector<El
                      .clearance_deg = kNaN,
                      .blocking_distance_m = kNaN,
                      .blocking = {.latitude_deg = kNaN, .longitude_deg = kNaN}};
-  const double last = total - (1.5 * cell_m);
+  const double last = total - std::max(1.5 * cell_m, options.target_margin_m);
   const auto count = last > step ? static_cast<std::size_t>(last / step) : std::size_t{0};
   for (std::size_t i = 1; i <= count; ++i) {
     const double d = static_cast<double>(i) * step;

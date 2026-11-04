@@ -277,7 +277,13 @@ TEST_CASE("line_of_sight sees over flat ground and not through a ridge", "[plan]
             eye, {.latitude_deg = tower.latitude_deg, .longitude_deg = lon, .elevation_m = 600},
             {grid})
             .visible);
+  // The ridge half way is the target itself if the margin covers it.
+  const LineOfSight margin = line_of_sight(eye, tower, {grid}, {.target_margin_m = 6000});
+  CHECK(margin.visible);
+  CHECK(margin.blocking_distance_m < 4000);
   REQUIRE_THROWS_AS(line_of_sight(eye, tower, {}), std::invalid_argument);
+  REQUIRE_THROWS_AS(line_of_sight(eye, tower, {grid}, {.target_margin_m = -1}),
+                    std::invalid_argument);
 }
 
 TEST_CASE("dark_windows agrees with a scan of the conditions", "[plan]") {
