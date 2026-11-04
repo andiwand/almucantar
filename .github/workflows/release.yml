@@ -12,7 +12,7 @@ on:
       project:
         description: The project to release
         type: choice
-        options: [core, sunradar-android, sunradar-ios, sunradar-pwa, starradar-android, starradar-ios, starradar-pwa]
+        options: [core, sunradar-android, sunradar-ios, sunradar-pwa, starradar-android, starradar-ios, starradar-pwa, shotradar-pwa]
         required: true
       version:
         description: The version (empty for the version from the commits)

@@ -114,6 +114,9 @@ jobs:
           mkdir -p ../site/starradar
           cp -r starradar/site/dist/. ../site/starradar/
           cp -r starradar/app/dist ../site/starradar/app
+          mkdir -p ../site/shotradar
+          cp -r shotradar/site/dist/. ../site/shotradar/
+          cp -r shotradar/app/dist ../site/shotradar/app
 
       - uses: actions/upload-artifact@v4
         with:

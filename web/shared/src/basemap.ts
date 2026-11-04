@@ -178,6 +178,29 @@ export function screenToPlace(
   return { latitudeDeg: lat, longitudeDeg: lon };
 }
 
+/** The colors of the base map. The default is the dark map of the place panel. */
+export interface BaseMapStyle {
+  /** The fill of the whole map (the sea), or null to draw over what is already there. */
+  background: string | null;
+  rivers: string;
+  lakes: string;
+  coastline: string;
+  borders: string;
+  label: string;
+  /** The halo around a name, so it stays readable over the lines. */
+  halo: string;
+}
+
+export const DARK_MAP: BaseMapStyle = {
+  background: "#0e2440",
+  rivers: "rgba(110, 170, 230, 0.5)",
+  lakes: "rgba(110, 170, 230, 0.8)",
+  coastline: "rgba(220, 230, 240, 0.9)",
+  borders: "rgba(255, 200, 61, 0.6)",
+  label: "rgba(255, 255, 255, 0.85)",
+  halo: "#0e2440",
+};
+
 /**
  * Draws the base map into a 2D context of width x height (CSS pixels). Near the date line, and
  * at a small zoom, the screen shows more than one copy of the world, so each copy is drawn.
@@ -189,6 +212,7 @@ export function drawBaseMap(
   width: number,
   height: number,
   pin: Observer | null,
+  style: BaseMapStyle = DARK_MAP,
 ) {
   const [cx, cy] = toWorld(view.lon, view.lat, view.zoom);
   const size = 256 * 2 ** view.zoom;
@@ -200,8 +224,10 @@ export function drawBaseMap(
   const copies: number[] = [];
   for (let k = Math.floor(left / size); k * size < left + width; k++) copies.push(k);
 
-  ctx.fillStyle = "#0e2440";
-  ctx.fillRect(0, 0, width, height);
+  if (style.background !== null) {
+    ctx.fillStyle = style.background;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const stroke = (lines: Line[], color: string, lineWidth: number, dash: number[] = []) => {
     ctx.strokeStyle = color;
@@ -227,17 +253,17 @@ export function drawBaseMap(
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  stroke(map.layers.rivers, "rgba(110, 170, 230, 0.5)", 1);
-  stroke(map.layers.lakes, "rgba(110, 170, 230, 0.8)", 1);
-  stroke(map.layers.coastline, "rgba(220, 230, 240, 0.9)", 1.2);
-  stroke(map.layers.borders, "rgba(255, 200, 61, 0.6)", 1, [4, 3]);
+  stroke(map.layers.rivers, style.rivers, 1);
+  stroke(map.layers.lakes, style.lakes, 1);
+  stroke(map.layers.coastline, style.coastline, 1.2);
+  stroke(map.layers.borders, style.borders, 1, [4, 3]);
 
   // The place names: more of them at a larger zoom.
   const maxRank = Math.min(10, Math.round(view.zoom * 1.6));
   ctx.font = "12px system-ui";
   ctx.textAlign = "left";
-  // A dark halo (the color of the sea), so a name stays readable over the lines of the map.
-  ctx.strokeStyle = "#0e2440";
+  // A halo, so a name stays readable over the lines of the map.
+  ctx.strokeStyle = style.halo;
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.setLineDash([]);
@@ -252,7 +278,7 @@ export function drawBaseMap(
       // Skip a label that is too near to one that is already drawn.
       if (used.some(([ux, uy]) => Math.abs(ux - sx) < 90 && Math.abs(uy - sy) < 22)) continue;
       used.push([sx, sy]);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillStyle = style.label;
       ctx.beginPath();
       ctx.arc(sx, sy, 2, 0, 2 * Math.PI);
       ctx.fill();

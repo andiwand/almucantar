@@ -1,0 +1,343 @@
+/* The look of shotradar: warm paper, the dusk colors of the logo, and monospace numbers. */
+:root {
+  --paper: #f4ece0;
+  --card: #fffaf2;
+  --ink: #2a1f3d;
+  --muted: #7a6a72;
+  --rose: #8a4a55;
+  --apricot: #e8955e;
+  --line: rgba(42, 31, 61, 0.14);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    15px/1.4 system-ui,
+    sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+/* --- The top bar ------------------------------------------------------------------------------ */
+
+#top {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+#brand,
+#search-box {
+  pointer-events: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(42, 31, 61, 0.12);
+}
+
+#brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+#brand img {
+  border-radius: 7px;
+}
+
+#search-box {
+  flex: 1;
+  max-width: 360px;
+}
+
+#search {
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  outline: none;
+}
+
+#results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+#results small {
+  color: var(--muted);
+}
+
+#hint {
+  position: fixed;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* --- The sheet -------------------------------------------------------------------------------- */
+
+#sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  max-width: 440px;
+  max-height: 52vh;
+  overflow: auto;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 6px 24px rgba(42, 31, 61, 0.18);
+  padding: 10px 14px 8px;
+}
+
+@media (min-width: 800px) {
+  /* On a desktop, the sheet is a column at the left, as high as its content. */
+  #sheet {
+    top: calc(64px + env(safe-area-inset-top));
+    bottom: auto;
+    max-height: calc(100% - 80px);
+  }
+}
+
+#steps {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+#steps button {
+  flex: 1;
+  border: 0;
+  border-bottom: 2px solid var(--line);
+  background: transparent;
+  padding: 6px 2px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+#steps button b {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+#steps button.active {
+  color: var(--ink);
+  border-bottom-color: var(--apricot);
+}
+
+.lead {
+  margin: 4px 0 10px;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips button,
+.tabs button,
+.row button,
+#matches button {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.chips button.active,
+.tabs button.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.chips button small {
+  display: block;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.chips button {
+  border-radius: 12px;
+  text-align: left;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tabs button {
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.primary {
+  width: 100%;
+  margin: 6px 0;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(90deg, var(--rose), var(--apricot));
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  background: #fff;
+}
+
+.card .numbers {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+.field input {
+  width: 6em;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: #fff;
+}
+
+.field input[type="date"] {
+  width: auto;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--rose);
+}
+
+#matches {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+}
+
+#matches li {
+  border-top: 1px solid var(--line);
+  padding: 7px 0;
+}
+
+#matches li button {
+  float: right;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+#matches .when {
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-right: 4px;
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.tag.good {
+  background: #e7f0df;
+  color: #3f6b33;
+}
+
+.tag.bad {
+  background: #f6e2dc;
+  color: #8a3b2b;
+}
+
+#credits {
+  margin: 10px 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+#credits a {
+  color: inherit;
+}

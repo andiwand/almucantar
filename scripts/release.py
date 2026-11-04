@@ -131,6 +131,22 @@ PROJECTS = {
             )
         ],
     },
+    "shotradar-pwa": {
+        "paths": [
+            "web/shotradar/app/**",
+            "web/shared/**",
+            "web/package.json",
+            "web/package-lock.json",
+        ],
+        "changelog": "web/shotradar/app/CHANGELOG.md",
+        "stamps": [
+            (
+                "web/shotradar/app/package.json",
+                r'("version": ")[^"]*(")',
+                r"\g<1>{version}\g<2>",
+            )
+        ],
+    },
 }
 
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")

@@ -9,7 +9,9 @@
     "sunradar/app",
     "sunradar/site",
     "starradar/app",
-    "starradar/site"
+    "starradar/site",
+    "shotradar/app",
+    "shotradar/site"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
