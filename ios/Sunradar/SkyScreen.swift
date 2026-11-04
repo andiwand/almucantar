@@ -154,7 +154,7 @@ struct SkyScreen: SwiftUI.View {
             let observer = location.observer
             let day = dayCache.day(observer: observer, date: selectedDate, calendar: calendar)
             let terrainDay = terrainDayCache.day(day, observer: observer, terrain: terrain)
-            let time = selectedTime(day: day)
+            let time = TimePanel.time(now: now, dayOffset: dayOffset, minuteOfDay: minuteOfDay, calendar: calendar)
             let view = makeView(size: size)
             let sun = try? sunPosition(time, observer: observer)
             let moon = (try? moonIlluminatedFraction(time)).flatMap { fraction in
@@ -193,12 +193,15 @@ struct SkyScreen: SwiftUI.View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     statusPanel(day: day, terrainDay: terrainDay)
-                    if let message { panel { Text(message) } }
-                    if let aligning { panel { Text(hint(aligning)) } }
+                    if let message { Text(message).skyPanel() }
+                    if let aligning { Text(hint(aligning)).skyPanel() }
                     Spacer()
                     VStack(spacing: 8) {
-                        if showTime { panel { timePanel } }
-                        panel { readout(usable: usable, crossing: crossing) }
+                        if showTime {
+                            TimePanel(now: now, calendar: calendar, dayOffset: $dayOffset, minuteOfDay: $minuteOfDay)
+                                .skyPanel()
+                        }
+                        readout(usable: usable, crossing: crossing).skyPanel()
                         buttons(view: view)
                     }
                     .frame(maxWidth: .infinity)
@@ -217,7 +220,7 @@ struct SkyScreen: SwiftUI.View {
             .onAppear {
                 if let scene = ScreenshotMode.scene {
                     motion.startDemo(
-                        deviceToFrame: upright(azimuthDeg: scene.azimuthDeg, pitchDeg: scene.pitchDeg),
+                        deviceToFrame: SkyOrientation.upright(azimuthDeg: scene.azimuthDeg, pitchDeg: scene.pitchDeg),
                         headingSigmaDeg: scene.headingSigmaDeg)
                     location.startDemo(timeZone: ScreenshotScene.timeZone)
                 } else {
@@ -280,41 +283,11 @@ struct SkyScreen: SwiftUI.View {
         if motion.available, let q = motion.deviceToFrame {
             return Almucantar.View(
                 // The scenes of the demo mode are for a device in portrait.
-                deviceToEnu: q, screenRotation: ScreenshotMode.scene != nil ? .rotation0 : screenRotation(),
+                deviceToEnu: q, screenRotation: ScreenshotMode.scene != nil ? .rotation0 : SkyOrientation.screenRotation(),
                 headingOffsetDeg: motion.estimate.offsetDeg,
                 camera: cameraOn ? (camera ?? virtualCamera) : virtualCamera)
         }
-        return Almucantar.View(deviceToEnu: upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)
-    }
-
-    private func screenRotation() -> ScreenRotation {
-        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-        switch scene?.interfaceOrientation {
-        case .landscapeRight: return .rotation90  // home button right: the device top is left
-        case .landscapeLeft: return .rotation270
-        case .portraitUpsideDown: return .rotation180
-        default: return .rotation0
-        }
-    }
-
-    /// A device upright in portrait, with the back camera to the azimuth, pitched up.
-    private func upright(azimuthDeg: Double, pitchDeg: Double) -> Almucantar.Quaternion {
-        // The rotation about east by 90° + pitch, then about up by -azimuth.
-        let a = -azimuthDeg * .pi / 180
-        let p = (90 + pitchDeg) * .pi / 180
-        let qz = (w: cos(a / 2), z: sin(a / 2))
-        let qx = (w: cos(p / 2), x: sin(p / 2))
-        return Almucantar.Quaternion(w: qz.w * qx.w, x: qz.w * qx.x, y: qz.z * qx.x, z: qz.z * qx.w)
-    }
-
-    private func selectedTime(day: SkyDay) -> Double {
-        if minuteOfDay == nil && dayOffset == 0 { return now.timeIntervalSince1970 }
-        let components = calendar.dateComponents([.hour, .minute], from: now)
-        let minute = minuteOfDay.map { Int($0) } ?? components.hour! * 60 + components.minute!
-        // The wall clock time, not midnight + minutes: a day with a DST change has 23 or 25 hours.
-        let start = Date(timeIntervalSince1970: day.start)
-        return (calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: start) ?? start)
-            .timeIntervalSince1970
+        return Almucantar.View(deviceToEnu: SkyOrientation.upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)
     }
 
     /// The detection runs with the camera on and the sun up.
@@ -442,101 +415,10 @@ struct SkyScreen: SwiftUI.View {
 
     // MARK: - Drawing
 
-    private func path(_ lines: [[ScreenPoint]]) -> Path {
-        var path = Path()
-        for line in lines where line.count >= 2 {
-            path.move(to: CGPoint(x: line[0].x, y: line[0].y))
-            for p in line.dropFirst() { path.addLine(to: CGPoint(x: p.x, y: p.y)) }
-        }
-        return path
-    }
-
-    /// Draws the moon at `at` with the lit part toward the sun. The direction of the sun on the screen
-    /// comes from a point 1° from the moon toward the sun, see `MoonPhase.towardSun`.
-    private func drawMoon(
-        _ context: inout GraphicsContext, _ view: Almucantar.View, _ moon: MoonAt, sun: Horizontal?, at: CGPoint, radius: CGFloat
-    ) {
-        var u = CGPoint(x: 0, y: -1)
-        if let sun, let q = point(view, MoonPhase.towardSun(moon.direction, sun)) {
-            let length = hypot(q.x - at.x, q.y - at.y)
-            if length > 1e-3 { u = CGPoint(x: (q.x - at.x) / length, y: (q.y - at.y) / length) }
-        }
-        let v = CGPoint(x: -u.y, y: u.x)
-        let color = Color(white: 0.88)
-        let disc = CGRect(x: at.x - radius, y: at.y - radius, width: 2 * radius, height: 2 * radius)
-        context.fill(Path(ellipseIn: disc), with: .color(color.opacity(0.22)))
-        var lit = Path()
-        for (i, p) in MoonPhase.litOutline(moon.fraction).enumerated() {
-            let q = CGPoint(x: at.x + (u.x * p.x + v.x * p.y) * radius, y: at.y + (u.y * p.x + v.y * p.y) * radius)
-            if i == 0 { lit.move(to: q) } else { lit.addLine(to: q) }
-        }
-        lit.closeSubpath()
-        context.fill(lit, with: .color(color))
-    }
-
-    private func point(_ view: Almucantar.View, _ direction: Horizontal) -> CGPoint? {
-        guard let p = try? project(view, direction), p.valid else { return nil }
-        return CGPoint(x: p.point.x, y: p.point.y)
-    }
-
-    /// Draws a label upright relative to the horizon: its top points to a point higher in the sky.
+    /// A label of sunradar: bold and white, upright relative to the horizon.
     private func label(_ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: String, gap: Double) {
-        guard let at = point(view, direction) else { return }
-        let higher = point(view, Horizontal(azimuthDeg: direction.azimuthDeg, altitudeDeg: min(direction.altitudeDeg + 0.5, 89.9)))
-        let angle = higher.map { atan2($0.x - at.x, -($0.y - at.y)) } ?? 0
-        var c = context
-        c.translateBy(x: at.x, y: at.y)
-        c.rotate(by: .radians(angle))
-        c.addFilter(.shadow(color: .black, radius: 3))
-        c.draw(Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(.white), at: CGPoint(x: 0, y: -gap))
-    }
-
-    /// If `target` is not on the screen, the point on the border of the screen in the direction of
-    /// `target`, seen from `from` (the center of the view), and the unit direction to go on. Nil
-    /// if the target is visible.
-    private func edgeIndicator(_ view: Almucantar.View, from: Horizontal, to target: Horizontal) -> (CGPoint, CGPoint)? {
-        let bounds = CGRect(x: 0, y: 0, width: view.camera.width, height: view.camera.height).insetBy(dx: 28, dy: 28)
-        let inside = { (h: Horizontal) in point(view, h).map { bounds.contains($0) } ?? false }
-        if inside(target) { return nil }
-        let a = Geo.enu(from)
-        var b = Geo.enu(target)
-        // Directly behind the user, the way is not defined; take a way to the right.
-        if simd_length_squared(a + b) < 1e-6 {
-            b = Geo.enu(Horizontal(azimuthDeg: from.azimuthDeg + 179, altitudeDeg: from.altitudeDeg))
-        }
-        let along = { (t: Double) in Geo.horizontal(a + (b - a) * t) }
-        var (lo, hi) = (0.0, 1.0)
-        for _ in 0..<24 {
-            let mid = (lo + hi) / 2
-            if inside(along(mid)) { lo = mid } else { hi = mid }
-        }
-        guard let edge = point(view, along(lo)), let before = point(view, along(lo * 0.9)) else { return nil }
-        let (dx, dy) = (edge.x - before.x, edge.y - before.y)
-        let length = hypot(dx, dy)
-        return length > 0 ? (edge, CGPoint(x: dx / length, y: dy / length)) : nil
-    }
-
-    /// Fills the area below the terrain line, in narrow parts of the azimuth. The projection cuts a
-    /// part at the border of the view, so a narrow part keeps the error of the cut small.
-    private func fillTerrain(_ context: inout GraphicsContext, _ view: Almucantar.View, color: Color) {
-        let chunk = 12
-        var fill = Path()
-        for line in terrain.lines {
-            var start = 0
-            while start < line.count - 1 {
-                let top = Array(line[start...min(start + chunk, line.count - 1)])
-                start += chunk
-                let bottom = [top.last!, top.first!].map { Horizontal(azimuthDeg: $0.azimuthDeg, altitudeDeg: -89) }
-                guard let pieces = try? projectLine(view, top + bottom + [top[0]]), !pieces.isEmpty else { continue }
-                // The last piece continues into the first one, because the polygon is closed.
-                let ordered = pieces.count > 1 ? [pieces.last!] + pieces.dropLast() : pieces
-                let points = ordered.flatMap { $0 }
-                fill.move(to: CGPoint(x: points[0].x, y: points[0].y))
-                for p in points.dropFirst() { fill.addLine(to: CGPoint(x: p.x, y: p.y)) }
-                fill.closeSubpath()
-            }
-        }
-        context.fill(fill, with: .color(color))
+        SkyDrawing.label(
+            &context, view, direction, Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(.white), gap: gap)
     }
 
     private func draw(
@@ -547,14 +429,14 @@ struct SkyScreen: SwiftUI.View {
         let blue = Color(red: 0.498, green: 0.847, blue: 1)
         let green = Color(red: 0.6, green: 0.86, blue: 0.56)
         let hasTerrain = !terrain.lines.isEmpty
-        if hasTerrain && !cameraOn { fillTerrain(&context, view, color: green.opacity(0.12)) }
+        if hasTerrain && !cameraOn { SkyDrawing.fillTerrain(&context, view, lines: terrain.lines, color: green.opacity(0.12)) }
         if let horizon = try? horizonLine(view) {
             // The 0° horizon stays, but the terrain line is the one that the user sees.
-            context.stroke(path(horizon), with: .color(.white.opacity(hasTerrain ? 0.3 : 0.8)), lineWidth: hasTerrain ? 1 : 1.5)
+            context.stroke(SkyDrawing.path(horizon), with: .color(.white.opacity(hasTerrain ? 0.3 : 0.8)), lineWidth: hasTerrain ? 1 : 1.5)
         }
         for line in terrain.lines {
             if let lines = try? projectLine(view, line) {
-                context.stroke(path(lines), with: .color(green), lineWidth: 2)
+                context.stroke(SkyDrawing.path(lines), with: .color(green), lineWidth: 2)
             }
         }
         for (az, name) in [(0.0, "N"), (90.0, "E"), (180.0, "S"), (270.0, "W")] {
@@ -562,24 +444,24 @@ struct SkyScreen: SwiftUI.View {
         }
         for guide in day.guides {
             if let lines = try? projectLine(view, guide) {
-                context.stroke(path(lines), with: .color(.white.opacity(0.35)), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                context.stroke(SkyDrawing.path(lines), with: .color(.white.opacity(0.35)), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
             }
         }
         if let lines = try? projectLine(view, day.path) {
-            context.stroke(path(lines), with: .color(yellow.opacity(0.5)), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow.opacity(0.5)), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
         }
         for segment in terrainDay?.visible ?? day.daySegments {
             guard let lines = try? projectLine(view, segment) else { continue }
-            context.stroke(path(lines), with: .color(yellow.opacity(0.25)), lineWidth: 9)
-            context.stroke(path(lines), with: .color(yellow), lineWidth: 3)
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow.opacity(0.25)), lineWidth: 9)
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow), lineWidth: 3)
         }
         // The parts of the path behind the terrain: dimmer and dashed.
         for segment in terrainDay?.hidden ?? [] {
             guard let lines = try? projectLine(view, segment) else { continue }
-            context.stroke(path(lines), with: .color(yellow.opacity(0.6)), style: StrokeStyle(lineWidth: 2.5, dash: [5, 5]))
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow.opacity(0.6)), style: StrokeStyle(lineWidth: 2.5, dash: [5, 5]))
         }
         for hour in day.hours {
-            guard let p = point(view, hour.direction) else { continue }
+            guard let p = SkyDrawing.point(view, hour.direction) else { continue }
             context.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)), with: .color(yellow))
             label(&context, view, hour.direction, hour.label, gap: 12)
         }
@@ -588,36 +470,29 @@ struct SkyScreen: SwiftUI.View {
             let steps = max(2, Int(abs(end).rounded(.up)))
             let vertical = (0...steps).map { Horizontal(azimuthDeg: center.azimuthDeg, altitudeDeg: end * Double($0) / Double(steps)) }
             if let lines = try? projectLine(view, vertical) {
-                context.stroke(path(lines), with: .color(blue), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                context.stroke(SkyDrawing.path(lines), with: .color(blue), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
             }
-            if let p = point(view, crossing.sun) {
+            if let p = SkyDrawing.point(view, crossing.sun) {
                 context.stroke(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(blue), lineWidth: 2.5)
             }
         }
         // A landmark of the calibration: a marker on the horizon at its bearing.
-        if let landmark, let p = point(view, landmark) {
+        if let landmark, let p = SkyDrawing.point(view, landmark) {
             context.stroke(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)), with: .color(.red), lineWidth: 2.5)
             label(&context, view, landmark, "landmark", gap: 16)
         }
         // The moon with its phase. The faint disc shows the dark part.
-        if let moon, let p = point(view, moon.direction) {
-            drawMoon(&context, view, moon, sun: sun, at: p, radius: 11)
+        if let moon, let p = SkyDrawing.point(view, moon.direction) {
+            SkyDrawing.drawMoon(&context, view, moon, sun: sun, at: p, radius: 11)
             label(&context, view, moon.direction, "moon", gap: 20)
         }
         // The sun, or an arrow at the border of the screen that points to it.
         let sunColor = Color(red: 1, green: 0.878, blue: 0.541)
-        if let sun, let center, let (at, direction) = edgeIndicator(view, from: center, to: sun) {
-            let back = CGPoint(x: at.x - direction.x * 18, y: at.y - direction.y * 18)
-            let side = CGPoint(x: -direction.y * 11, y: direction.x * 11)
-            var arrow = Path()
-            arrow.move(to: at)
-            arrow.addLine(to: CGPoint(x: back.x + side.x, y: back.y + side.y))
-            arrow.addLine(to: CGPoint(x: back.x - side.x, y: back.y - side.y))
-            arrow.closeSubpath()
-            context.fill(arrow, with: .color(sunColor))
+        if let sun, let center, let (at, direction) = SkyDrawing.edgeIndicator(view, from: center, to: sun) {
+            SkyDrawing.drawArrow(&context, at: at, direction: direction, color: sunColor)
             let dot = CGPoint(x: at.x - direction.x * 26, y: at.y - direction.y * 26)
             context.fill(Path(ellipseIn: CGRect(x: dot.x - 6, y: dot.y - 6, width: 12, height: 12)), with: .color(sunColor))
-        } else if let sun, let p = point(view, sun) {
+        } else if let sun, let p = SkyDrawing.point(view, sun) {
             context.fill(Path(ellipseIn: CGRect(x: p.x - 26, y: p.y - 26, width: 52, height: 52)), with: .color(yellow.opacity(0.25)))
             context.fill(Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28)), with: .color(sunColor))
         }
@@ -646,35 +521,26 @@ struct SkyScreen: SwiftUI.View {
 
     // MARK: - Panels
 
-    private func panel<Content: SwiftUI.View>(@ViewBuilder _ content: () -> Content) -> some SwiftUI.View {
-        content()
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
-    }
-
     private func statusPanel(day: SkyDay, terrainDay: TerrainDay?) -> some SwiftUI.View {
-        panel {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(location.text).bold()
-                headingText
-                Text(day.summary).foregroundColor(.white.opacity(0.85))
-                if let terrainDay, !terrainDay.summary.isEmpty {
-                    Text(terrainDay.summary).foregroundColor(Color(red: 0.6, green: 0.86, blue: 0.56))
-                }
-                switch terrain.status {
-                case .loading(let remaining):
-                    Text("Loading the terrain (\(remaining) \(remaining == 1 ? "tile" : "tiles"))…")
-                        .font(.footnote).foregroundColor(.white.opacity(0.7))
-                case .missing:
-                    Text(terrain.profile == nil ? "No terrain data (offline)" : "Terrain data incomplete (offline)")
-                        .font(.footnote).foregroundColor(.orange)
-                case .off, .ready:
-                    EmptyView()
-                }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(location.text).bold()
+            headingText
+            Text(day.summary).foregroundColor(.white.opacity(0.85))
+            if let terrainDay, !terrainDay.summary.isEmpty {
+                Text(terrainDay.summary).foregroundColor(Color(red: 0.6, green: 0.86, blue: 0.56))
+            }
+            switch terrain.status {
+            case .loading(let remaining):
+                Text("Loading the terrain (\(remaining) \(remaining == 1 ? "tile" : "tiles"))…")
+                    .font(.footnote).foregroundColor(.white.opacity(0.7))
+            case .missing:
+                Text(terrain.profile == nil ? "No terrain data (offline)" : "Terrain data incomplete (offline)")
+                    .font(.footnote).foregroundColor(.orange)
+            case .off, .ready:
+                EmptyView()
             }
         }
+        .skyPanel()
     }
 
     private var headingText: some SwiftUI.View {
@@ -711,24 +577,6 @@ struct SkyScreen: SwiftUI.View {
             }
         }
         .multilineTextAlignment(.center)
-    }
-
-    private var timePanel: some SwiftUI.View {
-        VStack(alignment: .leading) {
-            HStack {
-                Text(PlaceTime.date(calendar.date(byAdding: .day, value: Int(dayOffset), to: now)!, location.timeZone))
-                    .frame(width: 120, alignment: .leading)
-                Slider(value: $dayOffset, in: -183...183, step: 1)
-                Button("Today") { dayOffset = 0 }
-            }
-            HStack {
-                let minute = minuteOfDay ?? Double(calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now))
-                Text(String(format: "%02d:%02d", Int(minute) / 60, Int(minute) % 60) + (minuteOfDay == nil ? " (now)" : ""))
-                    .frame(width: 120, alignment: .leading)
-                Slider(value: Binding(get: { minute }, set: { minuteOfDay = $0 }), in: 0...1439, step: 1)
-                Button("Now") { minuteOfDay = nil }
-            }
-        }
     }
 
     /// The align menu. Each item says what happens, or why it is not possible now.
