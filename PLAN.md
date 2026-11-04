@@ -578,11 +578,7 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. starradar (14.2): the layout of the sites, the star data, the core, then the PWA and the
-   website together.
-3. The core parts of the photo planner (14.1), in this order: the windows of darkness, the line
-   of sight over the DEM, and the inverse search.
-4. A prototype of the photo planner as a web app (14.1).
+2. shotradar, the photo planner (14.1): the core (`plan.hpp`), then the PWA and the website.
 
 Smaller items: the terrain line as a heading calibration (13.1), the Windows wheels (M10), and
 WMM2030 before the end of 2029.
@@ -770,7 +766,7 @@ app is mostly a new UI. The core has the name almucantar, and the repository hol
    the core already has the planets and the Milky Way (14.2).
 3. **The photo planner** is the third app. It comes after the sky map.
 
-### 14.1 The photo planner (the third app)
+### 14.1 shotradar: the photo planner (the third app)
 
 A friend of the user proposed the idea: photographers point at a place on a map and look for the
 times when the sun, the moon, or the Milky Way is at a given place in the picture, for example the
@@ -804,6 +800,50 @@ calendar of results, the phases of the twilight and of the moon, and the darknes
 
 **The order:** the core parts first, then a prototype of the planner as a second web app next to
 the PWA (the cheapest UI to try), then a decision about a native app.
+
+**Decided (2026-11-04):** the name is **shotradar**, the third app of the family: a photographer
+plans a shot. A web search found no app with this name.
+
+#### The workflow
+
+**Decided (2026-11-04):** the subject first, then the landmark.
+
+1. **The subject:** the moon, the Milky Way (its center), the sun, or a planet.
+2. **The landmark:** a place on the map, with its height: a peak, a tower, a church. The height
+   comes from the DEM, and the user can add the height of a building.
+3. **The search** gives a calendar of matches. There are two kinds:
+   - **"I stand here"** (the place is fixed, for example the device location): the dates and the
+     times when the subject is behind the landmark, seen from the place.
+   - **"Where must I stand?"** (the place is free): for a date and a time, the line of places on
+     the map from which the subject is behind the landmark, and on that line the spots where the
+     ground has the right height.
+4. **The checks** of a match: the darkness of the sky (the twilight and the moon), the line of
+   sight from the spot to the landmark over the DEM, and the phase of the moon.
+5. **The map** is the main view: the place, the landmark, the line to the subject, and the line
+   of the spots. The AR view (the camera view of sunradar and starradar) is the check at the place.
+
+#### The core
+
+A new public header `almucantar/plan.hpp`, with tests against independent calculations. C++,
+Python, and WASM first (the PWA needs it); the AAR and the Swift package follow with a native app.
+
+| Function | What |
+|---|---|
+| `Body` (moved to `types.hpp`) | gets the galactic center and the planets, after the sun and the moon, so the old values stay. `terrain_events()` takes all bodies. |
+| `body_position()` | the apparent position of any body: one function for the search. |
+| `sight()` | the direction and the distance from one point with a height to another: the bearing, and the altitude with the curvature of the Earth and the terrestrial refraction (the model of `horizon_profile()`). |
+| `find_alignments()` | "I stand here": the times when a body is in a fixed direction, for any body. The search follows the hour angle of the body to the hour angle of the direction (one or two evaluations per hour of the day), then finds the smallest separation. A year takes about 10,000 positions, so it is fast also in WebAssembly. |
+| `alignment_line()` | "Where must I stand?": for a time, the places behind the landmark (in the opposite direction of the body) and the height of the eye that puts the landmark on the body. With DEM tiles, also the ground on the line and the spots where the ground plus the eye has that height. The direction of the moon changes with the place (the parallax, up to 1°), so the function calculates the moon for each point. |
+| `line_of_sight()` | whether the landmark is visible from a spot over the DEM, the clearance, and the point that blocks the view. |
+| `dark_windows()` | the windows of darkness: the sun below a limit (−18° by default), the moon below the horizon or nearly new, and, if asked, the galactic center above the terrain. |
+
+#### The order of the work
+
+1. The core (`plan.hpp`), with the Python and the WASM bindings.
+2. The PWA (`web/shotradar/app`): the workflow above, on the map of `web/shared`.
+3. The website (`web/shotradar/site`): a scroll story like the other two, with its own design. It
+   follows the workflow: the subject, the landmark, the calendar, the spot, and the shot.
+4. A native app, if the prototype is good.
 
 ### 14.2 starradar: the sky map (the second app)
 
