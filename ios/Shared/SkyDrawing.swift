@@ -22,9 +22,11 @@ enum SkyDrawing {
     }
 
     /// Draws `text` upright relative to the horizon: its top points to a point higher in the sky.
-    /// The text is `gap` points above the direction.
+    /// The text is `gap` points above the direction. The `shadow` is the halo around the text: dark
+    /// for a light text, light for a dark text.
     static func label(
-        _ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: Text, gap: Double
+        _ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: Text, gap: Double,
+        shadow: Color = .black
     ) {
         guard let at = point(view, direction) else { return }
         let higher = point(view, Horizontal(azimuthDeg: direction.azimuthDeg, altitudeDeg: min(direction.altitudeDeg + 0.5, 89.9)))
@@ -32,7 +34,7 @@ enum SkyDrawing {
         var c = context
         c.translateBy(x: at.x, y: at.y)
         c.rotate(by: .radians(angle))
-        c.addFilter(.shadow(color: .black, radius: 3))
+        c.addFilter(.shadow(color: shadow, radius: 3))
         c.draw(text, at: CGPoint(x: 0, y: -gap))
     }
 

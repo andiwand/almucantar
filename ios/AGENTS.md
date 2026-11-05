@@ -24,7 +24,8 @@ for the features and the behavior.
 | `project.yml` | The XcodeGen project. `xcodegen generate` writes `Almucantar.xcodeproj`, which is not in Git. |
 | `Sonnseite/SonnseiteApp.swift` | The entry point. |
 | `Sonnseite/SkyScreen.swift` | The sky view: the drawing, the readout, the time panel, the align menu, and the detected sun. |
-| `Shared/SkyDrawing.swift` | The drawing helpers of the sky views (`SkyDrawing`): the point and the lines of a projection, upright labels, the arrow at the border of the screen, the terrain fill, and the moon with its phase. `SkyOrientation` gives the screen rotation and the upright device of the drag view. `skyPanel()` is the dark panel over the sky. |
+| `Sonnseite/SunLook.swift` | The bright look of the day of Sonnseite, the same as the PWA: the sky view without the camera (`SunLook.drawSkyView`: the sky colors of `DemoSkyDrawing.skyColors`, the glow of the sun, and the ground), the colors, the warm white panel (`sunPanel()`), and the capsule buttons (`SunButtonStyle`). Sternstunde keeps the dark `skyPanel()`. |
+| `Shared/SkyDrawing.swift` | The drawing helpers of the sky views (`SkyDrawing`): the point and the lines of a projection, upright labels (with a dark shadow, or a light halo with `shadow:`), the arrow at the border of the screen, the terrain fill, and the moon with its phase. `SkyOrientation` gives the screen rotation and the upright device of the drag view. `skyPanel()` is the dark panel over the sky. |
 | `Shared/TimePanel.swift` | The date and time sliders, and `TimePanel.time`, the selected time on the wall clock of the place. |
 | `Shared/MapPicker.swift` | The MapKit map to pick a landmark. |
 | `Shared/BaseMap.swift` | The offline base map (`assets/basemap/basemap.json`, Natural Earth, a resource of the app): the decode, the search, the nearest place and its time zone, and Web Mercator (`MapViewport`). `BaseMapStore` decodes it once, off the main thread. |

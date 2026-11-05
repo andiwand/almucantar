@@ -5,6 +5,12 @@ The changes in the iOS app Sonnseite that a user notices. Each release has the t
 
 ## Unreleased
 
+- The app has the bright look of the day of the website and the web app. Without the camera, the
+  sky has the colors of the height of the sun, with a glow around the sun and a light ground below
+  the horizon. The path of the sun has a dark edge. On a bright sky, the labels and the crosshair
+  are dark, so they are easy to see. The panels are warm white with dark text, the buttons are
+  capsules, and the Align button is sun yellow.
+
 - The app has the name Sonnseite (sunradar before), the Austrian word for the sunny side of a
   valley, and the bundle ID `at.stefl.sonnseite`.
 

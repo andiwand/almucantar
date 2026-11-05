@@ -182,7 +182,8 @@ struct SkyScreen: SwiftUI.View {
                         CameraView(detectSun: detecting, onBlobs: { blobs = $0 }) { camera = $0 }.ignoresSafeArea()
                     }
                 }
-                Canvas { context, _ in
+                Canvas { context, canvasSize in
+                    if !cameraOn { SunLook.drawSkyView(&context, view: view, sun: sun, size: canvasSize) }
                     draw(
                         &context, view: view, day: day, terrainDay: terrainDay, sun: sun, moon: moon,
                         landmark: landmarkDirection, center: center, crossing: crossing)
@@ -193,15 +194,17 @@ struct SkyScreen: SwiftUI.View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     statusPanel(day: day, terrainDay: terrainDay)
-                    if let message { Text(message).skyPanel() }
-                    if let aligning { Text(hint(aligning)).skyPanel() }
+                    if let message { Text(message).sunPanel() }
+                    if let aligning { Text(hint(aligning)).sunPanel() }
                     Spacer()
                     VStack(spacing: 8) {
                         if showTime {
                             TimePanel(now: now, calendar: calendar, dayOffset: $dayOffset, minuteOfDay: $minuteOfDay)
-                                .skyPanel()
+                                .tint(SunLook.slider)
+                                .buttonStyle(SunButtonStyle())
+                                .sunPanel()
                         }
-                        readout(usable: usable, crossing: crossing).skyPanel()
+                        readout(usable: usable, crossing: crossing).sunPanel()
                         buttons(view: view)
                     }
                     .frame(maxWidth: .infinity)
@@ -418,10 +421,16 @@ struct SkyScreen: SwiftUI.View {
 
     // MARK: - Drawing
 
-    /// A label of sonnseite: bold and white, upright relative to the horizon.
-    private func label(_ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: String, gap: Double) {
+    /// A label of sonnseite: bold, upright relative to the horizon. It is white with a dark shadow,
+    /// or dark with a light halo on a bright sky.
+    private func label(
+        _ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: String, gap: Double,
+        bright: Bool
+    ) {
         SkyDrawing.label(
-            &context, view, direction, Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(.white), gap: gap)
+            &context, view, direction,
+            Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(bright ? SunLook.ink : .white), gap: gap,
+            shadow: bright ? SunLook.halo : .black)
     }
 
     private func draw(
@@ -431,6 +440,11 @@ struct SkyScreen: SwiftUI.View {
         let yellow = Color(red: 1, green: 0.784, blue: 0.239)
         let blue = Color(red: 0.498, green: 0.847, blue: 1)
         let green = Color(red: 0.6, green: 0.86, blue: 0.56)
+        // In the sky view, the sky is bright by day, so the labels and the helpers are dark. On the
+        // camera image, they are light.
+        let bright = !cameraOn && (sun?.altitudeDeg ?? -90) > -4
+        let helper = bright ? SunLook.helper : blue
+        let ink = bright ? SunLook.ink : Color.white
         let hasTerrain = !terrain.lines.isEmpty
         if hasTerrain && !cameraOn { SkyDrawing.fillTerrain(&context, view, lines: terrain.lines, color: green.opacity(0.12)) }
         if let horizon = try? horizonLine(view) {
@@ -443,7 +457,7 @@ struct SkyScreen: SwiftUI.View {
             }
         }
         for (az, name) in [(0.0, "N"), (90.0, "E"), (180.0, "S"), (270.0, "W")] {
-            label(&context, view, Horizontal(azimuthDeg: az, altitudeDeg: 0), name, gap: 14)
+            label(&context, view, Horizontal(azimuthDeg: az, altitudeDeg: 0), name, gap: 14, bright: bright)
         }
         for guide in day.guides {
             if let lines = try? projectLine(view, guide) {
@@ -455,8 +469,10 @@ struct SkyScreen: SwiftUI.View {
         }
         for segment in terrainDay?.visible ?? day.daySegments {
             guard let lines = try? projectLine(view, segment) else { continue }
-            context.stroke(SkyDrawing.path(lines), with: .color(yellow.opacity(0.25)), lineWidth: 9)
-            context.stroke(SkyDrawing.path(lines), with: .color(yellow), lineWidth: 3)
+            // A dark edge, so the path is easy to see on a bright sky.
+            context.stroke(SkyDrawing.path(lines), with: .color(SunLook.hex(0xb45f06, 0.35)), lineWidth: 6)
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow.opacity(0.25)), lineWidth: 12)
+            context.stroke(SkyDrawing.path(lines), with: .color(yellow), lineWidth: 3.5)
         }
         // The parts of the path behind the terrain: dimmer and dashed.
         for segment in terrainDay?.hidden ?? [] {
@@ -466,28 +482,28 @@ struct SkyScreen: SwiftUI.View {
         for hour in day.hours {
             guard let p = SkyDrawing.point(view, hour.direction) else { continue }
             context.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)), with: .color(yellow))
-            label(&context, view, hour.direction, hour.label, gap: 12)
+            label(&context, view, hour.direction, hour.label, gap: 12, bright: bright)
         }
         if let crossing, let center {
             let end = crossing.sun.altitudeDeg
             let steps = max(2, Int(abs(end).rounded(.up)))
             let vertical = (0...steps).map { Horizontal(azimuthDeg: center.azimuthDeg, altitudeDeg: end * Double($0) / Double(steps)) }
             if let lines = try? projectLine(view, vertical) {
-                context.stroke(SkyDrawing.path(lines), with: .color(blue), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                context.stroke(SkyDrawing.path(lines), with: .color(helper), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
             }
             if let p = SkyDrawing.point(view, crossing.sun) {
-                context.stroke(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(blue), lineWidth: 2.5)
+                context.stroke(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(helper), lineWidth: 2.5)
             }
         }
         // A landmark of the calibration: a marker on the horizon at its bearing.
         if let landmark, let p = SkyDrawing.point(view, landmark) {
             context.stroke(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)), with: .color(.red), lineWidth: 2.5)
-            label(&context, view, landmark, "landmark", gap: 16)
+            label(&context, view, landmark, "landmark", gap: 16, bright: bright)
         }
         // The moon with its phase. The faint disc shows the dark part.
         if let moon, let p = SkyDrawing.point(view, moon.direction) {
             SkyDrawing.drawMoon(&context, view, moon, sun: sun, at: p, radius: 11)
-            label(&context, view, moon.direction, "moon", gap: 20)
+            label(&context, view, moon.direction, "moon", gap: 20, bright: bright)
         }
         // The sun, or an arrow at the border of the screen that points to it.
         let sunColor = Color(red: 1, green: 0.878, blue: 0.541)
@@ -496,8 +512,10 @@ struct SkyScreen: SwiftUI.View {
             let dot = CGPoint(x: at.x - direction.x * 26, y: at.y - direction.y * 26)
             context.fill(Path(ellipseIn: CGRect(x: dot.x - 6, y: dot.y - 6, width: 12, height: 12)), with: .color(sunColor))
         } else if let sun, let p = SkyDrawing.point(view, sun) {
-            context.fill(Path(ellipseIn: CGRect(x: p.x - 26, y: p.y - 26, width: 52, height: 52)), with: .color(yellow.opacity(0.25)))
-            context.fill(Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28)), with: .color(sunColor))
+            // A light disc with a soft yellow glow.
+            var glow = context
+            glow.addFilter(.shadow(color: SunLook.hex(0xffbe3c, 0.95), radius: 13))
+            glow.fill(Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28)), with: .color(SunLook.hex(0xfff4d2)))
         }
         let c = CGPoint(x: view.camera.cx, y: view.camera.cy)
         var cross = Path()
@@ -505,7 +523,7 @@ struct SkyScreen: SwiftUI.View {
         cross.addLine(to: CGPoint(x: c.x + 16, y: c.y))
         cross.move(to: CGPoint(x: c.x, y: c.y - 16))
         cross.addLine(to: CGPoint(x: c.x, y: c.y + 16))
-        context.stroke(cross, with: .color(.white), lineWidth: 1.5)
+        context.stroke(cross, with: .color(ink), lineWidth: 1.5)
     }
 
     /// A box around the detected sun, with a hint to tap it.
@@ -528,32 +546,32 @@ struct SkyScreen: SwiftUI.View {
         VStack(alignment: .leading, spacing: 2) {
             Text(location.text).bold()
             headingText
-            Text(day.summary).foregroundColor(.white.opacity(0.85))
+            Text(day.summary).foregroundColor(SunLook.secondary)
             if let terrainDay, !terrainDay.summary.isEmpty {
-                Text(terrainDay.summary).foregroundColor(Color(red: 0.6, green: 0.86, blue: 0.56))
+                Text(terrainDay.summary).foregroundColor(SunLook.good)
             }
             switch terrain.status {
             case .loading(let remaining):
                 Text("Loading the terrain (\(remaining) \(remaining == 1 ? "tile" : "tiles"))…")
-                    .font(.footnote).foregroundColor(.white.opacity(0.7))
+                    .font(.footnote).foregroundColor(SunLook.secondary)
             case .missing:
                 Text(terrain.profile == nil ? "No terrain data (offline)" : "Terrain data incomplete (offline)")
-                    .font(.footnote).foregroundColor(.orange)
+                    .font(.footnote).foregroundColor(SunLook.poor)
             case .off, .ready:
                 EmptyView()
             }
         }
-        .skyPanel()
+        .sunPanel()
     }
 
     private var headingText: some SwiftUI.View {
         let sigma = sqrt(motion.estimate.varianceDeg2)
         if !motion.available || motion.deviceToFrame == nil {
-            return Text("No motion sensors: drag to look around").foregroundColor(.orange)
+            return Text("No motion sensors: drag to look around").foregroundColor(SunLook.poor)
         }
-        if sigma > 10 { return Text(String(format: "Heading ±%.0f° (align with the sun)", sigma)).foregroundColor(.orange) }
-        if sigma > 3 { return Text(String(format: "Heading ±%.0f°", sigma)).foregroundColor(.yellow) }
-        return Text(String(format: "Heading ±%.1f°", sigma)).foregroundColor(.green)
+        if sigma > 10 { return Text(String(format: "Heading ±%.0f° (align with the sun)", sigma)).foregroundColor(SunLook.poor) }
+        if sigma > 3 { return Text(String(format: "Heading ±%.0f°", sigma)).foregroundColor(SunLook.fair) }
+        return Text(String(format: "Heading ±%.1f°", sigma)).foregroundColor(SunLook.good)
     }
 
     private func readout(usable: Bool, crossing: AzimuthCrossing?) -> some SwiftUI.View {
@@ -563,7 +581,7 @@ struct SkyScreen: SwiftUI.View {
             } else if let crossing {
                 Text(PlaceTime.time(crossing.unixUtc, location.timeZone))
                     .font(.system(size: 34, weight: .bold))
-                    .foregroundColor(Color(red: 0.498, green: 0.847, blue: 1))
+                    .foregroundColor(SunLook.amber)
                 Text(
                     crossing.sun.altitudeDeg >= 0
                         ? String(format: "The sun is in this direction, %.0f° high", crossing.sun.altitudeDeg)
@@ -576,7 +594,7 @@ struct SkyScreen: SwiftUI.View {
                     "In the crosshair: "
                         + dates.map { PlaceTime.dayAndTime($0.unixUtc, location.timeZone) }.joined(separator: ", ")
                 )
-                .foregroundColor(Color(red: 1, green: 0.878, blue: 0.541))
+                .foregroundColor(SunLook.secondary)
             }
         }
         .multilineTextAlignment(.center)
@@ -591,7 +609,7 @@ struct SkyScreen: SwiftUI.View {
         let moonUp = ((try? moonPosition(t, observer: observer))?.altitudeDeg ?? -1) > 0
         let moonBright = ((try? moonIlluminatedFraction(t)) ?? 0) >= Self.minMoonFraction
         let located = location.hasPlace
-        return Menu("Align") {
+        return Menu {
             Button {
                 startBodyAlign(.sun)
             } label: {
@@ -617,9 +635,10 @@ struct SkyScreen: SwiftUI.View {
                 Text(located ? "Pick it on a map, then aim at it" : "Needs your place (allow location access, or drop it)")
             }
             .disabled(!located)
+        } label: {
+            Text("Align")
         }
-        .buttonStyle(.borderedProminent)
-        .foregroundStyle(Self.onTint)
+        .buttonStyle(SunButtonStyle(primary: true))
     }
 
     /// The sun and the moon need the camera image, so the camera switches on first.
@@ -635,27 +654,22 @@ struct SkyScreen: SwiftUI.View {
                 aligning = nil
                 cameraOn.toggle()
             }
-                .buttonStyle(.bordered)
             Button(dayOffset == 0 && minuteOfDay == nil ? "Time" : "Time ●") { showTime.toggle() }
-                .buttonStyle(.bordered)
             if aligning == .landmark {
                 Button("Aligned") {
                     message = alignWithLandmark(view: view)
                     aligning = nil
                 }
-                .buttonStyle(.borderedProminent)
-                .foregroundStyle(Self.onTint)
+                .buttonStyle(SunButtonStyle(primary: true))
             } else if aligning != nil {
                 Button("Cancel") { aligning = nil }
-                    .buttonStyle(.borderedProminent)
-                    .foregroundStyle(Self.onTint)
+                    .buttonStyle(SunButtonStyle(primary: true))
             } else {
                 // The order of Android: Place before Align, and the menu last.
                 Button("Place") {
                     message = nil
                     showPlace = true
                 }
-                .buttonStyle(.bordered)
                 alignMenu
                 // The menu of the app: the settings and the credits. It is hidden during an alignment.
                 Menu {
@@ -663,13 +677,9 @@ struct SkyScreen: SwiftUI.View {
                 } label: {
                     Image(systemName: "ellipsis").rotationEffect(.degrees(90)).frame(width: 16, height: 22)
                 }
-                .buttonStyle(.bordered)
                 .accessibilityLabel("Menu")
             }
         }
-        .tint(Color(red: 0.81, green: 0.74, blue: 1))
+        .buttonStyle(SunButtonStyle())
     }
-
-    /// The label on the light tint of a prominent button: dark, as on Android, so it can be read.
-    private static let onTint = Color(red: 0.22, green: 0.12, blue: 0.40)
 }
