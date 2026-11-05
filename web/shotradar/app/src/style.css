@@ -145,6 +145,24 @@ body.on-map .brand span {
   color: rgba(255, 243, 214, 0.75);
 }
 
+#trail li button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+#trail li.done:hover {
+  border-color: var(--apricot);
+}
+
 #trail li.active {
   background: var(--apricot);
   border-color: var(--apricot);

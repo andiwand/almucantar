@@ -240,25 +240,42 @@ window.addEventListener("popstate", (e) => {
   render();
 });
 $("back").addEventListener("click", () => history.back());
+// Home goes back in the history too, so the entries of the history match the stack.
 $("home").addEventListener("click", () => {
-  stack = [{ kind: "home" }];
-  render();
+  if (stack.length > 1) history.go(1 - stack.length);
 });
+
+/** The step of a screen in the strip of film, or -1. */
+function stepOf(screen: Screen): number {
+  if (screen.kind === "home") return -1;
+  if (screen.kind === "shot" || screen.kind === "shot-map") return TRAILS[flow].length - 1;
+  return TRAIL_INDEX[flow][screen.kind] ?? -1;
+}
 
 function trail(screen: Screen) {
   const steps = screen.kind === "home" ? [] : TRAILS[flow];
-  const at =
-    screen.kind === "shot" || screen.kind === "shot-map"
-      ? steps.length - 1
-      : (TRAIL_INDEX[flow][screen.kind] ?? -1);
+  const at = stepOf(screen);
+  // A done step is a button: it goes back to the last screen of that step.
   $("trail").innerHTML = steps
-    .map(
-      (s, i) =>
-        `<li class="${i < at ? "done" : i === at ? "active" : ""}"><i>${String(i + 1).padStart(2, "0")}</i><span>${s}</span></li>`,
-    )
+    .map((s, i) => {
+      const label = `<i>${String(i + 1).padStart(2, "0")}</i><span>${s}</span>`;
+      if (i < at)
+        return `<li class="done"><button data-step="${i}" aria-label="Back to ${s}">${label}</button></li>`;
+      return `<li class="${i === at ? "active" : ""}"${i === at ? ' aria-current="step"' : ""}>${label}</li>`;
+    })
     .join("");
   $("back").classList.toggle("hidden", stack.length <= 1);
 }
+
+$("trail").addEventListener("click", (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-step]");
+  if (!button) return;
+  const step = Number(button.dataset.step);
+  let index = stack.length - 1;
+  while (index >= 0 && stepOf(stack[index]) !== step) index--;
+  // The history goes back, so the browser and the stack stay the same.
+  if (index >= 0) history.go(index + 1 - stack.length);
+});
 
 let renderGeneration = 0;
 

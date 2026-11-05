@@ -99,16 +99,23 @@ export function light(core: Core, unixUtc: number, at: Observer) {
   return { sunDeg: sun, label, dark: sun < -12 };
 }
 
-/** The smallest lit part of the moon that a photo shows. A new moon is not visible. */
+/** A moon with less light than this shows only as a crescent in the twilight. */
 const MIN_MOON_FRACTION = 0.1;
+/** The thinnest crescent that a photo shows. It is still near the sun. */
+const MIN_CRESCENT_FRACTION = 0.03;
+/** The sun must be this low for a thin crescent: then the twilight and the earthshine show. */
+const CRESCENT_MAX_SUN_DEG = -3;
 
 /** True if the subject is visible at the shot: a dark enough sky, and a moon that is lit. */
 export function darkEnough(core: Core, s: Shot): boolean {
-  if (s.subject === "moon" && core.moonIlluminatedFraction(s.unixUtc) < MIN_MOON_FRACTION) {
-    return false;
+  const sunDeg = light(core, s.unixUtc, s.spot).sunDeg;
+  if (s.subject === "moon") {
+    const fraction = core.moonIlluminatedFraction(s.unixUtc);
+    if (fraction < MIN_CRESCENT_FRACTION) return false;
+    if (fraction < MIN_MOON_FRACTION && sunDeg > CRESCENT_MAX_SUN_DEG) return false;
   }
   const limit = subjectOf(s.subject).maxSunDeg;
-  return limit === null || light(core, s.unixUtc, s.spot).sunDeg <= limit;
+  return limit === null || sunDeg <= limit;
 }
 
 const COMPASS = [

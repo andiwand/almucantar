@@ -25,3 +25,6 @@ The changes in the PWA shotradar that a user notices. Each release has the tag
 - The map of an eclipse zooms out to the whole Earth, and the forward button of the browser keeps
   the screen.
 - The shot follows a drag with less delay, and a failed search shows an error.
+- A tap on a done step in the strip at the top goes back to that step.
+- A thin crescent of the moon (3 to 10 % lit) is a shot when the sun is at least 3° below the
+  horizon, in the twilight. A moon with less light is not a shot.
