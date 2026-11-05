@@ -6,6 +6,8 @@ same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-05
+
 - Sunradar has the new name Sonnseite, the Austrian word for the sunny side of a valley.
 - The web app has a new address: <https://andiwand.github.io/almucantar/sonnseite/app/>, and the
   website is at <https://andiwand.github.io/almucantar/sonnseite/>. The repository has the new name
