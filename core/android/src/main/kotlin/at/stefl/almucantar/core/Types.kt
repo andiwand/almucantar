@@ -4,7 +4,11 @@ package at.stefl.almucantar.core
 // the enum constants, and the defaults are the same as in C++. An instrumented test checks
 // the defaults against the native library.
 
-/** A place on the Earth, in geodetic coordinates (WGS 84). */
+/**
+ * A place on the Earth, in geodetic coordinates (WGS 84). A result can have NaN in both values if
+ * it has no place: [SolarEclipse.peakPlace] of a partial eclipse, and [LineOfSight.blocking]
+ * without blocking terrain.
+ */
 data class Observer(
     /** North is positive, -90 to 90. */
     val latitudeDeg: Double = 0.0,
@@ -283,14 +287,23 @@ data class ElevationTile(
     val distanceM: Double = 0.0,
 )
 
-/** A body that can rise and set behind the terrain. */
+/** A body of the sky, in the order of the C++ enum. */
 enum class Body {
     SUN,
     MOON,
+    /** The center of the Milky Way (Sagittarius A*). */
+    GALACTIC_CENTER,
+    MERCURY,
+    VENUS,
+    MARS,
+    JUPITER,
+    SATURN,
+    URANUS,
+    NEPTUNE,
 }
 
 data class TerrainEventOptions(
-    /** The sun or the moon. */
+    /** Any body, for example the moon or the galactic center. */
     val body: Body = Body.SUN,
     /** Used only for the sun. */
     val model: SolarModel = SolarModel.NOAA,
@@ -342,3 +355,187 @@ class StarCatalog(
     val size: Int
         get() = raDeg.size
 }
+
+// The photo planner (core/src/almucantar/plan.hpp).
+
+data class BodyOptions(
+    /** Used only for the sun. */
+    val model: SolarModel = SolarModel.NOAA,
+    /** Add the refraction, to get the position that one sees. */
+    val refraction: Boolean = true,
+    /** Used only if [refraction] is true. */
+    val atmosphere: Atmosphere = Atmosphere(),
+)
+
+/** A point with its height: a place on the ground, the eye of an observer, or a landmark. */
+data class Site(
+    /** North is positive, -90 to 90. */
+    val latitudeDeg: Double,
+    /** East is positive, -180 to 180. */
+    val longitudeDeg: Double,
+    /** Above sea level. */
+    val elevationM: Double = 0.0,
+)
+
+data class SightOptions(
+    /** The coefficient of the terrestrial refraction, as in [HorizonOptions]. 0 gives none. */
+    val refractionCoefficient: Double = 0.13,
+    /**
+     * Used only by [lineOfSight]: the terrain nearer than this to the target does not count,
+     * because it is the target itself (for example the flanks of a summit in a DEM).
+     */
+    val targetMarginM: Double = 0.0,
+)
+
+/** The direction from one site to another, and the distance on the ground. */
+data class Sight(val direction: Horizontal, val distanceM: Double)
+
+data class AlignmentOptions(
+    val body: BodyOptions = BodyOptions(),
+    /** Only the times when the body is nearer than this angle to the direction. */
+    val maxSeparationDeg: Double = 1.0,
+    /** The time accuracy of the results. */
+    val toleranceS: Double = 1.0,
+)
+
+/** A time when a body is near a direction. */
+data class Alignment(
+    val unixUtc: Double,
+    /** The angle between the body and the direction. */
+    val separationDeg: Double,
+    /** The position of the body at [unixUtc]. */
+    val body: Horizontal,
+)
+
+data class AlignmentLineOptions(
+    val body: BodyOptions = BodyOptions(),
+    /** The first point of the line, from the landmark. */
+    val minDistanceM: Double = 100.0,
+    /** The last point of the line, at most 500 km. */
+    val maxDistanceM: Double = 30_000.0,
+    /** The distance between two points, at most 100,000 points. */
+    val stepM: Double = 100.0,
+    /** The eye above the ground, for the spots. */
+    val eyeHeightM: Double = 1.6,
+    /** The coefficient of the terrestrial refraction, as in [HorizonOptions]. */
+    val refractionCoefficient: Double = 0.13,
+)
+
+/** A place on the line of an alignment. */
+data class LinePoint(
+    val place: Observer,
+    /** From the landmark. */
+    val distanceM: Double,
+    /** The elevation of the eye above sea level at which the landmark is in front of the body. */
+    val eyeElevationM: Double,
+    /** The ground from the tiles, NaN if the tiles have no data. */
+    val groundElevationM: Double,
+    /** The body, seen from the place. */
+    val body: Horizontal,
+)
+
+data class AlignmentLine(
+    /** The places from which the body is in the direction of the landmark, the nearest first. */
+    val points: List<LinePoint>,
+    /**
+     * The places where the ground plus the eye height is at [LinePoint.eyeElevationM]: there, an
+     * observer on the ground sees the body behind the landmark. Empty without tiles.
+     */
+    val spots: List<LinePoint>,
+)
+
+/** The result of [lineOfSight]. */
+data class LineOfSight(
+    val visible: Boolean,
+    /**
+     * The angle between the target and the highest terrain in front of it: positive if the target
+     * is visible. NaN if the tiles have no data between the two sites.
+     */
+    val clearanceDeg: Double,
+    /** The distance to the highest terrain in front of the target. NaN if there is none. */
+    val blockingDistanceM: Double,
+    /** The place of the highest terrain in front of the target. NaN if there is none. */
+    val blocking: Observer,
+)
+
+data class DarkOptions(
+    /** The sky is dark if the airless center of the sun is below this altitude. */
+    val maxSunAltitudeDeg: Double = -18.0,
+    /** The moon does not disturb if its apparent center is below this altitude over the terrain, */
+    val maxMoonAltitudeDeg: Double = 0.0,
+    /** or if its illuminated fraction is at most this value. */
+    val maxMoonFraction: Double = 0.1,
+    /** If true, a window also needs the galactic center above [minGalacticCenterAltitudeDeg]. */
+    val galacticCenter: Boolean = false,
+    val minGalacticCenterAltitudeDeg: Double = 0.0,
+    /** A window shorter than this can be missed. */
+    val stepS: Double = 300.0,
+    /** The time accuracy of the results. */
+    val toleranceS: Double = 1.0,
+)
+
+/** An interval of time. */
+data class TimeWindow(val startUtc: Double, val endUtc: Double)
+
+// The eclipses (core/src/almucantar/eclipse.hpp).
+
+enum class EclipseKind {
+    /** A lunar eclipse in the penumbra of the Earth only (never a solar eclipse). */
+    PENUMBRAL,
+    PARTIAL,
+    /** A solar eclipse with a ring of the sun around the moon (never a lunar eclipse). */
+    ANNULAR,
+    TOTAL,
+}
+
+/** A lunar eclipse. It looks the same from every place where the moon is up. */
+data class LunarEclipse(
+    val kind: EclipseKind,
+    val peakUtc: Double,
+    /** The part of the disc of the moon in the umbra at the peak: 0 penumbral, 1 total. */
+    val obscuration: Double,
+    /** The times of the phases. A phase that does not happen has NaN. */
+    val penumbralBeginUtc: Double,
+    val partialBeginUtc: Double,
+    val totalBeginUtc: Double,
+    val totalEndUtc: Double,
+    val partialEndUtc: Double,
+    val penumbralEndUtc: Double,
+)
+
+/** A solar eclipse for the whole Earth. */
+data class SolarEclipse(
+    /** Partial if no place sees the sun fully covered or as a ring. */
+    val kind: EclipseKind,
+    /** The time when the axis of the shadow of the moon is nearest to the center of the Earth. */
+    val peakUtc: Double,
+    /** The center of the shadow at the peak, for a total or annular eclipse; else NaN. */
+    val peakPlace: Observer,
+    /** The part of the area of the sun that the moon covers at [peakPlace]; NaN if partial. */
+    val obscuration: Double,
+)
+
+/** A solar eclipse seen from one place. */
+data class LocalSolarEclipse(
+    val kind: EclipseKind,
+    /** The part of the area of the sun that the moon covers at the peak, 0 to 1. */
+    val obscuration: Double,
+    val partialBeginUtc: Double,
+    /** The second contact of a total or annular eclipse; else NaN. */
+    val totalBeginUtc: Double,
+    val peakUtc: Double,
+    /** The third contact of a total or annular eclipse; else NaN. */
+    val totalEndUtc: Double,
+    val partialEndUtc: Double,
+    /** The altitude of the sun with refraction at the peak. Below 0, the place cannot see it. */
+    val peakSunAltitudeDeg: Double,
+)
+
+/** A point of the central line of a solar eclipse. */
+data class ShadowPoint(
+    val unixUtc: Double,
+    /** Where the axis of the shadow of the moon meets the surface of the Earth. */
+    val place: Observer,
+    /** The radius of the umbra there in km: positive if total, negative if annular. */
+    val umbraRadiusKm: Double,
+)

@@ -36,6 +36,16 @@
 //   SkyOptions     [3]  refraction, pressure_hpa, temperature_c
 //   StarCatalog         four separate arrays: ra_deg, dec_deg, pm_ra_arcsec_per_year,
 //                       pm_dec_arcsec_per_year (the last two can be empty)
+//   tiles               the headers of all grids in one array (6 values for each grid, as
+//                       ElevationGrid), and the heights in an array of float arrays
+//   BodyOptions    [4]  model, refraction, pressure_hpa, temperature_c
+//   Site           [3]  latitude_deg, longitude_deg, elevation_m
+//   SightOptions   [2]  refraction_coefficient, target_margin_m
+//   AlignmentOptions [6]  BodyOptions[4], max_separation_deg, tolerance_s
+//   AlignmentLineOptions [9]  BodyOptions[4], min_distance_m, max_distance_m, step_m,
+//                       eye_height_m, refraction_coefficient
+//   DarkOptions    [7]  max_sun_altitude_deg, max_moon_altitude_deg, max_moon_fraction,
+//                       galactic_center, min_galactic_center_altitude_deg, step_s, tolerance_s
 //
 // Results:
 //   DayEvents      kind, culmination_utc, culmination_altitude_deg, n,
@@ -47,6 +57,21 @@
 //   ElevationTile [3] latitude_deg, longitude_deg, distance_m (for each tile)
 //   TerrainEvents  kind, n, then unix_utc, rising for each crossing
 //   points  [2 n]  x, y for each direction of projectPoints; NaN if it is not valid
+//   Sight      [3] azimuth_deg, altitude_deg, distance_m
+//   Alignment  [4] unix_utc, separation_deg, azimuth_deg, altitude_deg (for each alignment)
+//   LinePoint  [7] latitude_deg, longitude_deg, distance_m, eye_elevation_m,
+//                  ground_elevation_m, azimuth_deg, altitude_deg
+//   AlignmentLine  n_points, n_spots, then LinePoint[7] for each point, then for each spot
+//   LineOfSight [5] visible, clearance_deg, blocking_distance_m, latitude_deg, longitude_deg
+//   TimeWindow [2] start_utc, end_utc (for each window)
+//   LunarEclipse [9] kind, peak_utc, obscuration, penumbral_begin_utc, partial_begin_utc,
+//                  total_begin_utc, total_end_utc, partial_end_utc, penumbral_end_utc
+//   SolarEclipse [5] kind, peak_utc, latitude_deg, longitude_deg, obscuration
+//   LocalSolarEclipse [8] kind, obscuration, partial_begin_utc, total_begin_utc, peak_utc,
+//                  total_end_utc, partial_end_utc, peak_sun_altitude_deg
+//   ShadowPoint [4] unix_utc, latitude_deg, longitude_deg, umbra_radius_km
+//
+// A list of results is the records one after the other, without a count.
 //
 // Booleans are 0 or 1, and enums are their ordinals. std::invalid_argument becomes
 // IllegalArgumentException.
@@ -622,6 +647,37 @@ HorizonOptions horizon_options(const Doubles& o) {
           .min_distance_m = o[6]};
 }
 
+/// Makes the grids from the headers (6 values for each grid) and the heights of each grid.
+std::vector<ElevationGrid> grids(JNIEnv* env, jdoubleArray headers, jobjectArray heights) {
+  const Doubles h(env, headers, 0, "headers");
+  if (heights == nullptr) {
+    throw std::invalid_argument("heights is null");
+  }
+  const auto count = static_cast<std::size_t>(env->GetArrayLength(heights));
+  if (h.size() != 6 * count) {
+    throw std::invalid_argument("headers has the wrong length");
+  }
+  std::vector<ElevationGrid> tiles(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    ElevationGrid& g = tiles[i];
+    g.north_latitude_deg = h[6 * i];
+    g.west_longitude_deg = h[(6 * i) + 1];
+    g.latitude_step_deg = h[(6 * i) + 2];
+    g.longitude_step_deg = h[(6 * i) + 3];
+    g.rows = to_int(h[(6 * i) + 4], "rows");
+    g.columns = to_int(h[(6 * i) + 5], "columns");
+    auto* const array =
+        static_cast<jfloatArray>(env->GetObjectArrayElement(heights, static_cast<jsize>(i)));
+    if (array == nullptr) {
+      throw std::invalid_argument("heights_m is null");
+    }
+    g.heights_m.resize(static_cast<std::size_t>(env->GetArrayLength(array)));
+    env->GetFloatArrayRegion(array, 0, static_cast<jsize>(g.heights_m.size()), g.heights_m.data());
+    env->DeleteLocalRef(array);
+  }
+  return tiles;
+}
+
 TerrainEventOptions terrain_event_options(const Doubles& o) {
   // The body is the last value of the array, but the first field of the struct.
   return {.body = to_enum<Body>(o[7], "body"),
@@ -695,33 +751,7 @@ ALMUCANTAR_JNI(horizonProfile)
  jdoubleArray opts)
     ->jdoubleArray {
   return guarded<jdoubleArray>(env, nullptr, [&] {
-    const Doubles h(env, headers, 0, "headers");
-    if (heights == nullptr) {
-      throw std::invalid_argument("heights is null");
-    }
-    const auto count = static_cast<std::size_t>(env->GetArrayLength(heights));
-    if (h.size() != 6 * count) {
-      throw std::invalid_argument("headers has the wrong length");
-    }
-    std::vector<ElevationGrid> tiles(count);
-    for (std::size_t i = 0; i < count; ++i) {
-      ElevationGrid& g = tiles[i];
-      g.north_latitude_deg = h[6 * i];
-      g.west_longitude_deg = h[(6 * i) + 1];
-      g.latitude_step_deg = h[(6 * i) + 2];
-      g.longitude_step_deg = h[(6 * i) + 3];
-      g.rows = to_int(h[(6 * i) + 4], "rows");
-      g.columns = to_int(h[(6 * i) + 5], "columns");
-      auto* const array =
-          static_cast<jfloatArray>(env->GetObjectArrayElement(heights, static_cast<jsize>(i)));
-      if (array == nullptr) {
-        throw std::invalid_argument("heights_m is null");
-      }
-      g.heights_m.resize(static_cast<std::size_t>(env->GetArrayLength(array)));
-      env->GetFloatArrayRegion(array, 0, static_cast<jsize>(g.heights_m.size()),
-                               g.heights_m.data());
-      env->DeleteLocalRef(array);
-    }
+    const std::vector<ElevationGrid> tiles = grids(env, headers, heights);
     return to_java(env, pack(horizon_profile(observer(Doubles(env, obs, 2, "observer")), tiles,
                                              horizon_options(Doubles(env, opts, 7, "options")))));
   });
@@ -752,6 +782,188 @@ ALMUCANTAR_JNI(terrainEvents)
   });
 }
 
+namespace {
+
+BodyOptions body_options(const Doubles& o, const std::size_t i) {
+  return {.model = to_enum<SolarModel>(o[i], "model"),
+          .refraction = to_bool(o[i + 1]),
+          .atmosphere = {.pressure_hpa = o[i + 2], .temperature_c = o[i + 3]}};
+}
+
+Site site(const Doubles& a) {
+  return Site{.latitude_deg = a[0], .longitude_deg = a[1], .elevation_m = a[2]};
+}
+
+SightOptions sight_options(const Doubles& o) {
+  return {.refraction_coefficient = o[0], .target_margin_m = o[1]};
+}
+
+void append(std::vector<double>& out, const LinePoint& p) {
+  out.insert(out.end(),
+             {p.place.latitude_deg, p.place.longitude_deg, p.distance_m, p.eye_elevation_m,
+              p.ground_elevation_m, p.body.azimuth_deg, p.body.altitude_deg});
+}
+
+}  // namespace
+
+ALMUCANTAR_JNI(bodyPosition)
+(JNIEnv* env, jclass, jdouble body, jdouble unix_utc, jdoubleArray obs, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Horizontal h = body_position(to_enum<Body>(body, "body"), unix_utc,
+                                       observer(Doubles(env, obs, 2, "observer")),
+                                       body_options(Doubles(env, opts, 4, "options"), 0));
+    return to_java(env, {h.azimuth_deg, h.altitude_deg});
+  });
+}
+
+ALMUCANTAR_JNI(sight)
+(JNIEnv* env, jclass, jdoubleArray from, jdoubleArray to, jdoubleArray opts)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Sight s = sight(site(Doubles(env, from, 3, "from")), site(Doubles(env, to, 3, "to")),
+                          sight_options(Doubles(env, opts, 2, "options")));
+    return to_java(env, {s.direction.azimuth_deg, s.direction.altitude_deg, s.distance_m});
+  });
+}
+
+ALMUCANTAR_JNI(findAlignments)
+(JNIEnv* env, jclass, jdouble body, jdoubleArray obs, jdoubleArray direction, jdouble start,
+ jdouble end, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles o(env, opts, 6, "options");
+    const auto alignments = find_alignments(
+        to_enum<Body>(body, "body"), observer(Doubles(env, obs, 2, "observer")),
+        horizontal(Doubles(env, direction, 2, "direction")), start, end,
+        {.body = body_options(o, 0), .max_separation_deg = o[4], .tolerance_s = o[5]});
+    std::vector<double> out;
+    out.reserve(4 * alignments.size());
+    for (const Alignment& a : alignments) {
+      out.insert(out.end(),
+                 {a.unix_utc, a.separation_deg, a.body.azimuth_deg, a.body.altitude_deg});
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(alignmentLine)
+(JNIEnv* env, jclass, jdouble body, jdoubleArray target, jdouble unix_utc, jdoubleArray headers,
+ jobjectArray heights, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles o(env, opts, 9, "options");
+    const AlignmentLine line =
+        alignment_line(to_enum<Body>(body, "body"), site(Doubles(env, target, 3, "target")),
+                       unix_utc, grids(env, headers, heights),
+                       {.body = body_options(o, 0),
+                        .min_distance_m = o[4],
+                        .max_distance_m = o[5],
+                        .step_m = o[6],
+                        .eye_height_m = o[7],
+                        .refraction_coefficient = o[8]});
+    std::vector<double> out{static_cast<double>(line.points.size()),
+                            static_cast<double>(line.spots.size())};
+    out.reserve(2 + (7 * (line.points.size() + line.spots.size())));
+    for (const LinePoint& p : line.points) {
+      append(out, p);
+    }
+    for (const LinePoint& p : line.spots) {
+      append(out, p);
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(lineOfSight)
+(JNIEnv* env, jclass, jdoubleArray from, jdoubleArray to, jdoubleArray headers,
+ jobjectArray heights, jdoubleArray opts)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const LineOfSight l = line_of_sight(
+        site(Doubles(env, from, 3, "from")), site(Doubles(env, to, 3, "to")),
+        grids(env, headers, heights), sight_options(Doubles(env, opts, 2, "options")));
+    return to_java(env, {l.visible ? 1.0 : 0.0, l.clearance_deg, l.blocking_distance_m,
+                         l.blocking.latitude_deg, l.blocking.longitude_deg});
+  });
+}
+
+// A null profile is the empty profile: the horizon of 0 degrees.
+ALMUCANTAR_JNI(darkWindows)
+(JNIEnv* env, jclass, jdoubleArray obs, jdouble start, jdouble end, jdoubleArray opts,
+ jdoubleArray profile)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    const Doubles o(env, opts, 7, "options");
+    const HorizonProfile p =
+        profile == nullptr ? HorizonProfile{} : unpack_profile(Doubles(env, profile, 0, "profile"));
+    const auto windows = dark_windows(observer(Doubles(env, obs, 2, "observer")), start, end,
+                                      {.max_sun_altitude_deg = o[0],
+                                       .max_moon_altitude_deg = o[1],
+                                       .max_moon_fraction = o[2],
+                                       .galactic_center = to_bool(o[3]),
+                                       .min_galactic_center_altitude_deg = o[4],
+                                       .step_s = o[5],
+                                       .tolerance_s = o[6]},
+                                      p);
+    std::vector<double> out;
+    out.reserve(2 * windows.size());
+    for (const TimeWindow& w : windows) {
+      out.push_back(w.start_utc);
+      out.push_back(w.end_utc);
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(lunarEclipses)(JNIEnv* env, jclass, jdouble start, jdouble end)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    std::vector<double> out;
+    for (const LunarEclipse& e : lunar_eclipses(start, end)) {
+      out.insert(out.end(), {static_cast<double>(e.kind), e.peak_utc, e.obscuration,
+                             e.penumbral_begin_utc, e.partial_begin_utc, e.total_begin_utc,
+                             e.total_end_utc, e.partial_end_utc, e.penumbral_end_utc});
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(solarEclipses)(JNIEnv* env, jclass, jdouble start, jdouble end)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    std::vector<double> out;
+    for (const SolarEclipse& e : solar_eclipses(start, end)) {
+      out.insert(out.end(), {static_cast<double>(e.kind), e.peak_utc, e.peak_place.latitude_deg,
+                             e.peak_place.longitude_deg, e.obscuration});
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(localSolarEclipses)
+(JNIEnv* env, jclass, jdoubleArray obs, jdouble start, jdouble end)->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    std::vector<double> out;
+    for (const LocalSolarEclipse& e :
+         local_solar_eclipses(observer(Doubles(env, obs, 2, "observer")), start, end)) {
+      out.insert(out.end(), {static_cast<double>(e.kind), e.obscuration, e.partial_begin_utc,
+                             e.total_begin_utc, e.peak_utc, e.total_end_utc, e.partial_end_utc,
+                             e.peak_sun_altitude_deg});
+    }
+    return to_java(env, out);
+  });
+}
+
+ALMUCANTAR_JNI(eclipseCentralLine)(JNIEnv* env, jclass, jdouble peak_utc, jdouble step_s)
+    ->jdoubleArray {
+  return guarded<jdoubleArray>(env, nullptr, [&] {
+    std::vector<double> out;
+    for (const ShadowPoint& p : eclipse_central_line(peak_utc, step_s)) {
+      out.insert(out.end(),
+                 {p.unix_utc, p.place.latitude_deg, p.place.longitude_deg, p.umbra_radius_km});
+    }
+    return to_java(env, out);
+  });
+}
+
 // The C++ defaults of the option structs, Camera, View, and the heading filter, in the layouts
 // above, so the instrumented tests can check that the Kotlin defaults are the same.
 ALMUCANTAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
@@ -765,6 +977,11 @@ ALMUCANTAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
     const HeadingFilterOptions f;
     const HorizonOptions h;
     const TerrainEventOptions t;
+    const BodyOptions b;
+    const SightOptions so;
+    const AlignmentOptions a;
+    const AlignmentLineOptions l;
+    const DarkOptions d;
     return to_java(env, {static_cast<double>(s.model),
                          s.refraction ? 1.0 : 0.0,
                          s.atmosphere.pressure_hpa,
@@ -831,6 +1048,34 @@ ALMUCANTAR_JNI(defaults)(JNIEnv* env, jclass)->jdoubleArray {
                          static_cast<double>(t.body),
                          SkyOptions{}.refraction ? 1.0 : 0.0,
                          SkyOptions{}.atmosphere.pressure_hpa,
-                         SkyOptions{}.atmosphere.temperature_c});
+                         SkyOptions{}.atmosphere.temperature_c,
+                         static_cast<double>(b.model),
+                         b.refraction ? 1.0 : 0.0,
+                         b.atmosphere.pressure_hpa,
+                         b.atmosphere.temperature_c,
+                         so.refraction_coefficient,
+                         so.target_margin_m,
+                         static_cast<double>(a.body.model),
+                         a.body.refraction ? 1.0 : 0.0,
+                         a.body.atmosphere.pressure_hpa,
+                         a.body.atmosphere.temperature_c,
+                         a.max_separation_deg,
+                         a.tolerance_s,
+                         static_cast<double>(l.body.model),
+                         l.body.refraction ? 1.0 : 0.0,
+                         l.body.atmosphere.pressure_hpa,
+                         l.body.atmosphere.temperature_c,
+                         l.min_distance_m,
+                         l.max_distance_m,
+                         l.step_m,
+                         l.eye_height_m,
+                         l.refraction_coefficient,
+                         d.max_sun_altitude_deg,
+                         d.max_moon_altitude_deg,
+                         d.max_moon_fraction,
+                         d.galactic_center ? 1.0 : 0.0,
+                         d.min_galactic_center_altitude_deg,
+                         d.step_s,
+                         d.tolerance_s});
   });
 }

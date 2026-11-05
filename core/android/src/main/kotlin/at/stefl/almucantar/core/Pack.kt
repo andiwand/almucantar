@@ -176,3 +176,94 @@ internal fun TerrainEventOptions.pack() =
         toleranceS,
         body.ordinal.toDouble(),
     )
+
+internal fun List<ElevationGrid>.packHeaders(): DoubleArray {
+    val headers = DoubleArray(6 * size)
+    forEachIndexed { i, tile -> tile.packHeader().copyInto(headers, 6 * i) }
+    return headers
+}
+
+internal fun List<ElevationGrid>.heights(): Array<FloatArray> = Array(size) { this[it].heightsM }
+
+internal fun BodyOptions.pack() =
+    doubleArrayOf(
+        model.ordinal.toDouble(),
+        refraction.pack(),
+        atmosphere.pressureHpa,
+        atmosphere.temperatureC,
+    )
+
+internal fun Site.pack() = doubleArrayOf(latitudeDeg, longitudeDeg, elevationM)
+
+internal fun SightOptions.pack() = doubleArrayOf(refractionCoefficient, targetMarginM)
+
+internal fun AlignmentOptions.pack() = body.pack() + doubleArrayOf(maxSeparationDeg, toleranceS)
+
+internal fun AlignmentLineOptions.pack() =
+    body.pack() +
+        doubleArrayOf(minDistanceM, maxDistanceM, stepM, eyeHeightM, refractionCoefficient)
+
+internal fun DarkOptions.pack() =
+    doubleArrayOf(
+        maxSunAltitudeDeg,
+        maxMoonAltitudeDeg,
+        maxMoonFraction,
+        galacticCenter.pack(),
+        minGalacticCenterAltitudeDeg,
+        stepS,
+        toleranceS,
+    )
+
+internal fun DoubleArray.toLinePoint(offset: Int) =
+    LinePoint(
+        Observer(this[offset], this[offset + 1]),
+        this[offset + 2],
+        this[offset + 3],
+        this[offset + 4],
+        toHorizontal(offset + 5),
+    )
+
+internal fun DoubleArray.toAlignmentLine(): AlignmentLine {
+    val points = this[0].toInt()
+    val spots = this[1].toInt()
+    return AlignmentLine(
+        List(points) { toLinePoint(2 + 7 * it) },
+        List(spots) { toLinePoint(2 + 7 * (points + it)) },
+    )
+}
+
+internal fun DoubleArray.toLunarEclipse(offset: Int) =
+    LunarEclipse(
+        EclipseKind.entries[this[offset].toInt()],
+        this[offset + 1],
+        this[offset + 2],
+        this[offset + 3],
+        this[offset + 4],
+        this[offset + 5],
+        this[offset + 6],
+        this[offset + 7],
+        this[offset + 8],
+    )
+
+internal fun DoubleArray.toSolarEclipse(offset: Int) =
+    SolarEclipse(
+        EclipseKind.entries[this[offset].toInt()],
+        this[offset + 1],
+        Observer(this[offset + 2], this[offset + 3]),
+        this[offset + 4],
+    )
+
+internal fun DoubleArray.toLocalSolarEclipse(offset: Int) =
+    LocalSolarEclipse(
+        EclipseKind.entries[this[offset].toInt()],
+        this[offset + 1],
+        this[offset + 2],
+        this[offset + 3],
+        this[offset + 4],
+        this[offset + 5],
+        this[offset + 6],
+        this[offset + 7],
+    )
+
+internal fun DoubleArray.toShadowPoint(offset: Int) =
+    ShadowPoint(this[offset], Observer(this[offset + 1], this[offset + 2]), this[offset + 3])

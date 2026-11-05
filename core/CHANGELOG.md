@@ -18,7 +18,7 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   eclipses of an interval with their kind, peak, and coverage; `local_solar_eclipses()` gives the
   phases of a solar eclipse at a place, with the altitude of the sun; `eclipse_central_line()` gives
   the central line of a total or annular eclipse with the radius of the shadow, for a map. From
-  Astronomy Engine; in C++, Python, and WASM.
+  Astronomy Engine; in C++, Python, WASM, and the AAR.
 - The photo planner (`almucantar/plan.hpp`), for shotradar: `body_position()` gives the position
   of any body. `sight()` gives the direction to a landmark with the curvature of the Earth.
   `find_alignments()` finds the times when a body is behind a landmark ("I stand here"), one
@@ -26,10 +26,11 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   is behind a landmark at a time, and on a DEM the spots where the ground has the right height
   ("where must I stand?"). `line_of_sight()` checks the view over the DEM, and `dark_windows()`
   finds the dark hours without the sun and the moon, also with the galactic center up. In C++,
-  Python, and WASM. `SightOptions.target_margin_m` makes `line_of_sight()` ignore the flanks of a
-  summit just below its top.
+  Python, WASM, and the AAR. `SightOptions.target_margin_m` makes `line_of_sight()` ignore the
+  flanks of a summit just below its top.
 - `Body` has the galactic center and the planets after the sun and the moon, and
-  `terrain_events()` takes all of them. `Body` is in `types.hpp` now.
+  `terrain_events()` takes all of them. `Body` is in `types.hpp` now. The Kotlin `Body` of the
+  AAR has the same constants.
 - The stars: `star_positions()` gives the apparent positions of all stars of a `StarCatalog`
   (J2000 positions and proper motions, as columns) in one call, with the precession, the
   nutation, the annual aberration, and the refraction. 5080 stars take about 1 ms in WebAssembly.

@@ -354,12 +354,10 @@ fun horizonProfile(
     tiles: List<ElevationGrid>,
     options: HorizonOptions = HorizonOptions(),
 ): HorizonProfile {
-    val headers = DoubleArray(6 * tiles.size)
-    tiles.forEachIndexed { i, tile -> tile.packHeader().copyInto(headers, 6 * i) }
     return AlmucantarNative.horizonProfile(
             observer.pack(),
-            headers,
-            Array(tiles.size) { tiles[it].heightsM },
+            tiles.packHeaders(),
+            tiles.heights(),
             options.pack(),
         )
         .toHorizonProfile()
@@ -373,9 +371,9 @@ fun terrainAltitudeDeg(profile: HorizonProfile, azimuthDeg: Double): Double =
     AlmucantarNative.terrainAltitudeDeg(profile.packed, azimuthDeg)
 
 /**
- * Finds the times between the two times when the body of [options] (the sun or the moon) crosses
- * the terrain horizon [profile]: the visible rise and set, and the times when a peak hides the
- * body. An azimuth without data uses the altitude 0.
+ * Finds the times between the two times when the body of [options] (any [Body]) crosses the terrain
+ * horizon [profile]: the visible rise and set, and the times when a peak hides the body. An azimuth
+ * without data uses the altitude 0.
  */
 fun terrainEvents(
     observer: Observer,
@@ -397,4 +395,164 @@ fun terrainEvents(
         kind = DayKind.entries[r[0].toInt()],
         crossings = List(count) { Crossing(r[2 + 2 * it], r[3 + 2 * it] != 0.0) },
     )
+}
+
+/**
+ * Returns the apparent topocentric position of [body] at [unixUtc] for [observer]: the same as
+ * [sunPosition], [moonPosition], [galacticPosition] of the galactic center, or [planetPosition].
+ */
+fun bodyPosition(
+    body: Body,
+    unixUtc: Double,
+    observer: Observer,
+    options: BodyOptions = BodyOptions(),
+): Horizontal =
+    AlmucantarNative.bodyPosition(body.ordinal.toDouble(), unixUtc, observer.pack(), options.pack())
+        .toHorizontal()
+
+/**
+ * Returns the direction in which [from] sees [to], with the curvature of the Earth and the
+ * terrestrial refraction (the model of [horizonProfile]), and the distance on the ground. Throws
+ * IllegalArgumentException if the sites are at the same place or more than 500 km apart.
+ */
+fun sight(from: Site, to: Site, options: SightOptions = SightOptions()): Sight {
+    val r = AlmucantarNative.sight(from.pack(), to.pack(), options.pack())
+    return Sight(r.toHorizontal(), r[2])
+}
+
+/**
+ * "I stand here": finds the times between the two times when [body] is nearest to [direction] (for
+ * example the direction of a landmark from [sight]) and nearer than
+ * [AlignmentOptions.maxSeparationDeg], in time order. The interval can be at most 3660 days.
+ */
+fun findAlignments(
+    body: Body,
+    observer: Observer,
+    direction: Horizontal,
+    startUtc: Double,
+    endUtc: Double,
+    options: AlignmentOptions = AlignmentOptions(),
+): List<Alignment> {
+    val r =
+        AlmucantarNative.findAlignments(
+            body.ordinal.toDouble(),
+            observer.pack(),
+            direction.pack(),
+            startUtc,
+            endUtc,
+            options.pack(),
+        )
+    return List(r.size / 4) { Alignment(r[4 * it], r[4 * it + 1], r.toHorizontal(4 * it + 2)) }
+}
+
+/**
+ * "Where must I stand?": the places from which [body] is behind [target] at [unixUtc]. With [tiles]
+ * (DEM grids, as for [horizonProfile]), the points have the ground and the line has the spots;
+ * without them, the line has no spots. The line does not check the view to the target: use
+ * [lineOfSight] for a spot. Throws IllegalArgumentException if the body is within 1° of the zenith
+ * or the nadir.
+ */
+fun alignmentLine(
+    body: Body,
+    target: Site,
+    unixUtc: Double,
+    tiles: List<ElevationGrid> = emptyList(),
+    options: AlignmentLineOptions = AlignmentLineOptions(),
+): AlignmentLine =
+    AlmucantarNative.alignmentLine(
+            body.ordinal.toDouble(),
+            target.pack(),
+            unixUtc,
+            tiles.packHeaders(),
+            tiles.heights(),
+            options.pack(),
+        )
+        .toAlignmentLine()
+
+/**
+ * Checks whether the eye at [from] sees [to] over the terrain of [tiles], with the model of
+ * [sight]. The terrain within 1.5 cells of the target, or within [SightOptions.targetMarginM], is
+ * the target itself. Throws IllegalArgumentException if [tiles] is empty, or if the sites are at
+ * the same place or more than 500 km apart.
+ */
+fun lineOfSight(
+    from: Site,
+    to: Site,
+    tiles: List<ElevationGrid>,
+    options: SightOptions = SightOptions(),
+): LineOfSight {
+    val r =
+        AlmucantarNative.lineOfSight(
+            from.pack(),
+            to.pack(),
+            tiles.packHeaders(),
+            tiles.heights(),
+            options.pack(),
+        )
+    return LineOfSight(r[0] != 0.0, r[1], r[2], Observer(r[3], r[4]))
+}
+
+/**
+ * Finds the windows between the two times when the sky is dark for [options], in time order. The
+ * altitudes of the moon and the galactic center are over the terrain of [profile]; null is the
+ * horizon of 0°. A window that is open at [startUtc] or [endUtc] starts or ends there.
+ */
+fun darkWindows(
+    observer: Observer,
+    startUtc: Double,
+    endUtc: Double,
+    options: DarkOptions = DarkOptions(),
+    profile: HorizonProfile? = null,
+): List<TimeWindow> {
+    val r =
+        AlmucantarNative.darkWindows(
+            observer.pack(),
+            startUtc,
+            endUtc,
+            options.pack(),
+            profile?.packed,
+        )
+    return List(r.size / 2) { TimeWindow(r[2 * it], r[2 * it + 1]) }
+}
+
+/**
+ * Returns the lunar eclipses with the peak between the two times, in time order. The interval can
+ * be at most 100 years.
+ */
+fun lunarEclipses(startUtc: Double, endUtc: Double): List<LunarEclipse> {
+    val r = AlmucantarNative.lunarEclipses(startUtc, endUtc)
+    return List(r.size / 9) { r.toLunarEclipse(9 * it) }
+}
+
+/**
+ * Returns the solar eclipses for the whole Earth with the peak between the two times, in time
+ * order. The interval can be at most 100 years.
+ */
+fun solarEclipses(startUtc: Double, endUtc: Double): List<SolarEclipse> {
+    val r = AlmucantarNative.solarEclipses(startUtc, endUtc)
+    return List(r.size / 5) { r.toSolarEclipse(5 * it) }
+}
+
+/**
+ * Returns the solar eclipses that [observer] can see if the sun is up, with the peak between the
+ * two times, in time order. The list also has the eclipses at night: check
+ * [LocalSolarEclipse.peakSunAltitudeDeg].
+ */
+fun localSolarEclipses(
+    observer: Observer,
+    startUtc: Double,
+    endUtc: Double,
+): List<LocalSolarEclipse> {
+    val r = AlmucantarNative.localSolarEclipses(observer.pack(), startUtc, endUtc)
+    return List(r.size / 8) { r.toLocalSolarEclipse(8 * it) }
+}
+
+/**
+ * Returns the central line of the solar eclipse with the peak at [peakUtc] (see [solarEclipses]),
+ * every [stepS] seconds while the axis of the shadow meets the Earth. A partial eclipse has an
+ * empty line. Throws IllegalArgumentException if [stepS] is not in the range 1 to 3600.
+ */
+fun eclipseCentralLine(peakUtc: Double, stepS: Double = 60.0): List<ShadowPoint> {
+    val r = AlmucantarNative.eclipseCentralLine(peakUtc, stepS)
+    return List(r.size / 4) { r.toShadowPoint(4 * it) }
 }

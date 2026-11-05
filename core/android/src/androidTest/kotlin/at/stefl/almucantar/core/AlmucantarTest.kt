@@ -50,7 +50,12 @@ class AlmucantarTest {
                 HeadingFilterOptions().pack() +
                 HorizonOptions().pack() +
                 TerrainEventOptions().pack() +
-                SkyOptions().pack()
+                SkyOptions().pack() +
+                BodyOptions().pack() +
+                SightOptions().pack() +
+                AlignmentOptions().pack() +
+                AlignmentLineOptions().pack() +
+                DarkOptions().pack()
         assertEquals(expected.toList(), AlmucantarNative.defaults().toList())
     }
 
@@ -344,6 +349,240 @@ class AlmucantarTest {
         assertThrows(IllegalArgumentException::class.java) {
             headingUpdate(HeadingEstimate(), HeadingMeasurement(0.0, 0.0))
         }
+    }
+
+    // 2026-03-20T12:00Z.
+    private val equinox = 1774008000.0
+
+    // 2026-01-01 and 2028-01-01, 00:00 UTC.
+    private val eclipseStart = 1767225600.0
+    private val eclipseEnd = 1830297600.0
+
+    @Test
+    fun bodyPosition() {
+        assertEquals(10, Body.entries.size)
+        assertEquals(moonPosition(equinox, vienna), bodyPosition(Body.MOON, equinox, vienna))
+        assertEquals(sunPosition(equinox, vienna), bodyPosition(Body.SUN, equinox, vienna))
+        val airless = BodyOptions(refraction = false)
+        val center = bodyPosition(Body.GALACTIC_CENTER, equinox, vienna, airless)
+        val galactic =
+            galacticPosition(
+                GALACTIC_CENTER_LONGITUDE_DEG,
+                GALACTIC_CENTER_LATITUDE_DEG,
+                equinox,
+                vienna,
+                SkyOptions(refraction = false),
+            )
+        assertEquals(galactic.altitudeDeg, center.altitudeDeg, 1e-9)
+        assertEquals(
+            planetPosition(Planet.NEPTUNE, equinox, vienna),
+            bodyPosition(Body.NEPTUNE, equinox, vienna),
+        )
+    }
+
+    @Test
+    fun sightAndFindAlignments() {
+        val tower = Site(latitudeDeg = 48.25, longitudeDeg = 16.40, elevationM = 600.0)
+        val eye = Site(latitudeDeg = 48.2082, longitudeDeg = 16.3738, elevationM = 170.0)
+        val s = sight(eye, tower)
+        assertTrue(s.direction.azimuthDeg > 0 && s.direction.azimuthDeg < 90)
+        assertEquals(5050.0, s.distanceM, 50.0)
+        assertTrue(s.direction.altitudeDeg > 0)
+        val flat = sight(eye, tower, SightOptions(refractionCoefficient = 0.0))
+        assertTrue(flat.direction.altitudeDeg < s.direction.altitudeDeg)
+
+        // The moon of one time is found again at that time.
+        val t0 = equinox + 3 * day
+        val direction = moonPosition(t0, vienna)
+        val found =
+            findAlignments(
+                Body.MOON,
+                vienna,
+                direction,
+                t0 - day,
+                t0 + day,
+                AlignmentOptions(maxSeparationDeg = 0.1),
+            )
+        assertEquals(1, found.size)
+        assertEquals(t0, found[0].unixUtc, 2.0)
+        assertTrue(found[0].separationDeg < 0.1)
+        assertEquals(direction.azimuthDeg, found[0].body.azimuthDeg, 0.1)
+        assertThrows(IllegalArgumentException::class.java) { sight(eye, eye) }
+    }
+
+    @Test
+    fun alignmentLineWithoutTiles() {
+        val tower = Site(latitudeDeg = 47.0, longitudeDeg = 11.0, elevationM = 300.0)
+        val line =
+            alignmentLine(
+                Body.SUN,
+                tower,
+                equinox,
+                options = AlignmentLineOptions(maxDistanceM = 5000.0, stepM = 500.0),
+            )
+        assertEquals(10, line.points.size)
+        assertTrue(line.spots.isEmpty())
+        assertTrue(line.points.all { it.groundElevationM.isNaN() })
+        assertTrue(line.points.zipWithNext().all { (a, b) -> a.distanceM < b.distanceM })
+        // The landmark from a point of the line has the altitude of the body there.
+        val first = line.points[0]
+        val s =
+            sight(
+                Site(first.place.latitudeDeg, first.place.longitudeDeg, first.eyeElevationM),
+                tower,
+            )
+        assertEquals(first.body.altitudeDeg, s.direction.altitudeDeg, 1e-6)
+        assertEquals(first.distanceM, s.distanceM, 1.0)
+    }
+
+    @Test
+    fun alignmentLineAndLineOfSightOverFlatGround() {
+        val grid = flatGrid(northLatitudeDeg = 47.25, westLongitudeDeg = 10.75, heightM = 0f)
+        val eye = Site(latitudeDeg = 47.0, longitudeDeg = 11.0, elevationM = 2.0)
+        val tower = Site(latitudeDeg = 47.1, longitudeDeg = 11.0, elevationM = 100.0)
+        val clear = lineOfSight(eye, tower, listOf(grid))
+        assertTrue(clear.visible)
+        assertTrue(clear.clearanceDeg > 0)
+
+        // A wall of 500 m between the eye and the tower.
+        val wall = flatGrid(northLatitudeDeg = 47.25, westLongitudeDeg = 10.75, heightM = 0f)
+        val row = ((47.25 - 47.05) * 120).toInt()
+        for (c in 0 until wall.columns) wall.heightsM[row * wall.columns + c] = 500f
+        val blocked = lineOfSight(eye, tower, listOf(wall))
+        assertFalse(blocked.visible)
+        assertTrue(blocked.clearanceDeg < 0)
+        assertEquals(47.05, blocked.blocking.latitudeDeg, 0.01)
+        assertTrue(blocked.blockingDistanceM > 4000 && blocked.blockingDistanceM < 7000)
+        assertThrows(IllegalArgumentException::class.java) { lineOfSight(eye, tower, emptyList()) }
+
+        // The sun in the morning, low in the east: the line goes west from the tower, and the
+        // flat ground has a spot.
+        val morning = equinox - 4 * 3600
+        val line =
+            alignmentLine(
+                Body.SUN,
+                Site(47.0, 11.0, 100.0),
+                morning,
+                listOf(grid),
+                AlignmentLineOptions(maxDistanceM = 20_000.0, stepM = 200.0),
+            )
+        assertTrue(line.points.isNotEmpty())
+        val inside = line.points.filter { !it.groundElevationM.isNaN() }
+        assertTrue(inside.isNotEmpty())
+        assertTrue(inside.all { abs(it.groundElevationM) < 1e-3 })
+        assertTrue(line.spots.isNotEmpty())
+        val spot = line.spots[0]
+        assertEquals(spot.groundElevationM + 1.6, spot.eyeElevationM, 0.5)
+    }
+
+    @Test
+    fun darkWindows() {
+        val windows = darkWindows(vienna, equinox, equinox + 5 * day)
+        assertTrue(windows.isNotEmpty())
+        assertTrue(windows.all { it.endUtc > it.startUtc })
+        assertTrue(windows.zipWithNext().all { (a, b) -> a.endUtc <= b.startUtc })
+        // A wall of 80° hides the moon, so the windows can only be longer.
+        val wall = HorizonProfile(1.0, DoubleArray(360) { 80.0 }, DoubleArray(360) { 1000.0 })
+        val hidden = darkWindows(vienna, equinox, equinox + 5 * day, profile = wall)
+        assertTrue(
+            hidden.sumOf { it.endUtc - it.startUtc } >=
+                windows.sumOf { it.endUtc - it.startUtc } - 10
+        )
+        // The galactic center behind the wall: no window for the Milky Way.
+        val milkyWay =
+            darkWindows(
+                vienna,
+                equinox,
+                equinox + 5 * day,
+                DarkOptions(galacticCenter = true),
+                wall,
+            )
+        assertTrue(milkyWay.isEmpty())
+        assertThrows(IllegalArgumentException::class.java) { darkWindows(vienna, 10.0, 10.0) }
+    }
+
+    @Test
+    fun solarEclipsesAndTheCentralLine() {
+        val eclipses = solarEclipses(eclipseStart, eclipseEnd)
+        assertEquals(4, eclipses.size)
+        val total = eclipses.filter { it.kind == EclipseKind.TOTAL }
+        assertEquals(2, total.size)
+        assertTrue(total.all { !it.peakPlace.latitudeDeg.isNaN() && it.obscuration > 0.99 })
+        assertTrue(eclipses.zipWithNext().all { (a, b) -> a.peakUtc < b.peakUtc })
+        val line = eclipseCentralLine(total[1].peakUtc, 120.0)
+        assertTrue(line.size > 50)
+        assertTrue(line.all { it.umbraRadiusKm > 0 })
+        assertEquals(120.0, line[1].unixUtc - line[0].unixUtc, 1e-6)
+        assertTrue(eclipseCentralLine(total[1].peakUtc).size > line.size)
+        val annular = eclipses.first { it.kind == EclipseKind.ANNULAR }
+        val ring = eclipseCentralLine(annular.peakUtc, 600.0)
+        assertTrue(ring.isNotEmpty() && ring.all { it.umbraRadiusKm < 0 })
+
+        val local = localSolarEclipses(vienna, eclipseStart, eclipseEnd)
+        assertTrue(local.isNotEmpty())
+        assertTrue(local.all { it.kind == EclipseKind.PARTIAL })
+        assertTrue(local.all { it.totalBeginUtc.isNaN() && it.totalEndUtc.isNaN() })
+        assertTrue(local.all { it.partialBeginUtc < it.peakUtc && it.peakUtc < it.partialEndUtc })
+        assertTrue(local.all { it.obscuration >= 0 && it.obscuration <= 1 })
+        assertThrows(IllegalArgumentException::class.java) {
+            eclipseCentralLine(total[1].peakUtc, 0.5)
+        }
+        assertThrows(IllegalArgumentException::class.java) { solarEclipses(10.0, 10.0) }
+    }
+
+    @Test
+    fun lunarEclipses() {
+        val eclipses = lunarEclipses(eclipseStart, eclipseEnd)
+        val first = eclipses[0]
+        assertEquals(EclipseKind.TOTAL, first.kind)
+        assertEquals(1.0, first.obscuration, 1e-9)
+        assertTrue(first.penumbralBeginUtc < first.partialBeginUtc)
+        assertTrue(first.partialBeginUtc < first.totalBeginUtc)
+        assertTrue(first.totalBeginUtc < first.peakUtc && first.peakUtc < first.totalEndUtc)
+        assertTrue(first.partialEndUtc < first.penumbralEndUtc)
+        val penumbral = eclipses.filter { it.kind == EclipseKind.PENUMBRAL }
+        assertTrue(penumbral.all { it.partialBeginUtc.isNaN() && it.obscuration == 0.0 })
+        assertThrows(IllegalArgumentException::class.java) {
+            lunarEclipses(0.0, 200 * 365.25 * day)
+        }
+    }
+
+    @Test
+    fun terrainEventsOfTheNewBodies() {
+        val flat = HorizonProfile(1.0, DoubleArray(360), DoubleArray(360) { 1000.0 })
+        for (body in listOf(Body.GALACTIC_CENTER, Body.JUPITER)) {
+            val events =
+                terrainEvents(
+                    vienna,
+                    flat,
+                    dayStart,
+                    dayStart + 2 * day,
+                    TerrainEventOptions(body = body, limbDeg = 0.0),
+                )
+            assertEquals(DayKind.NORMAL, events.kind)
+            val rise = events.crossings.first { it.rising }
+            assertTrue(bodyPosition(body, rise.unixUtc + 5, vienna).altitudeDeg > 0)
+            assertTrue(bodyPosition(body, rise.unixUtc - 5, vienna).altitudeDeg < 0)
+        }
+    }
+
+    private fun flatGrid(
+        northLatitudeDeg: Double,
+        westLongitudeDeg: Double,
+        heightM: Float,
+    ): ElevationGrid {
+        // 0.5° by 0.5° with a step of 1/120 degree.
+        val rows = 61
+        val columns = 61
+        return ElevationGrid(
+            northLatitudeDeg = northLatitudeDeg,
+            westLongitudeDeg = westLongitudeDeg,
+            latitudeStepDeg = 1.0 / 120,
+            longitudeStepDeg = 1.0 / 120,
+            rows = rows,
+            columns = columns,
+            heightsM = FloatArray(rows * columns) { heightM },
+        )
     }
 
     private fun quaternionFromAxes(x: DoubleArray, y: DoubleArray, z: DoubleArray): Quaternion {

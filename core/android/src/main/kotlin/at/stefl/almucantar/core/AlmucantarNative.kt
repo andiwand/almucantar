@@ -201,6 +201,69 @@ internal object AlmucantarNative {
         options: DoubleArray,
     ): DoubleArray
 
+    @JvmStatic
+    external fun bodyPosition(
+        body: Double,
+        unixUtc: Double,
+        observer: DoubleArray,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun sight(from: DoubleArray, to: DoubleArray, options: DoubleArray): DoubleArray
+
+    @JvmStatic
+    external fun findAlignments(
+        body: Double,
+        observer: DoubleArray,
+        direction: DoubleArray,
+        startUtc: Double,
+        endUtc: Double,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun alignmentLine(
+        body: Double,
+        target: DoubleArray,
+        unixUtc: Double,
+        headers: DoubleArray,
+        heights: Array<FloatArray>,
+        options: DoubleArray,
+    ): DoubleArray
+
+    @JvmStatic
+    external fun lineOfSight(
+        from: DoubleArray,
+        to: DoubleArray,
+        headers: DoubleArray,
+        heights: Array<FloatArray>,
+        options: DoubleArray,
+    ): DoubleArray
+
+    /** A null [profile] is the horizon of 0 degrees. */
+    @JvmStatic
+    external fun darkWindows(
+        observer: DoubleArray,
+        startUtc: Double,
+        endUtc: Double,
+        options: DoubleArray,
+        profile: DoubleArray?,
+    ): DoubleArray
+
+    @JvmStatic external fun lunarEclipses(startUtc: Double, endUtc: Double): DoubleArray
+
+    @JvmStatic external fun solarEclipses(startUtc: Double, endUtc: Double): DoubleArray
+
+    @JvmStatic
+    external fun localSolarEclipses(
+        observer: DoubleArray,
+        startUtc: Double,
+        endUtc: Double,
+    ): DoubleArray
+
+    @JvmStatic external fun eclipseCentralLine(peakUtc: Double, stepS: Double): DoubleArray
+
     /**
      * The C++ defaults of the option structs, Camera, View, and the heading filter, for the tests.
      */

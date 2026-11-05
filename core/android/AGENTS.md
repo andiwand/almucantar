@@ -32,6 +32,11 @@ packaged as the AAR `at.stefl.almucantar:core-android`. The build loop is in
   `defaultsAreTheSameAsInCpp` compares them with the native function `defaults()`.
 - `std::invalid_argument` becomes `IllegalArgumentException`, other C++ exceptions become
   `RuntimeException`.
+- The Kotlin value types do not check their values, because a result can have NaN where it has
+  no value (for example `SolarEclipse.peakPlace` of a partial eclipse). The C++ functions check
+  the arguments.
+- An optional argument without a value crosses as `null` (the profile of `darkWindows`), and a
+  list of tiles crosses as the headers and the heights, the same as for `horizonProfile`.
 - `DirectionLine` and `Polylines` hold lines in packed form. An app packs the path once per
   day and projects it in each frame without conversion.
 - The native library links libc++ statically (`c++_static` in the Conan profile), because the
