@@ -4,6 +4,12 @@
 
 import { load } from "@almucantar/core";
 import type { Horizontal, Observer, PathPoint } from "@almucantar/core";
+import {
+  fromWallTime,
+  offsetMs,
+  startOfDay as zoneStartOfDay,
+  wallTime,
+} from "@almucantar/web-shared/zone";
 import { Sky } from "./sky";
 import type { Frame, HourMark } from "./sky";
 
@@ -21,39 +27,14 @@ let observer: Observer = { latitudeDeg: 48.2082, longitudeDeg: 16.3738 };
 let timeZone = "Europe/Vienna";
 let placeName = "Vienna";
 
-/** The offset of the time zone from UTC at a time, in seconds. */
-function zoneOffset(unixUtc: number): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-  }).formatToParts(new Date(unixUtc * 1000));
-  const get = (type: string) => Number(parts.find((part) => part.type === type)!.value);
-  const local = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
-  return Math.round((local / 1000 - Math.floor(unixUtc / 60) * 60) / 60) * 60;
-}
-
 /** The start of the local day that contains a time. */
-function startOfDay(unixUtc: number): number {
-  const local = unixUtc + zoneOffset(unixUtc);
-  const midnight = Math.floor(local / DAY) * DAY;
-  return midnight - zoneOffset(midnight - zoneOffset(unixUtc));
-}
+const startOfDay = (unixUtc: number) => zoneStartOfDay(timeZone, unixUtc * 1000, 0);
 
 /** The start of a local date. The month starts at 0. */
-function dateStart(year: number, month: number, day: number): number {
-  const guess = Date.UTC(year, month, day) / 1000;
-  return guess - zoneOffset(guess - zoneOffset(guess));
-}
+const dateStart = (year: number, month: number, day: number) =>
+  fromWallTime(timeZone, year, month + 1, day) / 1000;
 
-function localYear(unixUtc: number): number {
-  return new Date((unixUtc + zoneOffset(unixUtc)) * 1000).getUTCFullYear();
-}
+const localYear = (unixUtc: number) => wallTime(timeZone, unixUtc * 1000).year;
 
 const hhmm = (unixUtc: number) =>
   new Date(unixUtc * 1000).toLocaleTimeString([], { timeZone, hour: "2-digit", minute: "2-digit" });
@@ -86,7 +67,7 @@ function dayAt(unixUtc: number): Day {
     points,
     path: points.map((p) => p.position),
     hours: points
-      .filter((p) => (p.unixUtc + zoneOffset(p.unixUtc)) % 3600 === 0)
+      .filter((p) => (p.unixUtc * 1000 + offsetMs(timeZone, p.unixUtc * 1000)) % 3_600_000 === 0)
       .map((p) => ({ direction: p.position, label: hhmm(p.unixUtc).slice(0, 2) })),
     sunrise: events.crossings.find((c) => c.rising)?.unixUtc ?? null,
     sunset: events.crossings.find((c) => !c.rising)?.unixUtc ?? null,

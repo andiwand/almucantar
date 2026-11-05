@@ -78,8 +78,9 @@ export function discCoverage(separationDeg: number, sunRadiusDeg: number, moonRa
   const m = moonRadiusDeg;
   if (d >= r + m) return 0;
   if (d <= Math.abs(m - r)) return m >= r ? 1 : (m * m) / (r * r);
-  const a = r * r * Math.acos((d * d + r * r - m * m) / (2 * d * r));
-  const b = m * m * Math.acos((d * d + m * m - r * r) / (2 * d * m));
+  // The clamp keeps acos defined when rounding puts its argument just outside [-1, 1].
+  const a = r * r * Math.acos(clamp((d * d + r * r - m * m) / (2 * d * r), -1, 1));
+  const b = m * m * Math.acos(clamp((d * d + m * m - r * r) / (2 * d * m), -1, 1));
   const c = 0.5 * Math.sqrt((-d + r + m) * (d + r - m) * (d - r + m) * (d + r + m));
   return (a + b - c) / (Math.PI * r * r);
 }

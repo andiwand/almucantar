@@ -56,6 +56,18 @@ const message = $("message");
 const info = $("info");
 const ctx = canvas.getContext("2d")!;
 
+// The frame writes the texts 60 times a second. A write only on a change saves the work of the
+// layout. The browser serializes innerHTML in its own way, so the last HTML stays in a map.
+const lastHtml = new WeakMap<HTMLElement, string>();
+function setHtml(element: HTMLElement, html: string) {
+  if (lastHtml.get(element) === html) return;
+  lastHtml.set(element, html);
+  element.innerHTML = html;
+}
+function setText(element: HTMLElement, text: string) {
+  if (element.textContent !== text) element.textContent = text;
+}
+
 function showMessage(text: string | null) {
   message.textContent = text ?? "";
   message.classList.toggle("hidden", text === null);
@@ -237,7 +249,7 @@ let selected: Target | null = null;
 function targetName(t: Target): string {
   switch (t.kind) {
     case "star":
-      return stars.names.get(t.index) ?? `HR ${t.index}`;
+      return stars.names.get(t.index) ?? `HR ${stars.hr[t.index]}`;
     case "planet":
       return PLANETS.find((p) => p.planet === t.planet)!.name;
     case "moon":
@@ -297,7 +309,12 @@ function directionAt(t: Target, time: number): Horizontal {
       return { azimuthDeg: d[0], altitudeDeg: d[1] };
     }
     case "galactic-center":
-      return almucantar.galacticPosition(0, 0, time, observer);
+      return almucantar.galacticPosition(
+        GALACTIC_CENTER.longitudeDeg,
+        GALACTIC_CENTER.latitudeDeg,
+        time,
+        observer,
+      );
   }
 }
 
@@ -386,7 +403,7 @@ function showInfo(s: Sky) {
     }
     info.dataset.static = `<div class="name">${targetName(selected)}</div><div class="muted">${kind}</div><div>${times}</div>`;
   }
-  info.innerHTML = `${info.dataset.static}<div class="muted">${position}</div>`;
+  setHtml(info, `${info.dataset.static}<div class="muted">${position}</div>`);
   info.classList.remove("hidden");
 }
 
@@ -807,20 +824,27 @@ function frame() {
       ? `Moon up, ${Math.round(s.moon.fraction * 100)}% lit`
       : `Moon down (${Math.round(s.moon.fraction * 100)}% lit)`;
   const terrainText = terrainStatus();
-  status.innerHTML =
+  setHtml(
+    status,
     `<b>${placeText}</b><br>${headingText}<br>${darkness(s.sun.altitudeDeg)} · ${moonText}` +
-    (terrainText ? `<br><span class="heading-fair">${terrainText}</span>` : "");
+      (terrainText ? `<br><span class="heading-fair">${terrainText}</span>` : ""),
+  );
 
-  $("date-label").textContent = new Date(time * 1000).toLocaleDateString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: zone,
-  });
-  $("time-label").textContent =
-    minuteOfDay === null && dayOffset === 0 ? `${hhmm(time)} (now)` : hhmm(time);
-  $("fov-label").textContent = `${fovDeg}°`;
+  setText(
+    $("date-label"),
+    new Date(time * 1000).toLocaleDateString([], {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: zone,
+    }),
+  );
+  setText(
+    $("time-label"),
+    minuteOfDay === null && dayOffset === 0 ? `${hhmm(time)} (now)` : hhmm(time),
+  );
+  setText($("fov-label"), `${fovDeg}°`);
   requestAnimationFrame(frame);
 }
 

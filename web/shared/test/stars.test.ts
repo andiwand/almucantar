@@ -17,11 +17,14 @@ test("the star data decodes into columns of the same length", () => {
     stars.catalog.pmDecArcsecPerYear,
     stars.mag,
     stars.bv,
+    stars.hr,
   ]) {
     expect(column.length).toBe(n);
   }
   // Sorted by magnitude: Sirius first.
   expect(stars.names.get(0)).toBe("Sirius");
+  // The HR number is not the index: Sirius is HR 2491.
+  expect(stars.hr[0]).toBe(2491);
   expect(stars.mag[0]).toBeLessThan(stars.mag[1]);
   // Every line points to a star.
   expect(stars.constellations.length).toBe(89);

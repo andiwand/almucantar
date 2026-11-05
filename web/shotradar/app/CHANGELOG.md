@@ -19,3 +19,9 @@ The changes in the PWA shotradar that a user notices. Each release has the tag
 - A high subject alone stays inside its small photo, also near the top.
 - "From where I am" (the first way), now or on some days: the moon, the Milky Way, the sun, and the planets while
   they are over the real horizon of the place, and the peaks of the horizon that they pass.
+- The hours on the path of the subject are the full hours of the spot, also in a time zone with an
+  offset of 30 or 45 minutes.
+- After a time offline, the map and the horizon load the missing terrain again.
+- The map of an eclipse zooms out to the whole Earth, and the forward button of the browser keeps
+  the screen.
+- The shot follows a drag with less delay, and a failed search shows an error.

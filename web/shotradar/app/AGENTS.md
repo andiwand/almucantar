@@ -4,6 +4,7 @@ The web app shotradar, the photo planner (PLAN.md 14.1): the moon, the Milky Way
 planet behind a landmark. Vite, TypeScript, the core `@almucantar/core`, and the shared code
 `@almucantar/web-shared`. It is a package of the npm workspace `web/` (see
 [`../../AGENTS.md`](../../AGENTS.md)). GitHub Pages serves it under `/shotradar/app/`.
+The Android app (`android/shotradar/`) follows this PWA: its screens and its search are the same.
 
 ## The workflow
 
@@ -59,7 +60,7 @@ Milky Way at −15°, the planets at −4° to −8°).
 | `src/style.css` | The look of the website: paper with a grain, serif titles, monospace numbers, cards with the corners of a viewfinder, and the strip of film. |
 | `public/` | The manifest, the icon (`assets/shotradar-logo.svg`), and the service worker (cache prefix `shotradar:`). |
 | `index.html` | The bar, the page of the screens, and the map screen. |
-| `test/` | The relief, the horizon and the peaks, the umbra of a lunar eclipse, and the offline cache of the service worker. |
+| `test/` | The relief, the horizon and the peaks, the umbra of a lunar eclipse, the full hours of a time zone, and the offline cache of the service worker. |
 
 ## Build and test
 

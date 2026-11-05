@@ -372,7 +372,12 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
   milkyway: (p) => {
     const best = bestMilkyWayNight();
     const time = best.time - 1.5 * HOUR + 3 * HOUR * p;
-    const center = almucantar.galacticPosition(0, 0, best.time, home.observer).azimuthDeg;
+    const center = almucantar.galacticPosition(
+      GALACTIC_CENTER.longitudeDeg,
+      GALACTIC_CENTER.latitudeDeg,
+      best.time,
+      home.observer,
+    ).azimuthDeg;
     return { time, center, lines: 0.15, names: 0.3, milkyWay: 1.6 };
   },
   compass: (p) => {
@@ -595,6 +600,7 @@ function readouts(name: string, t: number, target: Target, limit: number) {
     );
   } else if (name === "constellations") {
     setText("const-name", stars.constellations[target.highlight]?.name ?? "");
+    // The data has two parts of Serpens, so the IAU count is one less.
     setText(
       "const-detail",
       `${stars.constellations.length - 1} constellations, ${stars.mag.length} stars`,
@@ -603,7 +609,9 @@ function readouts(name: string, t: number, target: Target, limit: number) {
     setText("turns-time", hhmm(t));
     setText(
       "turns-detail",
-      "The sky turns 15° in an hour around the celestial pole, near Polaris.",
+      place.observer.latitudeDeg >= 0
+        ? "The sky turns 15° in an hour around the celestial pole, near Polaris."
+        : "The sky turns 15° in an hour around the south celestial pole.",
     );
   } else if (name === "planets") {
     const nights = target.planetNights;

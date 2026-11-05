@@ -19,7 +19,7 @@ import {
 import type { BaseMap, MapView } from "@almucantar/web-shared/basemap";
 import { milkyWayDust } from "@almucantar/web-shared/milkyway";
 import { discCoverage, drawPhoto, lensSpanDeg } from "@almucantar/web-shared/photo";
-import type { PhotoFrame } from "@almucantar/web-shared/photo";
+import type { PhotoFrame, PhotoTrack } from "@almucantar/web-shared/photo";
 import { decodeStars, limitingMagnitude } from "@almucantar/web-shared/stars";
 import type { Stars, StarsJson } from "@almucantar/web-shared/stars";
 import { browserTimeZone, fromWallTime, wallTime } from "@almucantar/web-shared/zone";
@@ -32,6 +32,7 @@ import {
   ECLIPSE_NAMES,
   SUBJECTS,
   datesFor,
+  fullHours,
   localEclipse,
   lunarUmbra,
   upcomingEclipses,
@@ -39,6 +40,7 @@ import {
   momentsFor,
   noMatchReason,
   peakTargets,
+  separationDeg,
   shotsFromPlace,
   skyFromPlace,
   subjectOf,
@@ -120,16 +122,25 @@ const nameNear = (at: Observer) => (baseMap ? (nearestPlace(baseMap.places, at)?
 
 // --- Formatting ---------------------------------------------------------------------------------
 
+/** The formats by zone and parts: a new Intl.DateTimeFormat is slow, and a draw needs many. */
+const formats = new Map<string, Intl.DateTimeFormat>();
+
 function formatTime(unix: number, zone: string, parts: "date" | "time" | "both" = "both") {
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: zone,
-    weekday: parts === "time" ? undefined : "short",
-    day: parts === "time" ? undefined : "numeric",
-    month: parts === "time" ? undefined : "short",
-    year: parts === "time" ? undefined : "numeric",
-    hour: parts === "date" ? undefined : "2-digit",
-    minute: parts === "date" ? undefined : "2-digit",
-  }).format(new Date(unix * 1000));
+  const key = `${zone} ${parts}`;
+  let f = formats.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(undefined, {
+      timeZone: zone,
+      weekday: parts === "time" ? undefined : "short",
+      day: parts === "time" ? undefined : "numeric",
+      month: parts === "time" ? undefined : "short",
+      year: parts === "time" ? undefined : "numeric",
+      hour: parts === "date" ? undefined : "2-digit",
+      minute: parts === "date" ? undefined : "2-digit",
+    });
+    formats.set(key, f);
+  }
+  return f.format(new Date(unix * 1000));
 }
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 2 : 1)} km`;
@@ -221,8 +232,11 @@ function go(screen: Screen) {
   render();
 }
 
-window.addEventListener("popstate", () => {
-  if (stack.length > 1) stack.pop();
+// The state of a history entry is the length of the stack at that screen. Back goes to that
+// length. Forward cannot restore a screen, so it keeps the current screen.
+window.addEventListener("popstate", (e) => {
+  const length = typeof e.state === "number" ? e.state : 1;
+  if (length < stack.length) stack.length = Math.max(1, length);
   render();
 });
 $("back").addEventListener("click", () => history.back());
@@ -269,24 +283,36 @@ function render() {
     case "spot":
       return spotScreen(screen.purpose);
     case "dates":
-      return void datesScreen();
+      return guard(datesScreen());
     case "moments":
       return momentsScreen();
     case "spots":
-      return void spotsScreen(screen.moment);
+      return guard(spotsScreen(screen.moment));
     case "when":
       return whenScreen();
     case "place":
-      return void placeScreen();
+      return guard(placeScreen());
     case "shot":
-      return void shotScreen(screen.shot);
+      return guard(shotScreen(screen.shot));
     case "shot-map":
       return shotMapScreen(screen.shot);
     case "eclipses":
       return eclipsesScreen();
     case "eclipse":
-      return void eclipseScreen(screen.event);
+      return guard(eclipseScreen(screen.event));
   }
+}
+
+/** An async screen that fails shows the error, not the progress forever. */
+function guard(screen: Promise<void>) {
+  const generation = renderGeneration;
+  screen.catch((error: unknown) => {
+    console.error(error);
+    if (generation !== renderGeneration) return;
+    const status = document.getElementById("status") ?? document.getElementById("photo-status");
+    if (status)
+      status.innerHTML = `<p class="muted">Something went wrong: ${escape(String(error))}</p>`;
+  });
 }
 
 /** The card head: the number of the frame and the title, like the edge of a film. */
@@ -364,7 +390,7 @@ function subjectScreen() {
           .map(
             (
               b,
-            ) => `<button class="subject ${b.id === state.subject ? "active" : ""}" data-id="${b.id}">
+            ) => `<button class="subject ${b.id === state.subject ? "active" : ""}" aria-pressed="${b.id === state.subject}" data-id="${b.id}">
               <span class="art">${icon(b.id)}</span><b>${b.name}</b><small>${b.note}</small></button>`,
           )
           .join("")}
@@ -374,7 +400,10 @@ function subjectScreen() {
   on(".subject", (el) => {
     state.subject = el.dataset.id as SubjectId;
     save();
-    for (const b of document.querySelectorAll(".subject")) b.classList.toggle("active", b === el);
+    for (const b of document.querySelectorAll(".subject")) {
+      b.classList.toggle("active", b === el);
+      b.setAttribute("aria-pressed", String(b === el));
+    }
   });
   on("#next", () => go({ kind: "landmark" }));
 }
@@ -492,18 +521,18 @@ function spotScreen(purpose: "dates" | "place" | "eclipse") {
     );
     on(
       "#locate",
-      () =>
-        navigator.geolocation?.getCurrentPosition(
-          (pos) => {
-            const at = { latitudeDeg: pos.coords.latitude, longitudeDeg: pos.coords.longitude };
-            map.center(at, 12);
-            void setSpot({ ...at, name: "your location", groundM: null });
-          },
-          () => {
-            const hint = document.getElementById("spot-hint");
-            if (hint) hint.textContent = "No location access. Tap the map.";
-          },
-        ),
+      () => {
+        const denied = () => {
+          const hint = document.getElementById("spot-hint");
+          if (hint) hint.textContent = "No location access. Tap the map.";
+        };
+        if (!navigator.geolocation) return denied();
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const at = { latitudeDeg: pos.coords.latitude, longitudeDeg: pos.coords.longitude };
+          map.center(at, 12);
+          void setSpot({ ...at, name: "your location", groundM: null });
+        }, denied);
+      },
       mapCard,
     );
   };
@@ -531,6 +560,8 @@ function horizonOf(at: Observer, onProgress?: (done: number, total: number) => v
   if (!h) {
     h = computeHorizon(almucantar, at, onProgress);
     horizons.set(key, h);
+    // A failed horizon is not kept, so the next visit tries again.
+    h.catch(() => horizons.delete(key));
   }
   return h;
 }
@@ -549,7 +580,6 @@ function loadStars() {
   return starsLoading;
 }
 
-/** A frame of the photo of a shot at the time `t`, with the lens `focalMm`. */
 /** The pan of the photo: the change of the direction of the view, and a zoom of the view. */
 interface Pan {
   azimuthDeg: number;
@@ -559,6 +589,30 @@ interface Pan {
 
 const NO_PAN: Pan = { azimuthDeg: 0, altitudeDeg: 0, zoom: 1 };
 
+/** The path of the subject of each shot, with the full hours of the zone of the spot. */
+const tracks = new WeakMap<Shot, PhotoTrack>();
+
+function trackOf(shot: Shot): PhotoTrack {
+  let track = tracks.get(shot);
+  if (!track) {
+    const body = subjectOf(shot.subject).body;
+    const at = shot.spot;
+    const zone = zoneAt(at);
+    const points = [];
+    for (let u = shot.pathStartUtc; u <= shot.pathEndUtc; u += 300) {
+      points.push(almucantar.bodyPosition(body, u, at));
+    }
+    const ticks = fullHours(shot.pathStartUtc, shot.pathEndUtc, zone).map((u) => ({
+      direction: almucantar.bodyPosition(body, u, at),
+      label: formatTime(u, zone, "time"),
+    }));
+    track = { points, ticks };
+    tracks.set(shot, track);
+  }
+  return track;
+}
+
+/** A frame of the photo of a shot at the time `t`, with the lens `focalMm`. */
 function frameOf(
   shot: Shot,
   horizon: Horizon,
@@ -593,16 +647,6 @@ function frameOf(
   const limit = limitingMagnitude(sunAlt);
   const night = sunAlt < -8;
   const zone = zoneAt(at);
-  // The path of the subject, with the full hours.
-  const points = [];
-  const ticks = [];
-  for (let u = shot.pathStartUtc; u <= shot.pathEndUtc; u += 300) {
-    const d = almucantar.bodyPosition(s.body, u, at);
-    points.push(d);
-    if (Math.round(u) % 3600 < 300) {
-      ticks.push({ direction: d, label: formatTime(Math.floor(u / 3600) * 3600, zone, "time") });
-    }
-  }
   const fraction = almucantar.moonIlluminatedFraction(t);
   const eclipse = shot.eclipse;
   const solarEclipse =
@@ -611,7 +655,7 @@ function frameOf(
           sunRadiusDeg: eclipse.local.sunRadiusDeg,
           moonRadiusDeg: eclipse.local.moonRadiusDeg,
           coverage: discCoverage(
-            angleDeg(sun, moon),
+            separationDeg(sun, moon),
             eclipse.local.sunRadiusDeg,
             eclipse.local.moonRadiusDeg,
           ),
@@ -625,7 +669,7 @@ function frameOf(
     moon,
     moonFraction: fraction,
     terrain: horizon.terrain,
-    track: { points, ticks },
+    track: trackOf(shot),
     trackAlpha: thumb ? 0.6 : 0.9,
     body:
       s.body === Body.moon || s.body === Body.galacticCenter
@@ -662,16 +706,6 @@ function frameOf(
           bottom: formatTime(t, zone).toUpperCase(),
         },
   };
-}
-
-/** The angle between two directions, with the haversine formula. */
-function angleDeg(a: { azimuthDeg: number; altitudeDeg: number }, b: typeof a): number {
-  const rad = Math.PI / 180;
-  const h1 = a.altitudeDeg * rad;
-  const h2 = b.altitudeDeg * rad;
-  const dz = (b.azimuthDeg - a.azimuthDeg) * rad;
-  const s = Math.sin((h2 - h1) / 2) ** 2 + Math.cos(h1) * Math.cos(h2) * Math.sin(dz / 2) ** 2;
-  return (2 * Math.asin(Math.min(1, Math.sqrt(s)))) / rad;
 }
 
 /** Draws a frame into a canvas of its CSS size. */
@@ -748,6 +782,10 @@ function contactSheet(
 
 const developing = (text: string) => `<p class="developing"><span></span>${text}</p>`;
 
+/** Waits until the browser shows the last change, before a long search blocks the page. */
+const nextFrame = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
 // --- The dates ("I know my spot") ---------------------------------------------------------------
 
 async function datesScreen() {
@@ -772,17 +810,24 @@ async function datesScreen() {
       <ol class="contact" id="list"></ol>
     </section>`;
   const generation = renderGeneration;
-  const shots = datesFor(almucantar, state.subject, eye, top, name, Date.now() / 1000);
   // The view to the landmark over the terrain, if it is near enough for the tiles.
   if (sight.distanceM <= 40_000) {
     const middle = destination(observerOf(spot), sight.direction.azimuthDeg, sight.distanceM / 2);
-    void gridsAround(almucantar, middle, sight.distanceM / 2 + 1000, GRID_ZOOM).then((tiles) => {
-      if (generation !== renderGeneration || tiles.length === 0) return;
-      const v = almucantar.lineOfSight(eye, top, tiles, targetMargin(sight.distanceM));
-      $("view").innerHTML = v.visible
-        ? `<span class="tag good">clear</span>`
-        : `<span class="tag bad">blocked</span> ${km(v.blockingDistanceM)} from you`;
-    });
+    void gridsAround(almucantar, middle, sight.distanceM / 2 + 1000, GRID_ZOOM)
+      .then((tiles) => {
+        if (generation !== renderGeneration) return;
+        if (tiles.length === 0) {
+          $("view").textContent = "no terrain to check (offline?)";
+          return;
+        }
+        const v = almucantar.lineOfSight(eye, top, tiles, targetMargin(sight.distanceM));
+        $("view").innerHTML = v.visible
+          ? `<span class="tag good">clear</span>`
+          : `<span class="tag bad">blocked</span> ${km(v.blockingDistanceM)} from you`;
+      })
+      .catch(() => {
+        if (generation === renderGeneration) $("view").textContent = "could not check";
+      });
   } else {
     $("view").textContent = "too far to check";
   }
@@ -792,6 +837,10 @@ async function datesScreen() {
     }
   });
   if (generation !== renderGeneration) return;
+  $("status").innerHTML = developing("Searching the next 12 months…");
+  await nextFrame();
+  if (generation !== renderGeneration) return;
+  const shots = datesFor(almucantar, state.subject, eye, top, name, Date.now() / 1000);
   $("status").innerHTML = shots.length
     ? `<p class="muted">${shots.length} ${shots.length === 1 ? "date" : "dates"}. Tap a photo for the shot.</p>`
     : `<p class="muted">${escape(noMatchReason(almucantar, state.subject, sight.direction, observerOf(spot), Date.now() / 1000))}</p>`;
@@ -856,7 +905,7 @@ async function spotsScreen(moment: number) {
   let views = new Map<LinePoint, boolean>();
   let selected: LinePoint | null = null;
   const generation = renderGeneration;
-  const tiles = gridsAround(almucantar, at, LINE_DISTANCE_M, GRID_ZOOM);
+  const tiles = gridsAround(almucantar, at, LINE_DISTANCE_M, GRID_ZOOM).catch(() => []);
 
   const card = () => {
     const body = almucantar.bodyPosition(s.body, t, at);
@@ -1066,7 +1115,7 @@ async function placeScreen() {
       <div class="chips" id="filter">${chips
         .map(
           ([id, n]) =>
-            `<button data-f="${id}" class="${id === "all" ? "active" : ""}">${n}</button>`,
+            `<button data-f="${id}" class="${id === "all" ? "active" : ""}" aria-pressed="${id === "all"}">${n}</button>`,
         )
         .join("")}</div>
       <div id="status">${developing("Reading the horizon of the place…")}</div>
@@ -1084,6 +1133,9 @@ async function placeScreen() {
     }
   });
   if (generation !== renderGeneration) return;
+  $("status").innerHTML = developing("Searching the days…");
+  await nextFrame();
+  if (generation !== renderGeneration) return;
   const targets = peakTargets(horizon);
   $("peaks").textContent = String(targets.length);
   const sky = skyFromPlace(almucantar, horizon, start, end);
@@ -1092,6 +1144,7 @@ async function placeScreen() {
     filter = id;
     for (const c of document.querySelectorAll<HTMLElement>("#filter button")) {
       c.classList.toggle("active", c.dataset.f === id);
+      c.setAttribute("aria-pressed", String(c.dataset.f === id));
     }
     show();
   };
@@ -1140,13 +1193,13 @@ async function shotScreen(shot: Shot) {
       : `${s.name} over the horizon`;
   page.innerHTML = `
     <section class="shot-page">
-      <div class="print"><canvas id="photo"></canvas><div id="photo-status">${developing("Developing the shot…")}</div>
+      <div class="print"><canvas id="photo" role="img" aria-label="The photo from the spot"></canvas><div id="photo-status">${developing("Developing the shot…")}</div>
         <p class="hint">Drag to look around · pinch or scroll to zoom · double tap to aim again</p></div>
       <div class="shot-card">
         ${head("◉", shot.eclipse ? "The eclipse" : shot.target ? "The shot" : "The sky")}
         <h2 class="title">${escape(title)}</h2>
         <label class="slider"><span>Time</span><input id="when" type="range" min="0" max="${minutes}" step="1" value="${offset}" aria-label="The time" /><output id="when-label"></output></label>
-        <div class="lenses chips">${LENSES.map((l) => `<button data-lens="${l}" class="${l === focal ? "active" : ""}">${l} mm</button>`).join("")}</div>
+        <div class="lenses chips">${LENSES.map((l) => `<button data-lens="${l}" class="${l === focal ? "active" : ""}" aria-pressed="${l === focal}">${l} mm</button>`).join("")}</div>
         <dl class="exif" id="exif"></dl>
         <div class="row">
           <a class="button primary" id="navigate" target="_blank" rel="noopener">Navigate to the spot</a>
@@ -1172,7 +1225,13 @@ async function shotScreen(shot: Shot) {
   if (generation !== renderGeneration) return;
   $("photo-status").innerHTML = "";
   let pan: Pan = { ...NO_PAN };
+  // The pointer and the slider can send many events in one frame; one draw per frame is enough.
+  let frame = 0;
   const draw = () => {
+    frame ||= requestAnimationFrame(drawNow);
+  };
+  const drawNow = () => {
+    frame = 0;
     if (generation !== renderGeneration) return;
     paint(canvas, frameOf(shot, horizon, t, focal, false, pan));
     $("when-label").textContent = formatTime(t, zone, "time");
@@ -1199,7 +1258,10 @@ async function shotScreen(shot: Shot) {
       const now =
         e.event.type === "solar"
           ? discCoverage(
-              angleDeg(almucantar.sunPosition(t, shot.spot), almucantar.moonPosition(t, shot.spot)),
+              separationDeg(
+                almucantar.sunPosition(t, shot.spot),
+                almucantar.moonPosition(t, shot.spot),
+              ),
               e.local.sunRadiusDeg,
               e.local.moonRadiusDeg,
             )
@@ -1280,11 +1342,17 @@ async function shotScreen(shot: Shot) {
     focal = Number(el.dataset.lens);
     for (const b of document.querySelectorAll("[data-lens]")) {
       b.classList.toggle("active", b === el);
+      b.setAttribute("aria-pressed", String(b === el));
     }
     draw();
   });
-  new ResizeObserver(() => draw()).observe(canvas);
-  draw();
+  // The observer stops when the user leaves the shot, so it does not keep the old canvas.
+  const resized = new ResizeObserver(() => {
+    if (generation === renderGeneration) draw();
+    else resized.disconnect();
+  });
+  resized.observe(canvas);
+  drawNow();
 }
 
 /** True in the total phase of a solar eclipse. */
@@ -1292,7 +1360,7 @@ function totality(shot: Shot, t: number): boolean {
   const e = shot.eclipse;
   if (!e || e.event.type !== "solar" || e.local.kind !== 3) return false;
   const covered = discCoverage(
-    angleDeg(almucantar.sunPosition(t, shot.spot), almucantar.moonPosition(t, shot.spot)),
+    separationDeg(almucantar.sunPosition(t, shot.spot), almucantar.moonPosition(t, shot.spot)),
     e.local.sunRadiusDeg,
     e.local.moonRadiusDeg,
   );
@@ -1507,12 +1575,14 @@ async function eclipseScreen(e: Eclipse) {
     }
   };
   map.onTap = (at) => {
-    state.spot = { ...at, name: nameNear(at), groundM: null };
+    const spot: Point = { ...at, name: nameNear(at), groundM: null };
+    state.spot = spot;
     save();
     map.marks.spot = at;
     map.draw();
+    // The height goes to this spot, also if the user taps another one before it arrives.
     void groundAt(at).then((g) => {
-      if (state.spot) state.spot.groundM = g;
+      spot.groundM = g;
       save();
     });
     void draw();
@@ -1550,9 +1620,14 @@ if ("serviceWorker" in navigator && location.protocol !== "http:") {
 stack = [{ kind: "home" }];
 history.replaceState(1, "");
 render();
-baseMap = decodeBaseMap(await (await fetch(baseMapUrl)).json());
-map.baseMap = baseMap;
-map.draw();
+try {
+  baseMap = decodeBaseMap(await (await fetch(baseMapUrl)).json());
+  map.baseMap = baseMap;
+  map.draw();
+} catch (error) {
+  // Without the base map, the map has only the relief, and the zone is the one of the browser.
+  console.error(error);
+}
 // The heights of the saved points come back once their tiles are in memory.
 for (const p of [state.landmark, state.spot]) {
   if (p && p.groundM === null) void groundAt(observerOf(p)).then((g) => (p.groundM = g));

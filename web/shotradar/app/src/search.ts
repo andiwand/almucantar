@@ -7,6 +7,7 @@ import type { Almucantar, Horizontal, LunarEclipse, Observer, Site } from "@almu
 import type { Horizon, Peak } from "./horizon";
 import { findPeaks } from "./horizon";
 import { destination } from "./mapview";
+import { offsetMs } from "@almucantar/web-shared/zone";
 
 export type SubjectId = "moon" | "milkyway" | "sun" | "venus" | "jupiter" | "saturn" | "mars";
 
@@ -202,6 +203,11 @@ export function momentsFor(
     if (now !== before) {
       // About 3° over the horizon: 20 to 30 minutes after the rise or before the set.
       const when = now ? t + 1500 : t - 1500;
+      // A set just after the start gives a moment in the past.
+      if (when < startUtc) {
+        before = now;
+        continue;
+      }
       const fraction = s.body === Body.moon ? core.moonIlluminatedFraction(when) : null;
       const dark =
         s.maxSunDeg === null ||
@@ -406,8 +412,8 @@ export function skyFromPlace(
           body: core.bodyPosition(s.body, best, at),
           pathStartUtc: from,
           pathEndUtc: to,
-          riseUtc: rose && from === a ? a : null,
-          setUtc: sets && to === b ? b : null,
+          riseUtc: rise ? a : null,
+          setUtc: set ? b : null,
         });
       }
     }
@@ -477,7 +483,7 @@ export interface LocalEclipse {
 }
 
 /** The angle between two directions, with the haversine formula. */
-function separationDeg(a: Horizontal, b: Horizontal): number {
+export function separationDeg(a: Horizontal, b: Horizontal): number {
   const rad = Math.PI / 180;
   const h1 = a.altitudeDeg * rad;
   const h2 = b.altitudeDeg * rad;
@@ -573,4 +579,18 @@ export function lunarUmbra(l: LunarEclipse, t: number): number {
   if (t < into) return top * ramp(l.partialBeginUtc, into);
   if (t > out) return top * (1 - ramp(out, l.partialEndUtc));
   return top;
+}
+
+/**
+ * The full hours of the wall clock of `zone` from `startUtc` to `endUtc`, in Unix seconds. A zone
+ * can have an offset of 30 or 45 minutes, so a full hour in UTC is not always a full hour there.
+ */
+export function fullHours(startUtc: number, endUtc: number, zone: string): number[] {
+  // The offsets of all time zones are whole quarter hours.
+  const step = 900;
+  const hours: number[] = [];
+  for (let u = Math.ceil(startUtc / step) * step; u <= endUtc; u += step) {
+    if ((u * 1000 + offsetMs(zone, u * 1000)) % 3_600_000 === 0) hours.push(u);
+  }
+  return hours;
 }

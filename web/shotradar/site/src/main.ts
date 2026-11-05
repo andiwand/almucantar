@@ -642,7 +642,7 @@ function hud(name: string, t: number, view: View): Frame["hud"] {
   const stamp = `${date(t).toUpperCase()} · ${hhmmss(t)} ${zoneName(t)}`;
   if (name === "subject") {
     return {
-      topLeft: `${(view.spanDeg / 1).toFixed(0)}° FIELD`,
+      topLeft: `${view.spanDeg.toFixed(0)}° FIELD`,
       topRight: `AZ ${deg(view.azimuthDeg, 1)}`,
       bottom: stamp,
     };
@@ -658,6 +658,7 @@ function hud(name: string, t: number, view: View): Frame["hud"] {
 
 const canvas = $<HTMLCanvasElement>("scene");
 const scene = new Scene(canvas, null, dust);
+let stars: Stars | null = null;
 fetch(starsUrl)
   .then((r) => r.json())
   .then((json: StarsJson) => {
@@ -665,7 +666,6 @@ fetch(starsUrl)
     scene.setStars(stars);
   })
   .catch(() => undefined);
-let stars: Stars | null = null;
 
 const shown = {
   time: heroTime(),

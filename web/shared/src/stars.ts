@@ -42,6 +42,8 @@ export interface Stars {
   };
   mag: Float32Array;
   bv: Float32Array;
+  /** The number of each star in the Bright Star Catalogue (HR). */
+  hr: Int32Array;
   /** The proper name of a star, by its index. */
   names: Map<number, string>;
   constellations: Constellation[];
@@ -60,6 +62,7 @@ export function decodeStars(json: StarsJson): Stars {
     },
     mag: Float32Array.from(s.mag),
     bv: Float32Array.from(s.bv),
+    hr: Int32Array.from(s.hr),
     names: new Map(json.names),
     constellations: json.constellations.map((c) => ({
       id: c.id,

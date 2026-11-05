@@ -19,3 +19,5 @@ The changes in the PWA of starradar that a user notices. Each release has the ta
   that keeps the eyes adapted to the dark.
 - The place panel of sunradar: search a place or tap it on the offline map, and keep the terrain
   of a place offline. The app works offline after the first visit.
+- A tapped star without a proper name shows its number in the Bright Star Catalogue (HR). Before,
+  it showed its place in the list of the app as an HR number, which was wrong.

@@ -28,6 +28,17 @@ export const tileCache = new TileCache({
   now: () => Date.now(),
 });
 
+/** Forgets a failed load, so that the next call tries again (for example after offline). */
+function forgetFailure<T>(
+  cache: Map<string, Promise<T | null>>,
+  key: string,
+  value: Promise<T | null>,
+) {
+  void value.then((v) => {
+    if (v === null && cache.get(key) === value) cache.delete(key);
+  });
+}
+
 /** The decoded tiles in memory, the oldest first, so the oldest go first when there are many. */
 const decoded = new Map<string, Promise<Decoded | null>>();
 
@@ -40,6 +51,7 @@ export function decodedTile(zoom: number, x: number, y: number): Promise<Decoded
       .then((blob) => (blob ? decodePng(blob) : null))
       .catch(() => null);
     decoded.set(url, tile);
+    forgetFailure(decoded, url, tile);
     if (decoded.size > 300) decoded.delete(decoded.keys().next().value!);
   }
   return tile;
@@ -114,10 +126,13 @@ export async function gridsAround(
       const url = tileUrl(t);
       let grid = grids.get(url);
       if (!grid) {
-        grid = decodedTile(t.zoom, t.x, t.y).then((tile) =>
-          tile ? almucantar.terrariumGrid(tile.rgba, tile.width, tile.height, t) : null,
-        );
+        grid = decodedTile(t.zoom, t.x, t.y)
+          .then((tile) =>
+            tile ? almucantar.terrariumGrid(tile.rgba, tile.width, tile.height, t) : null,
+          )
+          .catch(() => null);
         grids.set(url, grid);
+        forgetFailure(grids, url, grid);
         if (grids.size > 200) grids.delete(grids.keys().next().value!);
       }
       return grid;

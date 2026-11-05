@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   decodeBaseMap,
   drawBaseMap,
@@ -10,6 +10,7 @@ import {
   timeZoneAt,
   toWorld,
 } from "../src/basemap";
+import { DEFAULT_PLACE, loadPlace } from "../src/place";
 import { fromWallTime, offsetMs, startOfDay, wallTime } from "../src/zone";
 
 const map = decodeBaseMap(
@@ -113,5 +114,39 @@ describe("base map", () => {
     // The two points of the line, the place, and the pin; x is right of the middle.
     expect(inside.length).toBeGreaterThanOrEqual(4);
     expect(inside.every(([x]) => x > 200)).toBe(true);
+  });
+});
+
+describe("stored place", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const storeWith = (value: string | null) =>
+    vi.stubGlobal("localStorage", { getItem: () => value });
+
+  test("a valid entry loads", () => {
+    const place = {
+      observer: { latitudeDeg: 47.27, longitudeDeg: 11.39 },
+      name: "Innsbruck",
+      timeZone: "Europe/Vienna",
+      manual: true,
+    };
+    storeWith(JSON.stringify(place));
+    expect(loadPlace("key")).toEqual(place);
+  });
+
+  test("a missing, damaged, or incomplete entry gives the default place", () => {
+    for (const value of [
+      null,
+      "{",
+      JSON.stringify({ observer: { latitudeDeg: 47 }, name: "x", timeZone: "UTC" }),
+      JSON.stringify({ observer: { latitudeDeg: 47, longitudeDeg: 11 }, name: "x" }),
+      JSON.stringify({
+        observer: { latitudeDeg: 47, longitudeDeg: 11 },
+        name: "x",
+        timeZone: "Not/AZone",
+      }),
+    ]) {
+      storeWith(value);
+      expect(loadPlace("key")).toBe(DEFAULT_PLACE);
+    }
   });
 });

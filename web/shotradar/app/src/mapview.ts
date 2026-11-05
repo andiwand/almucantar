@@ -143,10 +143,21 @@ export class MapCanvas {
     if (this.relief.has(key)) return this.relief.get(key)!;
     this.relief.set(key, null);
     void decodedTile(zoom, x, y).then(async (tile) => {
-      if (!tile) return;
+      // Without the tile (offline), a draw after 30 s tries again. A draw on each move of a
+      // gesture must not start a new download each time.
+      if (!tile) {
+        setTimeout(() => {
+          if (this.relief.get(key) === null) this.relief.delete(key);
+        }, 30_000);
+        return;
+      }
       const shaded = shadeTile(tile.rgba, tile.width, tile.height, zoom, y);
       this.relief.set(key, await createImageBitmap(new ImageData(shaded, tile.width, tile.height)));
-      if (this.relief.size > 400) this.relief.delete(this.relief.keys().next().value!);
+      if (this.relief.size > 400) {
+        const oldest = this.relief.keys().next().value!;
+        this.relief.get(oldest)?.close();
+        this.relief.delete(oldest);
+      }
       this.draw();
     });
     return null;
@@ -294,7 +305,8 @@ export class MapCanvas {
 
   private zoomAt(x: number, y: number, zoom: number) {
     const before = this.placeAt(x, y);
-    this.view.zoom = Math.max(3, Math.min(15, zoom));
+    // Zoom 2 shows the whole Earth, for the map of an eclipse.
+    this.view.zoom = Math.max(2, Math.min(15, zoom));
     // Keep the place under the finger where it is.
     const [bx, by] = this.screen(before);
     const [cx, cy] = toWorld(this.view.lon, this.view.lat, this.view.zoom);

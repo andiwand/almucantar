@@ -24,7 +24,13 @@ export const DEFAULT_PLACE: StoredPlace = {
 export function loadPlace(key: string): StoredPlace {
   try {
     const stored = JSON.parse(localStorage.getItem(key) ?? "null") as StoredPlace | null;
-    if (stored && Number.isFinite(stored.observer?.latitudeDeg)) {
+    if (
+      stored &&
+      Number.isFinite(stored.observer?.latitudeDeg) &&
+      Number.isFinite(stored.observer?.longitudeDeg) &&
+      typeof stored.name === "string" &&
+      typeof stored.timeZone === "string"
+    ) {
       new Intl.DateTimeFormat("en-US", { timeZone: stored.timeZone }); // throws if not valid
       return stored;
     }

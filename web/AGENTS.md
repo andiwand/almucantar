@@ -1,6 +1,6 @@
 # AGENTS.md — the web
 
-One npm workspace for all web apps of the repository and the website (PLAN.md 14). The packages:
+One npm workspace for all web apps of the repository and their websites (PLAN.md 14). The packages:
 
 | Package | What |
 |---|---|

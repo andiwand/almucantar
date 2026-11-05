@@ -100,11 +100,6 @@ export class Sky {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  /** The point of a direction on the screen, for the input of the user. */
-  panorama(centerAzimuthDeg: number): Panorama {
-    return new Panorama(this.canvas.clientWidth, this.canvas.clientHeight, centerAzimuthDeg);
-  }
-
   draw(frame: Frame, nowMs: number) {
     this.fit();
     const ctx = this.ctx;

@@ -3,6 +3,8 @@
 // Carina, and the Great Rift is a dark lane. The positions are J2000, so the core moves them like
 // stars (starPositions). This is a picture for the eye, not a measurement.
 
+import { random } from "./panorama";
+
 const DEG = Math.PI / 180;
 
 // The north galactic pole and the galactic longitude of the north celestial pole (IAU 1958, J2000).
@@ -22,18 +24,6 @@ export function galacticToJ2000(lDeg: number, bDeg: number): [number, number] {
     Math.cos(POLE_DEC) * Math.sin(b) - Math.sin(POLE_DEC) * Math.cos(b) * Math.cos(NCP_L - l);
   const ra = ((((POLE_RA + Math.atan2(y, x)) / DEG) % 360) + 360) % 360;
   return [ra, dec / DEG];
-}
-
-/** A small random generator with a seed, so the picture stays the same. */
-function random(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** A bell curve around `center` on the circle of the longitude. */
