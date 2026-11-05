@@ -7,20 +7,24 @@ the milestones, and the plan of the apps (section 14).
 
 | App | What | Status |
 |---|---|---|
-| **sunradar** | The path of the sun on the camera image: when is the sun at this place in the sky? | pre-release |
-| **starradar** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | web app: <https://andiwand.github.io/almucantar/starradar/>; the Android and iOS apps build from `android/` and `ios/` |
-| **shotradar** | The photo planner: from where and when is the moon, the Milky Way, or the sun behind a landmark? | prototype: <https://andiwand.github.io/almucantar/shotradar/>; the Android app builds from `android/` |
+| **Sonnseite** | The path of the sun on the camera image: when is the sun at this place in the sky? | pre-release: Android, web, and iOS (from source) |
+| **Sternstunde** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | pre-release of the web app; the Android and iOS apps build from `android/` and `ios/` |
+| **Alidade** | The photo planner: from where and when is the moon, the Milky Way, or the sun behind a landmark? | prototype of the web app; the Android app builds from `android/` |
 
-## sunradar
+The apps had the names sunradar, starradar, and shotradar before November 2026. The web and the
+Android apps use the new names; the iOS apps get them later ([PLAN.md](PLAN.md) section 14.4).
+
+## Sonnseite
 
 <p align="center">
-  <img src="assets/logo.svg" alt="Sunradar" width="128" height="128">
+  <img src="assets/logo.svg" alt="Sonnseite" width="128" height="128">
 </p>
 
-**Website and web app: <https://andiwand.github.io/almucantar/sunradar/>**
+**Website and web app: <https://andiwand.github.io/almucantar/sonnseite/>**
 
-sunradar shows the path of the sun on top of the camera image. You can see when the sun is at a
-given place in the sky, for example when you visit a flat.
+"Sonnseite" is the Austrian word for the sunny side of a valley. Sonnseite shows the path of the
+sun on top of the camera image. You can see when the sun is at a given place in the sky, for
+example when you visit a flat.
 
 - The path of the sun with the hours, the horizon, the terrain, and the summer and winter paths,
   on the camera image or on a sky view.
@@ -32,15 +36,35 @@ given place in the sky, for example when you visit a flat.
   map. The Android and iOS apps find the sun in the camera image.
 - The sun to 0.015° or better, measured against NASA JPL Horizons.
 
-### Download
+## Sternstunde
 
-sunradar is a pre-release. It is not ready for all users yet.
+**Website and web app: <https://andiwand.github.io/almucantar/sternstunde/>**
 
-| What | Where |
-|---|---|
-| Android app | the APK of [sonnseite-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sonnseite-android-v0.2.0) (a debug build: allow the installation from this source) |
-| Web app | <https://andiwand.github.io/almucantar/sonnseite/app/> (also offline after the first visit) |
-| iOS app | build it from `ios/` (see [`ios/AGENTS.md`](ios/AGENTS.md)); it is not in the App Store |
+A "Sternstunde" (literally "star hour") is the German word for a great moment. Sternstunde is the
+sky map: hold up the phone, and it shows the stars to magnitude 6, the 88 constellations, the
+planets, the moon in its phase, and the Milky Way, over the real horizon of the terrain and
+offline.
+
+## Alidade
+
+**Website and web app: <https://andiwand.github.io/almucantar/alidade/>**
+
+An alidade is the sighting rule of an astrolabe: you aim it at a target. Alidade is the photo
+planner: start from your spot, from a landmark, or from the next eclipse, and it shows where to
+stand and when, with the real terrain between you and the subject.
+
+## Download
+
+All apps are pre-releases. They are not ready for all users yet.
+
+| App | Android | Web | iOS |
+|---|---|---|---|
+| Sonnseite | the APK of [sonnseite-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sonnseite-android-v0.2.0), still with the old name sunradar (a debug build: allow the installation from this source) | <https://andiwand.github.io/almucantar/sonnseite/app/> | build it from `ios/` |
+| Sternstunde | build it from `android/` | <https://andiwand.github.io/almucantar/sternstunde/app/> | build it from `ios/` |
+| Alidade | build it from `android/` | <https://andiwand.github.io/almucantar/alidade/app/> | – |
+
+The web apps also work offline after the first visit. The iOS apps are not in the App Store: see
+[`ios/AGENTS.md`](ios/AGENTS.md).
 
 ## The core packages
 
@@ -64,9 +88,9 @@ are grouped by platform: each platform is one build with a shared part and one p
 | Path | Content |
 |---|---|
 | `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
-| `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/`, `sunradar/`, `starradar/`, and `shotradar/` |
-| `ios/` | the iOS apps (SwiftUI): `Shared/`, `Sunradar/`, and `Starradar/` |
-| `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and for each app `app/` and `site/` (on GitHub Pages under `/sunradar/`, `/starradar/`, and `/shotradar/`) |
+| `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/`, `sonnseite/`, `sternstunde/`, and `alidade/` |
+| `ios/` | the iOS apps (SwiftUI): `Shared/`, `Sunradar/` (Sonnseite), and `Starradar/` (Sternstunde) |
+| `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and for each app `app/` and `site/` (on GitHub Pages under `/sonnseite/`, `/sternstunde/`, and `/alidade/`) |
 | `assets/` | the logos, the offline base map, and the star data |
 
 ## License
