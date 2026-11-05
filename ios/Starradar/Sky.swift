@@ -152,13 +152,15 @@ struct RiseSet: Equatable, Sendable {
     /// The text of the info card, with the times in `timeZone`, the earlier event first.
     func text(_ timeZone: TimeZone, overTerrain: Bool) -> String {
         let over = overTerrain ? " over the terrain" : ""
+        // Optional patterns, because Swift 6.1 (Xcode 16.4 in CI) does not see `true`, `false`,
+        // and `nil` as all the cases of `Bool?`.
         switch always {
-        case true: return "Up all day" + over
-        case false: return "Below the horizon all day" + over
-        case nil:
+        case .some(true): return "Up all day" + over
+        case .some(false): return "Below the horizon all day" + over
+        case .none:
             let parts = [rise.map { ($0, "rises " + PlaceTime.time($0, timeZone)) }, set.map { ($0, "sets " + PlaceTime.time($0, timeZone)) }]
                 .compactMap { $0 }.sorted { $0.0 < $1.0 }.map(\.1).joined(separator: " · ")
-            return parts.prefix(1).uppercased() + parts.dropFirst() + over
+            return parts.prefix(1).uppercased() + String(parts.dropFirst()) + over
         }
     }
 }
