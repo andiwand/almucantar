@@ -6,12 +6,16 @@ on:
     paths:
       - "android/**"
       - "core/**"
+      - "assets/basemap/**"
+      - "assets/stars/**"
       - ".github/workflows/android.yml"
       - ".github/workflows/native-android.yml"
   pull_request:
     paths:
       - "android/**"
       - "core/**"
+      - "assets/basemap/**"
+      - "assets/stars/**"
       - ".github/workflows/android.yml"
       - ".github/workflows/native-android.yml"
 

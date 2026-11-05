@@ -1,6 +1,6 @@
 # Calculates the next version and the release notes of a project from the Conventional Commits.
 # scripts/release.py calls it with the tag pattern and the paths of the project, for example
-# --tag-pattern "core-v.*" --include-path "core/**". The configuration of OpenDocument.core,
+# --tag-pattern "^core-v" --include-path "core/**". The configuration of OpenDocument.core,
 # adapted to the monorepo.
 
 [changelog]

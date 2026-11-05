@@ -1,6 +1,5 @@
-# The WebAssembly package and the npm workspace web/: the shared code, the PWA of sunradar, and the
-# website. The website uses the package for its sky. On main, the website and the PWA (under
-# /app/) go to GitHub Pages.
+# The WebAssembly package and the npm workspace web/: the shared code, the page of the family, and
+# the PWA and the website of each app. On main, the tree of the sites goes to GitHub Pages.
 name: web
 
 on:

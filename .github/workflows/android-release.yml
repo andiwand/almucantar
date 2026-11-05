@@ -1,7 +1,9 @@
-# Builds the Android app sunradar when a sunradar-android-v* release is published, and attaches the APK to the
-# release. With the signing secrets, the APK is signed for release:
+# Builds an Android app when its release is published (sunradar-android-v*, starradar-android-v*,
+# or shotradar-android-v*), and attaches the APK to the release. With the signing secrets of the
+# app, the APK is signed for release. For sunradar, the secrets are:
 #   SUNRADAR_KEYSTORE (base64 of the keystore), SUNRADAR_KEYSTORE_PASSWORD, SUNRADAR_KEY_ALIAS,
 #   SUNRADAR_KEY_PASSWORD.
+# starradar and shotradar use the same names with STARRADAR_ and SHOTRADAR_.
 # Without them, the workflow attaches a debug build, named so.
 name: android-release
 
@@ -10,6 +12,11 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      app:
+        description: The app to build
+        type: choice
+        options: [sunradar, starradar, shotradar]
+        default: sunradar
       version:
         description: The version to build (nothing is attached)
         type: string
@@ -17,7 +24,11 @@ on:
 
 jobs:
   native:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'sunradar-android-v')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.release.tag_name, 'sunradar-android-v') ||
+      startsWith(github.event.release.tag_name, 'starradar-android-v') ||
+      startsWith(github.event.release.tag_name, 'shotradar-android-v')
     uses: ./.github/workflows/native-android.yml
 
   apk:
@@ -30,9 +41,27 @@ jobs:
         working-directory: android
     env:
       ALMUCANTAR_ABIS: ""
-      SUNRADAR_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
+      TAG: ${{ github.event.release.tag_name }}
+      INPUT_APP: ${{ inputs.app }}
+      INPUT_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: App and version
+        id: app
+        run: |
+          if [ -n "${TAG}" ]; then
+            app="${TAG%%-android-v*}"
+            version="${TAG#*-android-v}"
+          else
+            app="${INPUT_APP}"
+            version="${INPUT_VERSION}"
+          fi
+          {
+            echo "app=${app}"
+            echo "prefix=$(echo "${app}" | tr '[:lower:]' '[:upper:]')"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
 
       - uses: actions/download-artifact@v4
         with:
@@ -47,30 +76,38 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # The Gradle module of the app reads <APP>_VERSION and the signing variables <APP>_*.
       - name: Build
         env:
-          KEYSTORE_BASE64: ${{ secrets.SUNRADAR_KEYSTORE }}
-          SUNRADAR_KEYSTORE_PASSWORD: ${{ secrets.SUNRADAR_KEYSTORE_PASSWORD }}
-          SUNRADAR_KEY_ALIAS: ${{ secrets.SUNRADAR_KEY_ALIAS }}
-          SUNRADAR_KEY_PASSWORD: ${{ secrets.SUNRADAR_KEY_PASSWORD }}
+          APP: ${{ steps.app.outputs.app }}
+          PREFIX: ${{ steps.app.outputs.prefix }}
+          VERSION: ${{ steps.app.outputs.version }}
+          KEYSTORE_BASE64: ${{ secrets[format('{0}_KEYSTORE', steps.app.outputs.prefix)] }}
+          KEYSTORE_PASSWORD: ${{ secrets[format('{0}_KEYSTORE_PASSWORD', steps.app.outputs.prefix)] }}
+          KEY_ALIAS: ${{ secrets[format('{0}_KEY_ALIAS', steps.app.outputs.prefix)] }}
+          KEY_PASSWORD: ${{ secrets[format('{0}_KEY_PASSWORD', steps.app.outputs.prefix)] }}
         run: |
-          version="${SUNRADAR_VERSION#sunradar-android-v}"
+          export "${PREFIX}_VERSION=${VERSION}"
           mkdir -p out
           if [ -n "${KEYSTORE_BASE64}" ]; then
             echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.keystore"
-            SUNRADAR_KEYSTORE_FILE="${RUNNER_TEMP}/release.keystore" ./gradlew :sunradar:assembleRelease
-            cp sunradar/build/outputs/apk/release/sunradar-release.apk "out/sunradar-${version}.apk"
+            export "${PREFIX}_KEYSTORE_FILE=${RUNNER_TEMP}/release.keystore"
+            export "${PREFIX}_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}"
+            export "${PREFIX}_KEY_ALIAS=${KEY_ALIAS}"
+            export "${PREFIX}_KEY_PASSWORD=${KEY_PASSWORD}"
+            ./gradlew ":${APP}:assembleRelease"
+            cp "${APP}/build/outputs/apk/release/${APP}-release.apk" "out/${APP}-${VERSION}.apk"
           else
             echo "::notice::No signing secrets; the release gets a debug build"
-            ./gradlew :sunradar:assembleDebug
-            cp sunradar/build/outputs/apk/debug/sunradar-debug.apk "out/sunradar-${version}-debug.apk"
+            ./gradlew ":${APP}:assembleDebug"
+            cp "${APP}/build/outputs/apk/debug/${APP}-debug.apk" "out/${APP}-${VERSION}-debug.apk"
           fi
 
       - name: Attach to the release
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" out/*.apk
+        run: gh release upload "${TAG}" out/*.apk
 
       - uses: actions/upload-artifact@v4
         with:

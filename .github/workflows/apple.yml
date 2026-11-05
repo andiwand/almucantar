@@ -1,13 +1,13 @@
-# The Apple part: the xcframework of the C API, the tests of the Swift package, and a build of the
-# iOS app for the simulator (without signing).
+# The Apple part: the xcframework of the C API, the tests of the Swift package, and the builds and
+# tests of the iOS apps for the simulator (without signing).
 name: apple
 
 on:
   push:
     branches: [main]
-    paths: ["core/**", "ios/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
+    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
   pull_request:
-    paths: ["core/**", "ios/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
+    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
