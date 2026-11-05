@@ -48,7 +48,7 @@ for the features and the behavior.
 | `Starradar/StarData.swift` | The decoder of `stars.json`, the planets with their colors (`planetStyles`), and `StarLook` (size, color, limiting magnitude, twilight), the same rules as Android and `web/shared/src/stars.ts`. |
 | `Starradar/MilkyWay.swift` | The points of the Milky Way in the galactic system, with `JavaRandom`, so the points are the same as on Android. |
 | `Starradar/SettingsView.swift` | The settings (constellation lines, terrain, red light) and the credits of the data. |
-| `StarradarTests/` | The tests of the star data, the look of the stars, the Milky Way, the random numbers, the rise and set, and `horizonAt`. |
+| `StarradarTests/` | The tests of the star data, the look of the stars, the Milky Way, the random numbers, the rise and set with its text, `horizonAt`, the tap, the sky color, and the search. |
 | `SharedTests/` | The unit tests of the detector, of `Geo`, of `MoonPhase`, of the DEM cache (with a fake HTTP layer), of the two steps of the terrain and "Keep offline" (`TerrainLoadTests.swift`), and of the base map, the search, and the time zones (`PlaceTests.swift`). `TestServer.swift` has a fake server with Range requests and a writer of small GeoTIFF tiles. |
 | `SunradarUITests/` | The UI test that takes the store screenshots, and `Snapshots.swift`, the handoff with fastlane snapshot. |
 | `fastlane/` | The lanes `screenshots` and `upload_listing`. |

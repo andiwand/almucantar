@@ -5,6 +5,10 @@ The changes in the iOS app sunradar that a user notices. Each release has the ta
 
 ## Unreleased
 
+- The compass uses the magnetic declination of the place from the start. Before, it used the
+  declination of Vienna when the app started with the last place or a dropped place, so the
+  heading had an error of some degrees far from Vienna.
+
 - The place panel looks like a map app. The map fills the screen. The search bar is at the top,
   with a back arrow and a clear button, and the results show the country below the name. The
   buttons zoom in, zoom out, and "Use my location" are on the right. A card at the bottom shows the

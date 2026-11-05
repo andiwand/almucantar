@@ -227,6 +227,9 @@ struct SkyScreen: SwiftUI.View {
                     motion.start()
                     location.start()
                 }
+                // The provider can load the last place in its init, and onChange does not see
+                // that first value. The heading filter needs the place for the declination.
+                motion.observer = location.observer
                 updateTerrain()
             }
             .onReceive(timer) { if ScreenshotMode.scene == nil { now = $0 } }

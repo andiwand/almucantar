@@ -148,6 +148,19 @@ struct RiseSet: Equatable, Sendable {
     let rise: Double?
     let set: Double?
     let always: Bool?
+
+    /// The text of the info card, with the times in `timeZone`, the earlier event first.
+    func text(_ timeZone: TimeZone, overTerrain: Bool) -> String {
+        let over = overTerrain ? " over the terrain" : ""
+        switch always {
+        case true: return "Up all day" + over
+        case false: return "Below the horizon all day" + over
+        case nil:
+            let parts = [rise.map { ($0, "rises " + PlaceTime.time($0, timeZone)) }, set.map { ($0, "sets " + PlaceTime.time($0, timeZone)) }]
+                .compactMap { $0 }.sorted { $0.0 < $1.0 }.map(\.1).joined(separator: " · ")
+            return parts.prefix(1).uppercased() + parts.dropFirst() + over
+        }
+    }
 }
 
 /// The altitude of the visible horizon in a direction: the terrain, or 0°. It has the linear

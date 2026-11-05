@@ -53,6 +53,8 @@ struct StarScreen: SwiftUI.View {
     // field of view of the lens, so the zoom does not change it.
     @State private var zoom = 1.0
     @State private var zoomStart: Double?
+    /// A pinch happened during the current touch, so its end is not a tap.
+    @State private var pinched = false
     @State private var dragAzimuth = 180.0
     @State private var dragPitch = 30.0
     @State private var dragStart: (azimuth: Double, pitch: Double)?
@@ -131,6 +133,9 @@ struct StarScreen: SwiftUI.View {
             .onAppear {
                 motion.start()
                 location.start()
+                // The provider can load the last place in its init, and onChange does not see
+                // that first value. The heading filter needs the place for the declination.
+                motion.observer = location.observer
                 updateTerrain()
             }
             .onReceive(timer) { now = $0 }
@@ -218,7 +223,8 @@ struct StarScreen: SwiftUI.View {
             }
             .onEnded { value in
                 dragStart = nil
-                guard abs(value.translation.width) < 10, abs(value.translation.height) < 10 else { return }
+                defer { pinched = false }
+                guard !pinched, abs(value.translation.width) < 10, abs(value.translation.height) < 10 else { return }
                 tap(view: view, at: value.location)
             }
     }
@@ -226,6 +232,7 @@ struct StarScreen: SwiftUI.View {
     private func zoomGesture(size: CGSize) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                pinched = true
                 guard !cameraOn else { return }
                 if zoomStart == nil { zoomStart = zoom }
                 let base = baseFov(size)
@@ -350,7 +357,8 @@ struct StarScreen: SwiftUI.View {
         func screen(_ i: Int) -> CGPoint? {
             points[i].valid ? CGPoint(x: points[i].point.x, y: points[i].point.y) : nil
         }
-        // The constellation lines between projected stars. A segment needs both ends on the screen.
+        // The constellation lines between projected stars. A segment needs both ends in front of
+        // the camera.
         if linesOn && limit > 1 {
             var path = Path()
             for c in stars.constellations {
@@ -375,7 +383,7 @@ struct StarScreen: SwiftUI.View {
             let mag = stars.mag[i]
             let fade = min(1, max(0, 0.35 + (limit - mag) / 1.5))
             let alpha = hidden(sky.stars[i]) ? 0.22 * fade : fade
-            // 10 steps of the brightness and 12 steps of the color.
+            // 11 steps of the brightness (0 to 1) and 13 steps of the color (B-V from -0.4 to 2).
             let alphaStep = Int((alpha * 10).rounded())
             let colorStep = Int(((min(2, max(-0.4, stars.bv[i])) + 0.4) / 0.2).rounded())
             let key = alphaStep * 16 + colorStep
@@ -524,21 +532,7 @@ struct StarScreen: SwiftUI.View {
             case .constellation: "Constellation"
             case .galacticCenter: "Milky Way · Sagittarius A*"
             }
-        let over = profile != nil ? " over the terrain" : ""
-        let times: String
-        if let r = riseSet {
-            switch r.always {
-            case true: times = "Up all day" + over
-            case false: times = "Below the horizon all day" + over
-            case nil:
-                let parts = [r.rise.map { ($0, "rises " + PlaceTime.time($0, location.timeZone)) },
-                             r.set.map { ($0, "sets " + PlaceTime.time($0, location.timeZone)) }]
-                    .compactMap { $0 }.sorted { $0.0 < $1.0 }.map(\.1).joined(separator: " · ")
-                times = parts.prefix(1).uppercased() + parts.dropFirst() + over
-            }
-        } else {
-            times = "…"
-        }
+        let times = riseSet?.text(location.timeZone, overTerrain: profile != nil) ?? "…"
         let gray = Color(red: 0.706, green: 0.753, blue: 0.824)
         return VStack(alignment: .leading, spacing: 2) {
             Text(target.name(stars)).font(.system(size: 17, weight: .semibold))
@@ -625,15 +619,21 @@ struct FindPanel: SwiftUI.View {
         text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
     }
 
-    private var found: [Entry] {
+    /// The entries whose name starts with the query, then the entries whose name contains it.
+    private func search(_ query: String) -> [Entry] {
         let q = Self.fold(query.trimmingCharacters(in: .whitespaces))
         if q.isEmpty { return [] }
-        let matches = entries.filter { Self.fold($0.name).contains(q) }
-        let first = matches.filter { Self.fold($0.name).hasPrefix(q) }
-        return Array((first + matches.filter { !Self.fold($0.name).hasPrefix(q) }).prefix(20))
+        var starts: [Entry] = []
+        var contains: [Entry] = []
+        for entry in entries {
+            let name = Self.fold(entry.name)
+            if name.hasPrefix(q) { starts.append(entry) } else if name.contains(q) { contains.append(entry) }
+        }
+        return Array((starts + contains).prefix(20))
     }
 
     var body: some SwiftUI.View {
+        let found = search(query)
         NavigationStack {
             List(found) { entry in
                 Button {
