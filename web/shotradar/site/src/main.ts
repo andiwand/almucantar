@@ -1,18 +1,50 @@
 // The website of shotradar: one print on the paper of the page that develops while you scroll.
-// Each chapter is a step of the workflow of the app (the subject, the landmark, the calendar, the
-// spot, the check, and the shot), and it sets the time, the view, and the picture of the print.
-// The core (the same WebAssembly package as the app) calculates the sky, the alignments, the line
-// of the spots, and the darkness; the terrain comes from src/shot.json.
+// The chapters follow the three ways of the start page of the app: A "From where I am" (the peaks
+// of the skyline and the shots behind them), B "I have a landmark" (the subject, the landmark, the
+// calendar, the spot, the check, and the shot), and C "The next eclipses". Each chapter sets the
+// time, the view, and the picture of the print. The core (the same WebAssembly package as the app)
+// calculates the sky, the alignments, the line of the spots, the darkness, and the eclipses; the
+// terrain and the coastlines come from src/shot.json.
 
-import { Body as CoreBody, load } from "@almucantar/core";
-import type { Alignment, AlignmentLine, Horizontal } from "@almucantar/core";
+import { Body as CoreBody, EclipseKind, load } from "@almucantar/core";
+import type {
+  Alignment,
+  AlignmentLine,
+  Horizontal,
+  LocalSolarEclipse,
+  LunarEclipse,
+  Observer,
+} from "@almucantar/core";
 import { milkyWayDust } from "@almucantar/web-shared/milkyway";
+import { discCoverage } from "@almucantar/web-shared/photo";
 import { decodeStars, limitingMagnitude } from "@almucantar/web-shared/stars";
 import type { Stars, StarsJson } from "@almucantar/web-shared/stars";
 import starsUrl from "../../../../assets/stars/stars.json?url";
-import { HORIZON, MAP, PEAK, PROFILE, SHOT, SIGHT, SPOT, ZONE } from "./data";
-import { Scene } from "./scene";
-import type { Body, Frame, MapState, Moment, ProfileState, Track, View } from "./scene";
+import {
+  FINE_WINDOW,
+  HORIZON,
+  LAYERS,
+  MAP,
+  PEAK,
+  PROFILE,
+  SHOT,
+  SIGHT,
+  SPOT,
+  ZONE,
+  terrainAltitude,
+} from "./data";
+import { Scene, printRect } from "./scene";
+import type {
+  Body,
+  Frame,
+  MapState,
+  Moment,
+  PeakMark,
+  ProfileState,
+  Track,
+  View,
+  WorldState,
+} from "./scene";
 
 const almucantar = await load();
 const dust = milkyWayDust(2400, 3600);
@@ -25,6 +57,7 @@ const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const ease = (t: number) => t * t * (3 - 2 * t);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const wrap180 = (deg: number) => (((deg % 360) + 540) % 360) - 180;
+const wrap360 = (deg: number) => ((deg % 360) + 360) % 360;
 
 const SUMMIT: Horizontal = { azimuthDeg: SIGHT.azimuthDeg, altitudeDeg: SIGHT.altitudeDeg };
 const FOCAL_MM = 600;
@@ -77,7 +110,41 @@ function alignments(body: number, maxSeparationDeg = 0.3): Alignment[] {
   return almucantar.findAlignments(body, SPOT.observer, SUMMIT, FROM, TO, { maxSeparationDeg });
 }
 
-const calendar = alignments(CoreBody.moon);
+// The rule of darkEnough() in app/src/search.ts, with the same constants.
+/** The smallest lit part of the moon that a photo shows in any sky. */
+const MIN_MOON_FRACTION = 0.1;
+/** The thinnest crescent that a photo shows. It is still near the sun. */
+const MIN_CRESCENT_FRACTION = 0.03;
+/** The sun must be this low for a thin crescent: then the twilight and the earthshine show. */
+const CRESCENT_MAX_SUN_DEG = -3;
+/** The sky must be this dark for a subject: the airless altitude of the sun (SUBJECTS of the app). */
+const MAX_SUN_DEG = new Map<number, number | null>([
+  [CoreBody.moon, null],
+  [CoreBody.sun, null],
+  [CoreBody.galacticCenter, -15],
+  [CoreBody.venus, -4],
+  [CoreBody.jupiter, -6],
+  [CoreBody.saturn, -8],
+  [CoreBody.mars, -6],
+]);
+
+/** True if the app shows the shot: a lit moon, and a sky that is dark enough for the subject. */
+function darkEnough(body: number, t: number): boolean {
+  const sunDeg = almucantar.sunPosition(t, SPOT.observer, { refraction: false }).altitudeDeg;
+  if (body === CoreBody.moon) {
+    const fraction = fractionAt(t);
+    if (fraction < MIN_CRESCENT_FRACTION) return false;
+    if (fraction < MIN_MOON_FRACTION && sunDeg > CRESCENT_MAX_SUN_DEG) return false;
+  }
+  const limit = MAX_SUN_DEG.get(body) ?? null;
+  return limit === null || sunDeg <= limit;
+}
+
+/** The dates that the app shows: the alignments in a sky that is dark enough. */
+const shownAlignments = (body: number) =>
+  alignments(body, 0.3).filter((a) => darkEnough(body, a.unixUtc));
+
+const calendar = shownAlignments(CoreBody.moon);
 const storyIndex = Math.max(
   0,
   calendar.findIndex((a) => Math.abs(a.unixUtc - SHOT.unixUtc) < HOUR),
@@ -248,6 +315,467 @@ function allSubjects(): Subject[] {
   return subjects;
 }
 
+// --- Way A: the peaks of the skyline, and the shots behind them ------------------------------------
+
+const COMPASS = "N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW".split(" ");
+const compass = (azimuthDeg: number) =>
+  COMPASS[Math.round((((azimuthDeg % 360) + 360) % 360) / 22.5) % 16];
+
+/** A prominent peak on the skyline of the spot. */
+interface Peak {
+  direction: Horizontal;
+  distanceM: number;
+  /** The height of the summit, from its altitude and its distance (about). */
+  elevationM: number;
+  /** "Großglockner" or "peak to the ENE", for a sentence. */
+  name: string;
+  /** The label in the photo. */
+  label: string;
+}
+
+/**
+ * The peaks of the skyline: the same rule as findPeaks() of the app. A peak is the highest point
+ * within 5° on both sides, and it stands out 0.6° over the lowest point on each side. In the window
+ * of the fine horizon, the summit moves to the highest point of the fine data.
+ */
+function findPeaks(windowDeg = 5, minProminenceDeg = 0.6, minDistanceM = 1500, count = 10) {
+  const a = HORIZON.altitudeDeg;
+  const n = a.length;
+  const step = HORIZON.azimuthStepDeg;
+  const w = Math.max(1, Math.round(windowDeg / step));
+  const at = (i: number) => a[((i % n) + n) % n];
+  const found: { i: number; prominence: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = a[i];
+    if (!(HORIZON.distanceM[i] >= minDistanceM)) continue;
+    let highest = true;
+    let lowLeft = h;
+    let lowRight = h;
+    for (let k = 1; k <= w && highest; k++) {
+      // A plateau counts once: the first sample of equal values wins.
+      if (at(i - k) >= h || at(i + k) > h) highest = false;
+      lowLeft = Math.min(lowLeft, at(i - k));
+      lowRight = Math.min(lowRight, at(i + k));
+    }
+    const prominence = h - Math.max(lowLeft, lowRight);
+    if (highest && prominence >= minProminenceDeg) found.push({ i, prominence });
+  }
+  const eye = SPOT.eye.elevationM;
+  return found
+    .sort((p, q) => q.prominence - p.prominence)
+    .slice(0, count)
+    .map(({ i }): Peak => {
+      let direction: Horizontal = { azimuthDeg: i * step, altitudeDeg: a[i] };
+      if (wrap360(direction.azimuthDeg - FINE_WINDOW.firstAzimuthDeg) <= FINE_WINDOW.spanDeg) {
+        for (let az = direction.azimuthDeg - step; az <= direction.azimuthDeg + step; az += 0.05) {
+          const alt = terrainAltitude(LAYERS - 1, az);
+          if (alt > direction.altitudeDeg) direction = { azimuthDeg: az, altitudeDeg: alt };
+        }
+      }
+      const d = HORIZON.distanceM[i];
+      const summit = Math.abs(wrap180(direction.azimuthDeg - SIGHT.azimuthDeg)) < 0.6;
+      if (summit) direction = SUMMIT;
+      // The height from the altitude: the inverse of the model of sight(), with the refraction.
+      const drop = (d * d * (1 - 0.13)) / (2 * 6_371_008.8);
+      const elevationM = summit
+        ? PEAK.site.elevationM
+        : eye + d * Math.tan((direction.altitudeDeg * Math.PI) / 180) + drop;
+      const side = compass(direction.azimuthDeg);
+      return {
+        direction,
+        distanceM: summit ? SIGHT.distanceM : d,
+        elevationM,
+        name: summit ? PEAK.name : `peak to the ${side}`,
+        label: summit ? PEAK.name.toUpperCase() : `${side} · ${Math.round(elevationM / 10) * 10} M`,
+      };
+    });
+}
+
+const PEAKS = findPeaks();
+
+/** The subjects of way A, with the separation of the app. darkEnough() checks the sky. */
+const HERE_SUBJECTS = [
+  { key: "moon", name: "The moon", short: "Moon", body: CoreBody.moon, sep: 0.3 },
+  { key: "sun", name: "The sun", short: "Sun", body: CoreBody.sun, sep: 0.3 },
+  {
+    key: "milkyway",
+    name: "The core of the Milky Way",
+    short: "Core",
+    body: CoreBody.galacticCenter,
+    sep: 2,
+  },
+  { key: "venus", name: "Venus", short: "Venus", body: CoreBody.venus, sep: 0.4 },
+  { key: "jupiter", name: "Jupiter", short: "Jupiter", body: CoreBody.jupiter, sep: 0.4 },
+  { key: "saturn", name: "Saturn", short: "Saturn", body: CoreBody.saturn, sep: 0.4 },
+  { key: "mars", name: "Mars", short: "Mars", body: CoreBody.mars, sep: 0.4 },
+];
+
+/** A shot of way A: a subject behind a peak, or alone over the skyline (peak is null). */
+interface HereShot extends Subject {
+  short: string;
+  peak: Peak | null;
+  direction: Horizontal;
+  /** The subject alone: the dark hours over the skyline. */
+  window: { startUtc: number; endUtc: number } | null;
+}
+
+/** The search of way A starts on the day of the story and looks one year ahead. */
+const HERE_FROM = Date.UTC(2026, 10, 24) / 1000;
+const HERE_TO = HERE_FROM + 365 * DAY;
+
+/** The first time when the subject is behind one of the peaks, in a sky dark enough for it. */
+function firstBehindPeak(s: (typeof HERE_SUBJECTS)[number]): HereShot | null {
+  let best: { a: Alignment; peak: Peak } | null = null;
+  for (const peak of PEAKS) {
+    const match = almucantar
+      .findAlignments(s.body, SPOT.observer, peak.direction, HERE_FROM, HERE_TO, {
+        maxSeparationDeg: s.sep,
+      })
+      .find((a) => darkEnough(s.body, a.unixUtc));
+    if (match && (!best || match.unixUtc < best.a.unixUtc)) best = { a: match, peak };
+  }
+  if (!best) return null;
+  const { a, peak } = best;
+  const direction = (t: number) => almucantar.bodyPosition(s.body, t, SPOT.observer);
+  const rises = direction(a.unixUtc + 120).altitudeDeg > direction(a.unixUtc).altitudeDeg;
+  const where =
+    peak.name === PEAK.name
+      ? `the ${peak.name}, ${(peak.distanceM / 1000).toFixed(1)} km away`
+      : `the ${peak.name}, ${(peak.distanceM / 1000).toFixed(1)} km away, about ${Math.round(peak.elevationM / 10) * 10} m`;
+  return {
+    key: s.key,
+    name: s.name,
+    short: s.short,
+    time: a.unixUtc,
+    detail: `${s.name} ${rises ? "rises" : "sets"} behind ${where}.`,
+    track: track(direction, a.unixUtc),
+    body: (t) =>
+      s.body === CoreBody.moon || s.body === CoreBody.galacticCenter
+        ? null
+        : {
+            kind: s.body === CoreBody.sun ? "sun" : "planet",
+            direction: direction(t),
+            label: s.short,
+          },
+    milkyWay: s.body === CoreBody.galacticCenter,
+    peak,
+    direction: peak.direction,
+    window: null,
+  };
+}
+
+/**
+ * The core of the Milky Way alone over the ridge: the longest window from April to September 2027
+ * with the core over the skyline, the sun 18° down, and the moon down (darkWindows of the core).
+ */
+function coreOverRidge(): HereShot | null {
+  const windows = almucantar.darkWindows(
+    SPOT.observer,
+    Date.UTC(2027, 3, 1) / 1000,
+    Date.UTC(2027, 9, 1) / 1000,
+    { galacticCenter: true },
+    HORIZON,
+  );
+  const w = windows.sort((p, q) => q.endUtc - q.startUtc - (p.endUtc - p.startUtc))[0];
+  if (!w) return null;
+  const time = (w.startUtc + w.endUtc) / 2;
+  const core = (t: number) => almucantar.bodyPosition(CoreBody.galacticCenter, t, SPOT.observer);
+  const side = compass(core(time).azimuthDeg);
+  return {
+    key: "core-alone",
+    name: "The core of the Milky Way",
+    short: "Alone",
+    time,
+    detail: `The core of the Milky Way stands alone over the ridge to the ${side}, from ${hhmm(w.startUtc)} to ${hhmm(w.endUtc)}, with no moon in the sky.`,
+    track: track(core, time),
+    body: () => null,
+    milkyWay: true,
+    peak: null,
+    direction: core(time),
+    window: w,
+  };
+}
+
+let hereShots: HereShot[] = [];
+
+/** The searches of way A take a few tenths of a second, so they run in steps after the start. */
+async function searchHere() {
+  const out: HereShot[] = [];
+  for (const s of HERE_SUBJECTS) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const shot = firstBehindPeak(s);
+    if (shot) out.push(shot);
+  }
+  const alone = coreOverRidge();
+  if (alone) out.push(alone);
+  hereShots = out.sort((p, q) => p.time - q.time);
+  fillHereSheet();
+}
+
+/** The view of way A: the peak (or the subject) low in the print, with the skyline around it. */
+function hereView(direction: Horizontal): View {
+  const r = printRect(innerWidth, innerHeight);
+  const span = narrow() ? 40 : 56;
+  const tall = (span * r.h) / r.w;
+  return {
+    azimuthDeg: direction.azimuthDeg,
+    altitudeDeg: Math.max(direction.altitudeDeg, 2) + 0.22 * tall,
+    spanDeg: span,
+  };
+}
+
+// --- Way C: the eclipses ------------------------------------------------------------------------
+
+const ECLIPSE_NAMES = ["Penumbral", "Partial", "Annular", "Total"];
+
+interface EclipseShot extends Subject {
+  type: "solar" | "lunar";
+  kind: number;
+  peakUtc: number;
+  /** The times of the photo: from the first to the last contact. */
+  begin: number;
+  end: number;
+  local: LocalSolarEclipse | null;
+  lunar: LunarEclipse | null;
+  sunRadiusDeg: number;
+  moonRadiusDeg: number;
+  /** The point of the greatest eclipse of a total or annular solar eclipse. */
+  peakPlace: Observer | null;
+  /** The length of the central phase at that point, in seconds. */
+  centralS: number;
+  world: WorldState | null;
+  here: string;
+  line: string;
+}
+
+const airlessSunAt = (t: number) => almucantar.sunPosition(t, SPOT.observer, { refraction: false });
+const airlessMoonAt = (t: number) =>
+  almucantar.moonPosition(t, SPOT.observer, { refraction: false });
+
+const duration = (s: number) => {
+  const m = Math.floor(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min ${Math.round(s - 60 * m)} s`;
+};
+const latLon = (o: Observer) =>
+  `${Math.abs(o.latitudeDeg).toFixed(1)}° ${o.latitudeDeg >= 0 ? "N" : "S"}, ${Math.abs(o.longitudeDeg).toFixed(1)}° ${o.longitudeDeg >= 0 ? "E" : "W"}`;
+
+/** The box of the map of an eclipse: the central line and the spot, with a margin. */
+function worldBox(points: Observer[]) {
+  const lons = points.map((p) => p.longitudeDeg);
+  const lats = points.map((p) => p.latitudeDeg);
+  return {
+    west: Math.max(-45, Math.min(...lons) - 6),
+    east: Math.min(100, Math.max(...lons) + 6),
+    south: Math.max(-20, Math.min(...lats) - 6),
+    north: Math.min(72, Math.max(...lats) + 6),
+  };
+}
+
+function solarShot(e: { kind: number; peakUtc: number; peakPlace: Observer }): EclipseShot | null {
+  const local = almucantar
+    .localSolarEclipses(SPOT.observer, e.peakUtc - DAY, e.peakUtc + DAY)
+    .find((l) => Math.abs(l.peakUtc - e.peakUtc) < 6 * HOUR);
+  if (!local || local.peakSunAltitudeDeg <= 0 || local.obscuration < 0.3) return null;
+  // The radii from the contacts, as in the app: at the first contact the discs touch outside (the
+  // sum of the radii), at the second inside (the difference).
+  const outside = separation(
+    airlessSunAt(local.partialBeginUtc),
+    airlessMoonAt(local.partialBeginUtc),
+  );
+  let sunRadiusDeg = 0.2666;
+  let moonRadiusDeg = outside - sunRadiusDeg;
+  if (Number.isFinite(local.totalBeginUtc)) {
+    const inside = separation(
+      airlessSunAt(local.totalBeginUtc),
+      airlessMoonAt(local.totalBeginUtc),
+    );
+    sunRadiusDeg =
+      local.kind === EclipseKind.total ? (outside - inside) / 2 : (outside + inside) / 2;
+    moonRadiusDeg =
+      local.kind === EclipseKind.total ? (outside + inside) / 2 : (outside - inside) / 2;
+  }
+  const central = Number.isFinite(e.peakPlace.latitudeDeg);
+  const points = central ? almucantar.eclipseCentralLine(e.peakUtc, 120) : [];
+  const at = central
+    ? almucantar
+        .localSolarEclipses(e.peakPlace, e.peakUtc - DAY, e.peakUtc + DAY)
+        .find((l) => Math.abs(l.peakUtc - e.peakUtc) < 6 * HOUR)
+    : undefined;
+  const centralS = at ? at.totalEndUtc - at.totalBeginUtc : NaN;
+  const name = `${ECLIPSE_NAMES[e.kind]} solar eclipse`;
+  const phase = e.kind === EclipseKind.annular ? "annular" : "total";
+  const utc = (t: number) =>
+    new Date(t * 1000).toLocaleTimeString("en-GB", {
+      timeZone: "UTC",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  const world: WorldState = {
+    box: worldBox([...points.map((p) => p.place), SPOT.observer]),
+    line: points.map((p) => ({
+      lon: p.place.longitudeDeg,
+      lat: p.place.latitudeDeg,
+      radiusKm: Math.abs(p.umbraRadiusKm),
+    })),
+    ticks: points
+      .filter((_, i) => i % 15 === 0 && i > 0 && i < points.length - 1)
+      .map((p) => ({
+        lon: p.place.longitudeDeg,
+        lat: p.place.latitudeDeg,
+        label: `${utc(p.unixUtc)} UTC`,
+      })),
+    moonUp: null,
+    spot: SPOT.observer,
+    spotLabel: `YOU · ${percent(local.obscuration)}`,
+    peak:
+      central && Number.isFinite(centralS)
+        ? {
+            place: e.peakPlace,
+            label: `${phase.toUpperCase()} ${duration(centralS).toUpperCase()}`,
+          }
+        : null,
+    title: `${date(e.peakUtc).toUpperCase()} · ${name.toUpperCase()}`,
+    legend: central ? `THE PATH OF THE ${phase === "total" ? "UMBRA" : "ANTUMBRA"}` : "",
+  };
+  return {
+    key: `solar-${e.peakUtc}`,
+    name,
+    time: local.peakUtc,
+    detail: "",
+    track: null,
+    body: () => null,
+    milkyWay: false,
+    type: "solar",
+    kind: e.kind,
+    peakUtc: local.peakUtc,
+    begin: local.partialBeginUtc,
+    end: local.partialEndUtc,
+    local,
+    lunar: null,
+    sunRadiusDeg,
+    moonRadiusDeg,
+    peakPlace: central ? e.peakPlace : null,
+    centralS,
+    world,
+    here: `From the ridge: partial, the moon covers ${percent(local.obscuration)} of the sun at ${hhmm(local.peakUtc)} ${zoneName(local.peakUtc)}, with the sun ${deg(local.peakSunAltitudeDeg, 0)} high. It starts at ${hhmm(local.partialBeginUtc)} and ends at ${hhmm(local.partialEndUtc)}.`,
+    line:
+      central && Number.isFinite(centralS)
+        ? `At the point of the greatest eclipse (${latLon(e.peakPlace)}), the ${phase} phase lasts ${duration(centralS)}.`
+        : "",
+  };
+}
+
+function lunarShot(l: LunarEclipse): EclipseShot | null {
+  if (l.kind < EclipseKind.partial || l.obscuration < 0.3) return null;
+  const moon = moonAt(l.peakUtc);
+  if (moon.altitudeDeg <= almucantar.terrainAltitudeDeg(HORIZON, moon.azimuthDeg)) return null;
+  const total = Number.isFinite(l.totalBeginUtc);
+  const name = `${ECLIPSE_NAMES[l.kind]} lunar eclipse`;
+  // Where the moon is up at the peak: a grid of the map of the Earth.
+  const cellDeg = 2.5;
+  const cells: [number, number][] = [];
+  for (let lat = -20; lat <= 72; lat += cellDeg) {
+    for (let lon = -45; lon <= 100; lon += cellDeg) {
+      const at = { latitudeDeg: lat, longitudeDeg: lon };
+      if (almucantar.moonPosition(l.peakUtc, at).altitudeDeg > 0) cells.push([lon, lat]);
+    }
+  }
+  const above = (t: number) => {
+    const m = moonAt(t);
+    return m.altitudeDeg > almucantar.terrainAltitudeDeg(HORIZON, m.azimuthDeg);
+  };
+  const into = total ? l.totalBeginUtc : l.partialBeginUtc;
+  const world: WorldState = {
+    box: { west: -45, east: 100, south: -20, north: 72 },
+    line: [],
+    ticks: [],
+    moonUp: { cellDeg, cells },
+    spot: SPOT.observer,
+    spotLabel: `YOU · MOON ${deg(moon.altitudeDeg, 0)} HIGH`,
+    peak: null,
+    title: `${date(l.peakUtc).toUpperCase()} · ${name.toUpperCase()}`,
+    legend: "THE MOON IS UP AT THE PEAK",
+  };
+  return {
+    key: `lunar-${l.peakUtc}`,
+    name,
+    time: l.peakUtc,
+    detail: "",
+    track: null,
+    body: () => null,
+    milkyWay: false,
+    type: "lunar",
+    kind: l.kind,
+    peakUtc: l.peakUtc,
+    begin: l.partialBeginUtc,
+    end: l.partialEndUtc,
+    local: null,
+    lunar: l,
+    sunRadiusDeg: 0.2666,
+    moonRadiusDeg: 0.26,
+    peakPlace: null,
+    centralS: total ? l.totalEndUtc - l.totalBeginUtc : NaN,
+    world,
+    here: `From the ridge: the peak is at ${hhmm(l.peakUtc)} ${zoneName(l.peakUtc)}, with the moon ${deg(moon.altitudeDeg, 0)} high to the ${compass(moon.azimuthDeg)}. At the start of the ${total ? "total" : "partial"} phase, the moon is ${above(into) ? "over" : "still behind"} the mountains.`,
+    line: total
+      ? `The total phase lasts ${duration(l.totalEndUtc - l.totalBeginUtc)}, from ${hhmm(l.totalBeginUtc)} to ${hhmm(l.totalEndUtc)}: the moon turns red.`
+      : `At the peak, ${percent(l.obscuration)} of the moon is in the shadow of the Earth.`,
+  };
+}
+
+/** The part of the moon in the umbra at a time: the same ramp as lunarUmbra() of the app. */
+function umbraAt(l: LunarEclipse, t: number): number {
+  const ramp = (a: number, b: number) => clamp((t - a) / (b - a));
+  if (!Number.isFinite(l.partialBeginUtc)) return 0;
+  const top = Number.isFinite(l.totalBeginUtc) ? 1 : l.obscuration;
+  const into = Number.isFinite(l.totalBeginUtc) ? l.totalBeginUtc : l.peakUtc;
+  const out = Number.isFinite(l.totalEndUtc) ? l.totalEndUtc : l.peakUtc;
+  if (t < into) return top * ramp(l.partialBeginUtc, into);
+  if (t > out) return top * (1 - ramp(out, l.partialEndUtc));
+  return top;
+}
+
+/** The next eclipses that the spot sees well: 30 % of the sun or of the moon, over the terrain. */
+function searchEclipses(): EclipseShot[] {
+  const year = 365.25 * DAY;
+  const solar = almucantar
+    .solarEclipses(HERE_FROM, HERE_FROM + 10 * year)
+    .map(solarShot)
+    .filter((e): e is EclipseShot => e !== null);
+  const lunar = almucantar
+    .lunarEclipses(HERE_FROM, HERE_FROM + 5 * year)
+    .map(lunarShot)
+    .filter((e): e is EclipseShot => e !== null);
+  return [...solar, ...lunar].sort((a, b) => a.peakUtc - b.peakUtc).slice(0, 4);
+}
+
+const ECLIPSES = searchEclipses();
+const isEclipse = (s: Subject | null): s is EclipseShot => s !== null && "begin" in s;
+/** The eclipse of the chapter: the first total solar eclipse, until a click picks another one. */
+let eclipseIndex = Math.max(
+  0,
+  ECLIPSES.findIndex((e) => e.type === "solar" && e.kind === EclipseKind.total),
+);
+
+/** The view of the photo of an eclipse at a time. */
+function eclipseView(e: EclipseShot, t: number): View {
+  if (e.type === "solar") {
+    const sun = airlessSunAt(t);
+    return { azimuthDeg: sun.azimuthDeg, altitudeDeg: sun.altitudeDeg, spanDeg: narrow() ? 3 : 4 };
+  }
+  const peak = moonAt(e.peakUtc);
+  if (peak.altitudeDeg < 25) {
+    // A low moon: a fixed view with the mountains, so the moon moves over the skyline.
+    return {
+      azimuthDeg: peak.azimuthDeg - 3,
+      altitudeDeg: peak.altitudeDeg + 1,
+      spanDeg: narrow() ? 14 : 20,
+    };
+  }
+  const moon = moonAt(t);
+  return { azimuthDeg: moon.azimuthDeg, altitudeDeg: moon.altitudeDeg, spanDeg: narrow() ? 4 : 6 };
+}
+
 // --- The line of the spots and the line of sight --------------------------------------------------
 
 let lineCache: { t: number; line: AlignmentLine } | null = null;
@@ -330,7 +858,7 @@ const darkTonight = almucantar.darkWindows(
 
 // --- The chapters -------------------------------------------------------------------------------
 
-type Mode = "photo" | "map" | "profile";
+type Mode = "photo" | "map" | "profile" | "world";
 
 interface Target {
   time: number;
@@ -343,6 +871,49 @@ interface Target {
   trackAlpha: number;
   reveal: number;
   focal: number;
+  /** Way A: the marks of the peaks, and the peak of the shot. */
+  peaks: number;
+  activePeak: Peak | null;
+  /** Way C: the eclipse in the photo or on the map. */
+  eclipse: EclipseShot | null;
+}
+
+// --- The choices of the cards ---------------------------------------------------------------------
+
+/**
+ * A card with a list (the subjects, the calendar, the shots of way A) steps through it while you
+ * scroll. A click picks an item; the pick holds until the scroll reaches the next item.
+ */
+const picks = new Map<string, { index: number; scrolled: number }>();
+/** The raw progress of each chapter, from the last frame. */
+let rawProgress = { name: "", progress: 0 };
+
+function choice(name: string, p: number, n: number): number {
+  const scrolled = Math.min(n - 1, Math.floor(p * n));
+  const pick = picks.get(name);
+  if (!pick) return scrolled;
+  // Before the first frame in the chapter, the pick holds.
+  if (rawProgress.name !== name) return pick.index;
+  if (Math.min(n - 1, Math.floor(rawProgress.progress * n)) === pick.scrolled) return pick.index;
+  picks.delete(name);
+  return scrolled;
+}
+
+/** Makes the button of a list item pick it: a click, or Enter or Space on the keyboard. */
+function pickOnClick(button: HTMLButtonElement, name: string, index: number, n: () => number) {
+  button.addEventListener("click", () => {
+    const section = button.closest<HTMLElement>("[data-chapter]")!;
+    const rect = section.getBoundingClientRect();
+    const progress = clamp(-rect.top / Math.max(1, rect.height - innerHeight));
+    picks.set(name, { index, scrolled: Math.min(n() - 1, Math.floor(progress * n())) });
+  });
+}
+
+/** Marks the shown item of a list as pressed. */
+function press(list: ParentNode, index: number) {
+  list.querySelectorAll("button").forEach((b, i) => {
+    b.setAttribute("aria-pressed", String(i === index));
+  });
 }
 
 const narrow = () => innerWidth < 860;
@@ -360,9 +931,23 @@ const heroTime = () =>
 
 const chapters: Record<string, (p: number) => Partial<Target>> = {
   hero: () => ({ time: heroTime(), view: tele(6.5, 0.7) }),
+  here: (p) => {
+    if (!hereShots.length) {
+      return { time: SHOT.unixUtc, view: hereView(SUMMIT), peaks: 1, activePeak: PEAKS[0] };
+    }
+    const s = hereShots[choice("here", p, hereShots.length)];
+    return {
+      time: s.time,
+      view: hereView(s.direction),
+      subject: s,
+      trackAlpha: 1,
+      peaks: 1,
+      activePeak: s.peak,
+    };
+  },
   subject: (p) => {
     const list = allSubjects();
-    const s = list[Math.min(list.length - 1, Math.floor(p * list.length))];
+    const s = list[choice("subject", p, list.length)];
     return {
       time: s.time,
       view: {
@@ -380,7 +965,7 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     pin: clamp((p - 0.15) * 4),
   }),
   calendar: (p) => {
-    const a = sheet[Math.min(sheet.length - 1, Math.floor(p * sheet.length))];
+    const a = sheet[choice("calendar", p, sheet.length)];
     return { time: (a?.unixUtc ?? SHOT.unixUtc) + 40, view: tele(9, 0.8) };
   },
   spot: (p) => ({
@@ -399,6 +984,23 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     view: tele(6.2, 0.5),
     finder: clamp(p * 4),
   }),
+  eclipse: (p) => {
+    const e = ECLIPSES[eclipseIndex];
+    if (!e) return { time: SHOT.unixUtc, view: tele(9, 0.8) };
+    // The first part shows the map of the Earth, the rest the photo from the first to the last
+    // contact.
+    const q = clamp((p - 0.4) / 0.55);
+    const t = e.begin + (e.end - e.begin) * q;
+    return {
+      time: p < 0.4 ? e.begin : t,
+      mode: p < 0.4 ? "world" : "photo",
+      view: eclipseView(e, p < 0.4 ? e.begin : t),
+      subject: e,
+      eclipse: e,
+      // A low moon rises next to the summit, so the photo names the summit.
+      pin: e.type === "lunar" && moonAt(e.peakUtc).altitudeDeg < 25 ? 1 : 0,
+    };
+  },
   play: () => {
     // The view shows the frame of the lens with some room around it.
     const fov = (2 * Math.atan(18 / play.focal) * 180) / Math.PI;
@@ -422,7 +1024,7 @@ const PLAY_BODIES = [
   { body: CoreBody.jupiter, name: "Jupiter" },
   { body: CoreBody.saturn, name: "Saturn" },
   { body: CoreBody.mars, name: "Mars" },
-].filter((b) => b.body === CoreBody.moon || alignments(b.body, 0.3).length > 0);
+].filter((b) => b.body === CoreBody.moon || shownAlignments(b.body).length > 0);
 const playSubject = $<HTMLSelectElement>("play-subject");
 const playDate = $<HTMLSelectElement>("play-date");
 const playLens = $<HTMLSelectElement>("play-lens");
@@ -434,7 +1036,7 @@ function playBody() {
 
 function fillPlayDates() {
   const b = playBody();
-  play.matches = alignments(b.body, 0.3);
+  play.matches = shownAlignments(b.body);
   playDate.replaceChildren(
     ...play.matches.map((a, i) => {
       const option = document.createElement("option");
@@ -504,19 +1106,112 @@ function moonIcon(fraction: number, waxing: boolean): SVGSVGElement {
   return svg;
 }
 
+/** A small SVG icon of a subject or an eclipse, in a box of -1 to 1. */
+function icon(kind: string): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "-1 -1 2 2");
+  svg.setAttribute("aria-hidden", "true");
+  const shapes: Record<string, string> = {
+    sun: '<circle r="0.45" class="lit"/><g class="ray"><path d="M0 -0.95V-0.65M0 0.65V0.95M-0.95 0H-0.65M0.65 0H0.95M-0.67 -0.67L-0.46 -0.46M0.46 0.46L0.67 0.67M-0.67 0.67L-0.46 0.46M0.46 -0.46L0.67 -0.67"/></g>',
+    planet:
+      '<circle r="0.32" class="lit"/><ellipse rx="0.8" ry="0.22" class="ring" transform="rotate(-20)"/>',
+    milkyway:
+      '<ellipse rx="0.95" ry="0.32" class="band" transform="rotate(-35)"/><circle r="0.22" class="lit"/>',
+    solar: '<circle r="0.8" class="lit"/><circle cx="0.32" cy="-0.2" r="0.8" class="cover"/>',
+    lunar: '<circle r="0.8" class="red"/>',
+  };
+  svg.innerHTML = shapes[kind] ?? shapes.planet;
+  return svg;
+}
+
+/** A frame of a contact sheet: a button with an icon, a title, and a line of text. */
+function frameButton(svg: SVGSVGElement, title: string, line: string, label: string) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.setAttribute("aria-pressed", "false");
+  button.setAttribute("aria-label", label);
+  const text = document.createElement("span");
+  const b = document.createElement("b");
+  b.textContent = title;
+  text.append(b, line);
+  button.append(svg, text);
+  item.append(button);
+  return { item, button };
+}
+
 sheetList.replaceChildren(
   ...sheet.map((a, i) => {
-    const item = document.createElement("li");
     const f = fractionAt(a.unixUtc);
-    item.append(moonIcon(f, waxingAt(a.unixUtc)));
-    const text = document.createElement("span");
-    text.innerHTML = `<b>${dayMonth(a.unixUtc)}</b>${hhmm(a.unixUtc)}`;
-    item.append(text);
-    item.dataset.index = String(i);
-    if (Math.abs(a.unixUtc - SHOT.unixUtc) < HOUR) item.classList.add("story");
+    const { item, button } = frameButton(
+      moonIcon(f, waxingAt(a.unixUtc)),
+      dayMonth(a.unixUtc),
+      hhmm(a.unixUtc),
+      `${date(a.unixUtc)}, ${hhmm(a.unixUtc)}: ${phaseName(f, waxingAt(a.unixUtc)).toLowerCase()}, ${percent(f)} lit`,
+    );
+    if (Math.abs(a.unixUtc - SHOT.unixUtc) < HOUR) button.classList.add("story");
+    pickOnClick(button, "calendar", i, () => sheet.length);
     return item;
   }),
 );
+
+// --- The chips of the subjects ------------------------------------------------------------------
+
+/** The chips name the subjects in the order of allSubjects(). */
+const SUBJECT_KEYS = ["moon", "milkyway", "sun", "planet"];
+document.querySelectorAll<HTMLButtonElement>("[data-subject]").forEach((chip) => {
+  const index = SUBJECT_KEYS.indexOf(chip.dataset.subject!);
+  pickOnClick(chip, "subject", index, () => SUBJECT_KEYS.length);
+});
+
+// --- The contact sheet of way A ---------------------------------------------------------------------
+
+const hereList = $("here-sheet");
+
+function fillHereSheet() {
+  hereList.replaceChildren(
+    ...hereShots.map((s, i) => {
+      const kind =
+        s.key === "moon" ? "moon" : s.key === "sun" ? "sun" : s.milkyWay ? "milkyway" : "planet";
+      const svg = kind === "moon" ? moonIcon(fractionAt(s.time), waxingAt(s.time)) : icon(kind);
+      const where = s.peak ? `behind the ${s.peak.name}` : "alone over the ridge";
+      const { item, button } = frameButton(
+        svg,
+        s.short,
+        dayMonth(s.time),
+        `${s.name} ${where}: ${date(s.time)}, ${hhmm(s.time)}`,
+      );
+      pickOnClick(button, "here", i, () => hereShots.length);
+      return item;
+    }),
+  );
+  activeHere = -1;
+}
+
+// --- The list of the eclipses -----------------------------------------------------------------------
+
+const eclipseList = $("eclipse-sheet");
+eclipseList.replaceChildren(
+  ...ECLIPSES.map((e, i) => {
+    const year = format(e.peakUtc, { year: "2-digit" });
+    const { item, button } = frameButton(
+      icon(e.type),
+      `${dayMonth(e.peakUtc)} ${year}`,
+      e.type === "solar" ? `Sun ${percent(e.local!.obscuration)}` : ECLIPSE_NAMES[e.kind],
+      `${e.name}, ${longDate(e.peakUtc)}`,
+    );
+    // The icon shows the moon of a lunar eclipse, so its label is the kind only: "Moon total" is
+    // too long for the tile.
+    // The list picks the eclipse of the chapter; the scroll moves from the map to the photo.
+    button.addEventListener("click", () => {
+      eclipseIndex = i;
+      press(eclipseList, i);
+    });
+    return item;
+  }),
+);
+press(eclipseList, eclipseIndex);
 
 // --- The scroll position ------------------------------------------------------------------------
 
@@ -577,23 +1272,40 @@ function setText(id: string, text: string) {
 
 let activeSubject = "";
 let activeSheet = -1;
+let activeHere = -1;
 
 function readouts(name: string, target: Target, t: number, p: number) {
-  if (name === "subject" && target.subject) {
+  if (name === "here" && target.subject) {
+    const s = target.subject as HereShot;
+    const i = hereShots.indexOf(s);
+    if (i !== activeHere) {
+      activeHere = i;
+      press(hereList, i);
+    }
+    const sun = sunAt(s.time).altitudeDeg;
+    setText("here-name", `${date(s.time)} · ${hhmm(s.time)}`);
+    setText("here-detail", s.detail);
+    setText(
+      "here-light",
+      s.key === "moon"
+        ? `${phaseName(fractionAt(s.time), waxingAt(s.time))}, ${percent(fractionAt(s.time))} lit · ${light(sun)}`
+        : `${light(sun)} · the sun at ${deg(sun, 1)}`,
+    );
+  } else if (name === "subject" && target.subject) {
     const s = target.subject;
     if (activeSubject !== s.key) {
       activeSubject = s.key;
       document.querySelectorAll<HTMLElement>("[data-subject]").forEach((chip) => {
-        chip.classList.toggle("active", chip.dataset.subject === s.key);
+        chip.setAttribute("aria-pressed", String(chip.dataset.subject === s.key));
       });
     }
     setText("subject-name", s.name);
     setText("subject-detail", s.detail);
   } else if (name === "calendar") {
-    const i = Math.min(sheet.length - 1, Math.floor(p * sheet.length));
+    const i = choice("calendar", p, sheet.length);
     if (i !== activeSheet) {
       activeSheet = i;
-      sheetList.querySelectorAll("li").forEach((li, j) => li.classList.toggle("active", j === i));
+      press(sheetList, i);
     }
     const a = sheet[i];
     if (!a) return;
@@ -603,6 +1315,18 @@ function readouts(name: string, target: Target, t: number, p: number) {
       "calendar-detail",
       `${phaseName(f, waxingAt(a.unixUtc))}, ${percent(f)} lit · ${light(sunAt(a.unixUtc).altitudeDeg)}`,
     );
+  } else if (name === "eclipse" && target.eclipse) {
+    const e = target.eclipse;
+    setText("eclipse-name", `${date(e.peakUtc)} · ${e.name}`);
+    setText("eclipse-here", e.here);
+    setText("eclipse-line", e.line);
+    if (target.mode === "photo") {
+      const now =
+        e.type === "solar"
+          ? `${percent(discCoverage(separation(airlessSunAt(t), airlessMoonAt(t)), e.sunRadiusDeg, e.moonRadiusDeg))} of the sun covered`
+          : `${percent(umbraAt(e.lunar!, t))} of the moon in the umbra`;
+      setText("eclipse-now", `${hhmm(t)} ${zoneName(t)} · ${now}`);
+    } else setText("eclipse-now", narrow() ? "" : "Scroll on for the photo from the ridge.");
   } else if (name === "spot") {
     const line = lineAt(t);
     const near = line.spots[0];
@@ -640,6 +1364,21 @@ function readouts(name: string, target: Target, t: number, p: number) {
 function hud(name: string, t: number, view: View): Frame["hud"] {
   const moon = moonAt(t);
   const stamp = `${date(t).toUpperCase()} · ${hhmmss(t)} ${zoneName(t)}`;
+  if (name === "here") {
+    return {
+      topLeft: `${view.spanDeg.toFixed(0)}° FIELD · ${PEAKS.length} PEAKS`,
+      topRight: `AZ ${deg(wrap360(view.azimuthDeg), 1)}`,
+      bottom: stamp,
+    };
+  }
+  if (name === "eclipse") {
+    const sun = airlessSunAt(t);
+    return {
+      topLeft: `${view.spanDeg.toFixed(0)}° FIELD`,
+      topRight: `SUN ${deg(sun.altitudeDeg, 1)} · MOON ${deg(moon.altitudeDeg, 1)}`,
+      bottom: stamp,
+    };
+  }
   if (name === "subject") {
     return {
       topLeft: `${view.spanDeg.toFixed(0)}° FIELD`,
@@ -675,6 +1414,8 @@ const shown = {
   photo: 1,
   map: 0,
   profile: 0,
+  world: 0,
+  peaks: 0,
   pin: 0,
   finder: 0,
   print: 1,
@@ -692,6 +1433,7 @@ function frame(ms: number) {
   lastMs = ms;
   heroMs += dt * 1000;
   const { name, progress } = scrollState();
+  rawProgress = { name, progress };
   if (document.body.dataset.chapter !== name) updateRail(name);
   document.body.dataset.chapter = name;
   const k = reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 5);
@@ -711,6 +1453,9 @@ function frame(ms: number) {
     trackAlpha: 0,
     reveal: 0,
     focal: FOCAL_MM,
+    peaks: 0,
+    activePeak: null,
+    eclipse: null,
     ...chapters[name](shown.progress),
   };
 
@@ -732,10 +1477,11 @@ function frame(ms: number) {
   shown.az += wrap180(target.view.azimuthDeg - shown.az) * k;
   shown.alt += (target.view.altitudeDeg - shown.alt) * k;
   shown.logSpan += (Math.log(target.view.spanDeg) - shown.logSpan) * k;
-  for (const mode of ["photo", "map", "profile"] as const) {
+  for (const mode of ["photo", "map", "profile", "world"] as const) {
     shown[mode] += ((target.mode === mode ? 1 : 0) - shown[mode]) * Math.min(1, k * 1.4);
   }
   shown.pin += (target.pin - shown.pin) * k;
+  shown.peaks += (target.peaks - shown.peaks) * k;
   shown.finder += (target.finder - shown.finder) * k;
   shown.print += (target.print - shown.print) * k;
   shown.track += ((shownSubject ? target.trackAlpha : 0) - shown.track) * k;
@@ -752,8 +1498,10 @@ function frame(ms: number) {
   shown.flash *= Math.exp(-dt * 5);
 
   const t = shown.time;
-  const sun = sunAt(t);
-  const moon = moonAt(t);
+  // An eclipse uses the positions without the refraction, as the contacts of the core do.
+  const eclipse = isEclipse(shownSubject) ? shownSubject : null;
+  const sun = eclipse ? airlessSunAt(t) : sunAt(t);
+  const moon = eclipse ? airlessMoonAt(t) : moonAt(t);
   const view: View = {
     azimuthDeg: shown.az,
     altitudeDeg: shown.alt,
@@ -804,6 +1552,30 @@ function frame(ms: number) {
             ticks: TICKS,
           }
         : null,
+    world: shown.world,
+    worldState: eclipse?.world ?? null,
+    peaks:
+      shown.peaks > 0.01
+        ? PEAKS.map((p): PeakMark => ({
+            direction: p.direction,
+            label: p.label,
+            active: p === target.activePeak,
+          }))
+        : null,
+    peaksAlpha: shown.peaks,
+    solarEclipse:
+      eclipse?.type === "solar"
+        ? {
+            sunRadiusDeg: eclipse.sunRadiusDeg,
+            moonRadiusDeg: eclipse.moonRadiusDeg,
+            coverage: discCoverage(
+              separation(sun, moon),
+              eclipse.sunRadiusDeg,
+              eclipse.moonRadiusDeg,
+            ),
+          }
+        : null,
+    lunarUmbra: eclipse?.type === "lunar" ? umbraAt(eclipse.lunar!, t) : 0,
     fade: shown.fade,
     flash: shown.flash,
   };
@@ -837,3 +1609,4 @@ setText(
 
 document.documentElement.classList.add("ready");
 requestAnimationFrame(frame);
+void searchHere();

@@ -1,16 +1,16 @@
 // The scene of the website: one print on the paper of the page. It shows a photo (the sky, the
 // moon, and the terrain in layers, with the marks of a viewfinder: @almucantar/web-shared/photo), a
-// map (the terrain with the
-// line of the spots), or a profile (the ground from the spot to the summit). The core calculates
-// all positions; this file only draws them.
+// map (the terrain with the line of the spots), a profile (the ground from the spot to the summit),
+// or a map of the Earth (the path of the shadow of an eclipse). The core calculates all positions;
+// this file only draws them.
 
-import type { Horizontal, LinePoint } from "@almucantar/core";
+import type { Horizontal, LinePoint, Observer } from "@almucantar/core";
 import type { MilkyWayDust } from "@almucantar/web-shared/milkyway";
 import { css, mix } from "@almucantar/web-shared/panorama";
 import type { Rgb } from "@almucantar/web-shared/panorama";
-import { MONO, drawPhoto } from "@almucantar/web-shared/photo";
+import { MONO, drawPhoto, photoProjection } from "@almucantar/web-shared/photo";
 import type { Stars } from "@almucantar/web-shared/stars";
-import { LAYERS, MAP, PEAK, PROFILE, SIGHT, SPOT, terrainAltitude } from "./data";
+import { LAYERS, MAP, PEAK, PROFILE, SIGHT, SPOT, WORLD, terrainAltitude } from "./data";
 
 /** The direction in the center of the photo, and the azimuth range across its width. */
 export interface View {
@@ -58,6 +58,38 @@ export interface ProfileState {
   ticks: { t: number; label: string }[];
 }
 
+/** A peak of the skyline with its label, for way A. */
+export interface PeakMark {
+  direction: Horizontal;
+  label: string;
+  active: boolean;
+}
+
+/** The box of the map of the Earth, in degrees. */
+export interface Box {
+  west: number;
+  east: number;
+  south: number;
+  north: number;
+}
+
+/** The map of an eclipse: the path of the shadow, or where the moon is up at the peak. */
+export interface WorldState {
+  box: Box;
+  /** The central line of a solar eclipse, with the radius of the shadow at each point. */
+  line: { lon: number; lat: number; radiusKm: number }[];
+  /** Labels on the central line. */
+  ticks: { lon: number; lat: number; label: string }[];
+  /** A lunar eclipse: the cells (lon, lat, size in degrees) where the moon is up at the peak. */
+  moonUp: { cellDeg: number; cells: [number, number][] } | null;
+  spot: Observer;
+  spotLabel: string;
+  /** The point of the greatest eclipse, or null. */
+  peak: { place: Observer; label: string } | null;
+  title: string;
+  legend: string;
+}
+
 export interface Frame {
   sun: Horizontal;
   moon: Horizontal;
@@ -85,6 +117,15 @@ export interface Frame {
   hud: { topLeft: string; topRight: string; bottom: string };
   mapState: MapState | null;
   profileState: ProfileState | null;
+  /** The weight of the map of the Earth, from 0 to 1, and its content. */
+  world: number;
+  worldState: WorldState | null;
+  /** The peaks of the skyline (way A), and their visibility from 0 to 1. */
+  peaks: PeakMark[] | null;
+  peaksAlpha: number;
+  /** An eclipse in the photo. */
+  solarEclipse: { sunRadiusDeg: number; moonRadiusDeg: number; coverage: number } | null;
+  lunarUmbra: number;
   /** A dark layer between two dates, and a white flash at the shot, from 0 to 1. */
   fade: number;
   flash: number;
@@ -202,6 +243,10 @@ export class Scene {
       ctx.globalAlpha = f.print * f.profile;
       this.profile(f.profileState, f);
     }
+    if (f.world > 0.01 && f.worldState) {
+      ctx.globalAlpha = f.print * f.world;
+      this.world(f.worldState);
+    }
     ctx.globalAlpha = f.print;
     if (f.fade > 0.01) {
       ctx.fillStyle = `rgba(20, 14, 30, ${f.fade})`;
@@ -249,9 +294,177 @@ export class Scene {
         },
         hud: f.hud,
         alpha: f.print,
+        solarEclipse: f.solarEclipse,
+        lunarUmbra: f.lunarUmbra,
       },
       nowMs,
     );
+    if (f.peaks && f.peaksAlpha > 0.01) this.peakMarks(f.peaks, f.view, f.peaksAlpha);
+  }
+
+  /** The marks of the peaks: a tick over each summit and its name, staggered if they are near. */
+  private peakMarks(peaks: PeakMark[], view: View, alpha: number) {
+    const ctx = this.ctx;
+    const r = this.rect;
+    const { x, y } = photoProjection(r, view);
+    const marks = peaks
+      .map((p) => ({ p, px: x(p.direction.azimuthDeg), py: y(p.direction.altitudeDeg) }))
+      .filter((m) => m.px > r.x + 8 && m.px < r.x + r.w - 8 && m.py > r.y + 40)
+      .sort((a, b) => a.px - b.px);
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.font = `10px ${MONO}`;
+    ctx.textAlign = "center";
+    let lastRight = -Infinity;
+    let lift = 0;
+    for (const m of marks) {
+      const w = ctx.measureText(m.p.label).width + 10;
+      // A label that would touch the one on its left goes one line higher.
+      lift = m.px - w / 2 < lastRight ? (lift + 1) % 3 : 0;
+      lastRight = m.px + w / 2;
+      const top = m.py - 30 - lift * 16;
+      ctx.strokeStyle = m.p.active ? css(APRICOT) : css(CREAM, 0.7);
+      ctx.lineWidth = m.p.active ? 1.6 : 1;
+      ctx.beginPath();
+      ctx.moveTo(m.px, m.py - 4);
+      ctx.lineTo(m.px, top + 4);
+      ctx.stroke();
+      ctx.fillStyle = m.p.active ? css(APRICOT) : "rgba(29, 20, 38, 0.55)";
+      ctx.fillRect(m.px - w / 2, top - 11, w, 15);
+      ctx.fillStyle = m.p.active ? css(INK) : css(CREAM, 0.92);
+      ctx.fillText(m.p.label, m.px, top);
+    }
+    ctx.restore();
+  }
+
+  // --- The map of the Earth ---------------------------------------------------------------------
+
+  /** The map of an eclipse: the coastlines, the path of the shadow, the spot, and a legend. */
+  private world(w: WorldState) {
+    const ctx = this.ctx;
+    const r = this.rect;
+    ctx.fillStyle = css(PAPER);
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    const lat0 = (w.box.south + w.box.north) / 2;
+    const lon0 = (w.box.west + w.box.east) / 2;
+    const cos = Math.cos(lat0 * DEG);
+    const top = 44;
+    const k = Math.min(
+      (r.w - 24) / ((w.box.east - w.box.west) * cos),
+      (r.h - top - 30) / (w.box.north - w.box.south),
+    );
+    const cx = r.x + r.w / 2;
+    const cy = r.y + top + (r.h - top - 10) / 2;
+    const X = (lon: number) => cx + (lon - lon0) * k * cos;
+    const Y = (lat: number) => cy - (lat - lat0) * k;
+
+    // The grid every 15°.
+    ctx.strokeStyle = "rgba(42, 31, 61, 0.07)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let lon = -180; lon <= 180; lon += 15) {
+      ctx.moveTo(X(lon), r.y);
+      ctx.lineTo(X(lon), r.y + r.h);
+    }
+    for (let lat = -75; lat <= 75; lat += 15) {
+      ctx.moveTo(r.x, Y(lat));
+      ctx.lineTo(r.x + r.w, Y(lat));
+    }
+    ctx.stroke();
+
+    // Where the moon is up at the peak of a lunar eclipse.
+    if (w.moonUp) {
+      const s = w.moonUp.cellDeg;
+      ctx.fillStyle = css(APRICOT, 0.18);
+      for (const [lon, lat] of w.moonUp.cells) {
+        ctx.fillRect(X(lon - s / 2), Y(lat + s / 2), s * k * cos + 0.5, s * k + 0.5);
+      }
+    }
+
+    // The coastlines.
+    ctx.strokeStyle = css(INK, 0.7);
+    ctx.lineWidth = 0.9;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (const line of WORLD) {
+      for (let i = 0; i < line.length; i += 2) {
+        if (i === 0) ctx.moveTo(X(line[i]), Y(line[i + 1]));
+        else ctx.lineTo(X(line[i]), Y(line[i + 1]));
+      }
+    }
+    ctx.stroke();
+
+    // The band of the shadow, as wide as the shadow, and the central line in it.
+    if (w.line.length > 1) {
+      const kmPerDeg = 111.2;
+      // One path with the mean width, so the band has no seams; the radius changes little.
+      const radiusKm = w.line.reduce((sum, p) => sum + p.radiusKm, 0) / w.line.length;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = css(ROSE, 0.28);
+      ctx.lineWidth = Math.max(3, (2 * radiusKm * k) / kmPerDeg);
+      ctx.beginPath();
+      w.line.forEach((p, i) =>
+        i ? ctx.lineTo(X(p.lon), Y(p.lat)) : ctx.moveTo(X(p.lon), Y(p.lat)),
+      );
+      ctx.stroke();
+      ctx.strokeStyle = css(ROSE);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      w.line.forEach((p, i) =>
+        i ? ctx.lineTo(X(p.lon), Y(p.lat)) : ctx.moveTo(X(p.lon), Y(p.lat)),
+      );
+      ctx.stroke();
+      ctx.font = `10px ${MONO}`;
+      ctx.textAlign = "left";
+      let last: [number, number] | null = null;
+      for (const t of w.ticks) {
+        // A label too near the one before it is left out, so a small map stays readable.
+        const at: [number, number] = [X(t.lon), Y(t.lat)];
+        if (last && Math.hypot(at[0] - last[0], at[1] - last[1]) < 70) continue;
+        last = at;
+        ctx.fillStyle = css(ROSE);
+        ctx.beginPath();
+        ctx.arc(X(t.lon), Y(t.lat), 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = css(INK, 0.85);
+        ctx.fillText(t.label, X(t.lon) + 6, Y(t.lat) - 6);
+      }
+    }
+
+    // The point of the greatest eclipse.
+    if (w.peak) {
+      const px = X(w.peak.place.longitudeDeg);
+      const py = Y(w.peak.place.latitudeDeg);
+      ctx.fillStyle = css(INK);
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `10px ${MONO}`;
+      ctx.textAlign = px > r.x + r.w * 0.6 ? "right" : "left";
+      ctx.fillText(w.peak.label, px + (ctx.textAlign === "right" ? -9 : 9), py + 16);
+    }
+
+    // The spot of the story.
+    const sx = X(w.spot.longitudeDeg);
+    const sy = Y(w.spot.latitudeDeg);
+    ctx.fillStyle = css(APRICOT);
+    ctx.strokeStyle = css(INK);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `10px ${MONO}`;
+    ctx.fillStyle = css(INK);
+    ctx.textAlign = "left";
+    ctx.fillText(w.spotLabel, sx + 11, sy + 4);
+
+    // The title and the legend.
+    ctx.font = `11px ${MONO}`;
+    ctx.fillStyle = css(INK, 0.92);
+    ctx.fillText(w.title, r.x + 16, r.y + 24);
+    ctx.fillStyle = css(INK, 0.7);
+    ctx.fillText(w.legend, r.x + 16, r.y + 40);
   }
 
   // --- The map ----------------------------------------------------------------------------------

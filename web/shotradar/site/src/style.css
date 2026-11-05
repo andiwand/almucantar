@@ -251,6 +251,14 @@ h1 {
 .step b {
   font-weight: 600;
 }
+/* The way of the app that a chapter starts: A, B, or C of the start page. */
+.card p.way {
+  margin: 12px 0 0;
+  font: 600 11px/1.3 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
 .step::after {
   content: "";
   flex: 1;
@@ -301,23 +309,34 @@ h2 {
   padding: 0;
   list-style: none;
 }
-.chips li {
+.chips button {
   font: 600 11px/1 var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
+  background: transparent;
   color: var(--ink-soft);
+  cursor: pointer;
   transition:
     background 0.25s,
     color 0.25s,
     border-color 0.25s;
 }
-.chips li.active {
+.chips button:hover {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+.chips button[aria-pressed="true"] {
   background: var(--apricot);
   border-color: var(--apricot);
   color: var(--night);
+}
+.chips button:focus-visible,
+.sheet button:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
 }
 
 /* The calendar: a strip of frames, like a contact sheet. */
@@ -333,24 +352,44 @@ h2 {
 }
 .sheet li {
   display: flex;
+  min-width: 0;
+}
+/* Without JavaScript, the sheet has one frame without a button. */
+.sheet li > span,
+.sheet button {
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
   padding: 8px 2px 6px;
   border: 1px solid rgba(255, 243, 214, 0.12);
+  border-radius: 0;
+  background: transparent;
   color: rgba(255, 243, 214, 0.55);
   font: 10px/1.2 var(--mono);
   text-align: center;
+  cursor: pointer;
   transition:
     border-color 0.2s,
     color 0.2s,
     background 0.2s;
 }
-.sheet li span {
+.sheet button:hover {
+  border-color: rgba(255, 243, 214, 0.45);
+  color: rgba(255, 243, 214, 0.85);
+}
+.sheet button span {
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.sheet li b {
+.sheet b {
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -364,10 +403,30 @@ h2 {
 .sheet .lit {
   fill: var(--cream);
 }
-.sheet li.story {
+.sheet .ray,
+.sheet .ring {
+  fill: none;
+  stroke: var(--cream);
+  stroke-width: 0.14;
+  stroke-linecap: round;
+}
+.sheet .ring {
+  stroke-width: 0.1;
+  opacity: 0.8;
+}
+.sheet .band {
+  fill: rgba(255, 243, 214, 0.35);
+}
+.sheet .cover {
+  fill: var(--night);
+}
+.sheet .red {
+  fill: #a8452f;
+}
+.sheet button.story {
   border-color: rgba(232, 149, 94, 0.6);
 }
-.sheet li.active {
+.sheet button[aria-pressed="true"] {
   background: rgba(255, 243, 214, 0.1);
   border-color: var(--apricot);
   color: var(--cream);
@@ -644,12 +703,27 @@ footer p {
     padding: 5px;
     margin-top: 10px;
   }
-  .sheet li {
+  .sheet button {
     padding: 5px 0 4px;
     font-size: 8px;
   }
-  .sheet li span {
+  .sheet button span {
     display: none;
+  }
+  /* The eclipses are four frames, so they keep their dates. */
+  .sheet.eclipses {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .sheet.eclipses button {
+    font-size: 9px;
+  }
+  .sheet.eclipses button span {
+    display: flex;
+  }
+  .card p.way {
+    margin-top: 8px;
+    font-size: 10px;
+    line-height: 1.3;
   }
   .sheet svg {
     width: 16px;

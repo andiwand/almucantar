@@ -6,7 +6,7 @@
     <title>Shotradar – plan the shot</title>
     <meta
       name="description"
-      content="Shotradar is a photo planner: pick the moon, the sun, the Milky Way, or a planet, pick a peak on the map, and see where to stand and when – over the real terrain."
+      content="Shotradar is a photo planner: the moon, the sun, the Milky Way, a planet, or an eclipse over the real terrain. Start from your spot, from a peak on the map, or from the next eclipse, and see where to stand and when."
     />
     <meta property="og:title" content="Shotradar" />
     <meta
@@ -33,9 +33,9 @@
         </p>
         <h1>Plan the shot.</h1>
         <p class="lead">
-          The full moon behind a summit, the Milky Way over a ridge, the sun in a gap of the
-          mountains. Pick the subject and the landmark, and Shotradar tells you where to stand and
-          when – over the real terrain.
+          The full moon behind a summit, the Milky Way over a ridge, the moon in front of the sun.
+          Start from where you stand, from a landmark, or from the next eclipse. Shotradar tells you
+          where to stand and when – over the real terrain.
         </p>
         <div class="actions">
           <a class="button primary" href="app/">Plan a shot</a>
@@ -64,19 +64,44 @@
     </header>
 
     <main>
+      <section class="chapter" data-chapter="here">
+        <article class="card">
+          <p class="step"><span>01</span><b>From where I am</b></p>
+          <p class="way">Way A · I am here, or I will be</p>
+          <h2>What can I shoot from here?</h2>
+          <p>
+            Shotradar reads the real skyline of your spot and marks its peaks. It lists the subjects
+            that rise or set behind a peak, and each subject alone over the horizon.
+          </p>
+          <ol class="sheet" id="here-sheet" aria-label="Shots from the ridge above Kals"></ol>
+          <div class="readout">
+            <div class="big" id="here-name">The ridge above Kals</div>
+            <div class="muted" id="here-detail">
+              The skyline has the Großglockner and the peaks around it.
+            </div>
+            <div class="muted" id="here-light"></div>
+          </div>
+        </article>
+      </section>
+
       <section class="chapter" data-chapter="subject">
         <article class="card">
-          <p class="step"><span>01</span><b>The subject</b></p>
+          <p class="step"><span>02</span><b>The subject</b></p>
+          <p class="way">Way B · I have a landmark</p>
           <h2>What do you want in the frame?</h2>
           <p>
             The moon, the Milky Way, the sun, or a bright planet. Each one follows its own path
             across the sky, and Shotradar calculates all of them for any day and any place.
           </p>
           <ul class="chips" aria-label="Subjects">
-            <li data-subject="moon" class="active">Moon</li>
-            <li data-subject="milkyway">Milky Way</li>
-            <li data-subject="sun">Sun</li>
-            <li data-subject="planet">Planet</li>
+            <li><button type="button" data-subject="moon" aria-pressed="true">Moon</button></li>
+            <li>
+              <button type="button" data-subject="milkyway" aria-pressed="false">Milky Way</button>
+            </li>
+            <li><button type="button" data-subject="sun" aria-pressed="false">Sun</button></li>
+            <li>
+              <button type="button" data-subject="planet" aria-pressed="false">Planet</button>
+            </li>
           </ul>
           <div class="readout">
             <div class="big" id="subject-name">The full moon</div>
@@ -89,7 +114,7 @@
 
       <section class="chapter" data-chapter="landmark">
         <article class="card">
-          <p class="step"><span>02</span><b>The landmark</b></p>
+          <p class="step"><span>03</span><b>The landmark</b></p>
           <h2>Pick the peak</h2>
           <p>
             Tap a summit, a tower, or a church on the map. Shotradar takes the height from the
@@ -104,14 +129,14 @@
 
       <section class="chapter" data-chapter="calendar">
         <article class="card">
-          <p class="step"><span>03</span><b>The calendar</b></p>
+          <p class="step"><span>04</span><b>The calendar</b></p>
           <h2>I stand here. When?</h2>
           <p>
             From a fixed place, Shotradar searches the months ahead for each moment when the subject
-            is exactly behind the landmark, with the phase of the moon and the light.
+            is exactly behind the landmark, with the phase of the moon and the light. Pick a date.
           </p>
           <ol class="sheet" id="calendar" aria-label="Dates when the moon is behind the summit">
-            <li class="story">
+            <li>
               <span><b>24 Nov</b>17:08</span>
             </li>
           </ol>
@@ -124,7 +149,7 @@
 
       <section class="chapter" data-chapter="spot">
         <article class="card">
-          <p class="step"><span>04</span><b>The spot</b></p>
+          <p class="step"><span>05</span><b>The spot</b></p>
           <h2>Where must I stand?</h2>
           <p>
             Or turn the question around. For a date, Shotradar draws the line of places from which
@@ -140,7 +165,7 @@
 
       <section class="chapter" data-chapter="check">
         <article class="card">
-          <p class="step"><span>05</span><b>The check</b></p>
+          <p class="step"><span>06</span><b>The check</b></p>
           <h2>Can you see it from there?</h2>
           <p>
             A ridge in front can hide the summit. Shotradar follows the line of sight over the
@@ -156,7 +181,7 @@
 
       <section class="chapter" data-chapter="shot">
         <article class="card">
-          <p class="step"><span>06</span><b>The shot</b></p>
+          <p class="step"><span>07</span><b>The shot</b></p>
           <h2>Be there on time</h2>
           <p>
             On 24 November 2026, the full moon rises out of the summit of the Großglockner. It moves
@@ -169,9 +194,34 @@
         </article>
       </section>
 
+      <section class="chapter" data-chapter="eclipse">
+        <article class="card">
+          <p class="step"><span>08</span><b>The eclipses</b></p>
+          <p class="way">Way C · The next eclipses</p>
+          <h2>The moon in front of the sun</h2>
+          <p>
+            Shotradar lists the next solar and lunar eclipses. It draws the shadow on the map of the
+            Earth, and it shows how much of the sun your spot sees. Pick an eclipse.
+          </p>
+          <ol
+            class="sheet eclipses"
+            id="eclipse-sheet"
+            aria-label="The next eclipses seen from the ridge"
+          ></ol>
+          <div class="readout">
+            <div class="big" id="eclipse-name">2 Aug 2027 · Total solar eclipse</div>
+            <div class="muted" id="eclipse-here">
+              From the ridge, the eclipse is partial: the moon covers about half of the sun.
+            </div>
+            <div class="muted" id="eclipse-line"></div>
+            <div class="muted" id="eclipse-now"></div>
+          </div>
+        </article>
+      </section>
+
       <section class="play" data-chapter="play">
         <article class="card">
-          <p class="step"><span>07</span><b>Your turn</b></p>
+          <p class="step"><span>09</span><b>Your turn</b></p>
           <h2>Another date, another lens</h2>
           <p>
             Same spot, same peak. Pick a date from the calendar and a lens, and see the frame that
@@ -259,6 +309,30 @@
           </p>
         </section>
 
+        <section class="platforms">
+          <h2>Everywhere</h2>
+          <div class="grid">
+            <div class="tile">
+              <h3>Browser</h3>
+              <p>
+                The <a href="app/">web app</a> needs no installation and works offline after the
+                first visit.
+              </p>
+            </div>
+            <div class="tile">
+              <h3>Android</h3>
+              <p>
+                The native app, with the terrain of Copernicus GLO-90, is in testing and not in
+                Google Play yet.
+              </p>
+            </div>
+            <div class="tile">
+              <h3>iOS</h3>
+              <p>There is no iOS app yet. Use the web app in Safari.</p>
+            </div>
+          </div>
+        </section>
+
         <section class="family">
           <h2>The family</h2>
           <div class="grid">
@@ -286,9 +360,13 @@
             <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Terrarium;
             SRTM, the EU-DEM produced using Copernicus data and information funded by the European
             Union, and
-            <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">others</a>),
-            the base map of <a href="https://www.naturalearthdata.com/">Natural Earth</a>, and the
-            Yale Bright Star Catalogue (Hoffleit &amp; Warren 1991, NASA ADC).
+            <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">others</a>)
+            on this page and in the web app, the terrain of
+            <a href="https://registry.opendata.aws/copernicus-dem/">Copernicus DEM GLO-90</a> (© DLR
+            e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS
+            by the European Union and ESA; all rights reserved) in the Android app, the base map of
+            <a href="https://www.naturalearthdata.com/">Natural Earth</a>, and the Yale Bright Star
+            Catalogue (Hoffleit &amp; Warren 1991, NASA ADC).
           </p>
         </footer>
       </div>

@@ -21,11 +21,17 @@ The output (JSON, the angles in degrees, the distances and heights in meters):
 - "shot": the time of the alignment (Unix seconds) and the moon there.
 - "horizon": the terrain seen from the eye in layers, each layer only up to its distance, so the
   website can draw the near ridges darker than the far ones. "fine" is a window around the summit,
-  "wide" is the whole circle. The altitudes are in hundredths of a degree.
+  "wide" is the whole circle. The altitudes are in hundredths of a degree. "skyline_distance_m"
+  is the distance of the terrain that makes the skyline (the last layer, "wide"), so the website
+  can find the peaks of the skyline (the chapter "From where I am").
 - "map": the heights of the area around the line of the spots, as one byte per cell (base64),
   from "min_m" in steps of "step_m". The website draws the map from it and gives it to the core
   as a grid for `alignmentLine()` and `lineOfSight()`.
 - "profile": the ground from the spot to the summit, and the result of `line_of_sight()`.
+- "world": the coastlines of Europe, Africa, and the west of Asia from the base
+  map (assets/basemap/basemap.json, Natural Earth), with fewer points, for the map of the
+  eclipses. Each line is [lon0, lat0, dlon1, dlat1, ...] in hundredths of a degree, the first point
+  absolute and the next ones as steps.
 """
 
 import argparse
@@ -72,6 +78,15 @@ MAP_MIN_M = 600.0
 MAP_STEP_M = 13.0  # 255 steps reach 3915 m
 
 PROFILE_SAMPLES = 360
+
+# The map of the eclipses: the box of the base map, and the smallest step between two points.
+BASEMAP = (
+    pathlib.Path(__file__).resolve().parents[2] / "assets" / "basemap" / "basemap.json"
+)
+WORLD_BOX = {"west": -45.0, "east": 100.0, "south": -20.0, "north": 72.0}
+WORLD_STEP_DEG = 0.5
+# A line smaller than this (a small island) is left out.
+WORLD_MIN_SIZE_DEG = 1.5
 
 
 def fetch(tile, cache):
@@ -122,6 +137,66 @@ class Mosaic:
         top = h[i] * (1 - fc) + h[i + 1] * fc
         bottom = h[i + g.columns] * (1 - fc) + h[i + g.columns + 1] * fc
         return top * (1 - fr) + bottom * fr
+
+
+def world_lines():
+    """The lines of the base map in WORLD_BOX, with points at least WORLD_STEP_DEG apart.
+
+    A coastline smaller than WORLD_MIN_SIZE_DEG is left out, so the file stays small.
+    """
+    raw = json.loads(BASEMAP.read_text())
+    scale = raw["scale"]
+    out = {}
+    for name in ("coastline",):
+        lines = []
+        for flat in raw["layers"][name]:
+            lon = lat = 0
+            points = []
+            for i in range(0, len(flat), 2):
+                lon += flat[i]
+                lat += flat[i + 1]
+                points.append((lon / scale, lat / scale))
+            kept = [points[0]]
+            for p in points[1:-1]:
+                q = kept[-1]
+                if max(abs(p[0] - q[0]), abs(p[1] - q[1])) >= WORLD_STEP_DEG:
+                    kept.append(p)
+            if len(points) > 1:
+                kept.append(points[-1])
+            inside = [
+                WORLD_BOX["west"] <= p[0] <= WORLD_BOX["east"]
+                and WORLD_BOX["south"] <= p[1] <= WORLD_BOX["north"]
+                for p in kept
+            ]
+            # A line keeps its parts in the box, one point beyond each end of a part.
+            part = []
+            for i, p in enumerate(kept):
+                near = inside[i] or (i > 0 and inside[i - 1])
+                near = near or (i + 1 < len(kept) and inside[i + 1])
+                if near:
+                    part.append(p)
+                elif part:
+                    lines.append(part)
+                    part = []
+            if part:
+                lines.append(part)
+        encoded = []
+        for part in lines:
+            lons = [p[0] for p in part]
+            lats = [p[1] for p in part]
+            size = max(max(lons) - min(lons), max(lats) - min(lats))
+            if len(part) < 2 or size < WORLD_MIN_SIZE_DEG:
+                continue
+            values = []
+            last = (0, 0)
+            for lon, lat in part:
+                c = (round(lon * 100), round(lat * 100))
+                values += [c[0] - last[0], c[1] - last[1]]
+                last = c
+            encoded.append(values)
+        out[name] = encoded
+    out["attribution"] = raw["attribution"]
+    return out
 
 
 def centi(values):
@@ -211,6 +286,10 @@ def main():
                 fine_layer = centi(values)
             else:
                 wide_layer = centi(profile.altitude_deg)
+                skyline_distance = [
+                    0 if math.isnan(d) else int(round(d, -1))
+                    for d in profile.distance_m
+                ]
         layers.append(
             {"max_distance_m": distance, "fine": fine_layer, "wide": wide_layer}
         )
@@ -266,6 +345,7 @@ def main():
             "fine_step_deg": FINE_STEP_DEG,
             "wide_step_deg": WIDE_STEP_DEG,
             "layers": layers,
+            "skyline_distance_m": skyline_distance,
         },
         "map": {
             "north_latitude_deg": MAP_BOX["north"],
@@ -287,6 +367,7 @@ def main():
                 else round(los.blocking_distance_m, 1)
             ),
         },
+        "world": world_lines(),
         "attribution": ATTRIBUTION,
     }
     args.out.write_text(json.dumps(result, separators=(",", ":")) + "\n")

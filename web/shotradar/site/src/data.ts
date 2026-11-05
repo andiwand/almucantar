@@ -77,13 +77,19 @@ export function terrainAltitude(layer: number, azimuthDeg: number): number {
   return lerp(wide[layer], wrap(azimuthDeg) / h.wide_step_deg, true);
 }
 
-/** The whole horizon as a profile of the core, for darkWindows(). */
+/**
+ * The whole horizon as a profile of the core: the skyline, and the distance of the terrain that
+ * makes it. darkWindows() and terrainAltitudeDeg() read it, and the peaks of way A come from it.
+ */
 export const HORIZON: HorizonProfile = {
   azimuthStepDeg: h.wide_step_deg,
   altitudeDeg: Float64Array.from(wide[LAYERS - 1]),
-  distanceM: new Float64Array(wide[LAYERS - 1].length),
+  distanceM: Float64Array.from(h.skyline_distance_m),
   observerElevationM: shot.spot.ground_m,
 };
+
+/** The window of the fine horizon around the summit: its first azimuth and its width. */
+export const FINE_WINDOW = { firstAzimuthDeg: h.fine_first_azimuth_deg, spanDeg: fineSpan };
 
 // --- The map ------------------------------------------------------------------------------------
 
@@ -108,5 +114,21 @@ export const PROFILE = {
   groundM: Float32Array.from(shot.profile.ground_m),
   visible: shot.profile.visible,
 };
+
+// --- The map of the Earth for the eclipses ----------------------------------------------------------
+
+/** The coastlines of the base map: each line is lon0, lat0, lon1, lat1, ... in degrees. */
+export const WORLD: Float32Array[] = shot.world.coastline.map((steps) => {
+  const points = new Float32Array(steps.length);
+  let lon = 0;
+  let lat = 0;
+  for (let i = 0; i < steps.length; i += 2) {
+    lon += steps[i];
+    lat += steps[i + 1];
+    points[i] = lon / 100;
+    points[i + 1] = lat / 100;
+  }
+  return points;
+});
 
 export const ATTRIBUTION = shot.attribution;
