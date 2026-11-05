@@ -578,8 +578,8 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. The new names of the apps (14.4): the logos and the rest of the documentation. The web,
-   Android, and iOS are done. Then the first upload to the Play Store.
+2. The first upload to the Play Store, with the new names of the apps (14.4). Before it,
+   search the names in TMview.
 3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
    app.
 
@@ -1049,8 +1049,12 @@ The rename, step by step:
    both platforms, and the camera queues of `Shared/` have the family name
    (`at.stefl.almucantar.camera.*`), because both apps use them. iOS had no release, so no tag
    changes.
-5. The logos (`assets/`), the store screenshots, the README, and the rest of the documentation.
-   **Open.**
+5. The logos (`assets/sonnseite-logo.svg`, `assets/sternstunde-logo.svg`,
+   `assets/alidade-logo.svg`), the README, and the rest of the documentation. **Done
+   (2026-11-05).** The old names stay only where they are history: the changelogs of released
+   versions, the old core packages (`sunradar` on PyPI and npm), the APK of
+   `sonnseite-android-v0.2.0`, and the old cache name that the service worker of Sonnseite
+   deletes. The store screenshots get the new names when they are made again.
 
 The first release of a renamed project gives its version in the input `version` of the workflow
 `release`, because git cliff finds no tag of the new name. The old tags stay as they are.

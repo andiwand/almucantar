@@ -5,7 +5,7 @@
 
 #include "almucantar/types.hpp"
 
-/// The solar and the lunar eclipses (Astronomy Engine), for the planner of shotradar: when an
+/// The solar and the lunar eclipses (Astronomy Engine), for the planner of Alidade: when an
 /// eclipse happens, how much of the sun or the moon it covers, the times of its phases, and the
 /// central line of a total or annular solar eclipse.
 

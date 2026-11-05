@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">Starradar</title>
+  <title id="title">Sternstunde</title>
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0d1430"/>
@@ -11,7 +11,7 @@
     </radialGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#sky)"/>
-  <!-- the horizon with ticks, as in the logo of sunradar -->
+  <!-- the horizon with ticks, as in the logo of Sonnseite -->
   <path d="M64 372 H448" stroke="#ffffff" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
   <path d="M136 372 v-16 M256 372 v-24 M376 372 v-16" stroke="#ffffff" stroke-opacity="0.85" stroke-width="8" stroke-linecap="round"/>
   <!-- a constellation: the lines and the stars -->

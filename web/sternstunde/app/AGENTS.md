@@ -12,7 +12,7 @@ workspace `web/` (see [`../../AGENTS.md`](../../AGENTS.md)). GitHub Pages serves
 |---|---|
 | `src/main.ts` | The app: the star data, the sky at the selected time (`computeSky`, again once per second), the frame (projection and drawing), the tap and the info card (with the rise and set over the terrain), Find, the alignment with a bright object, sensors, location, camera, and the settings. |
 | `src/style.css` | The layout, the Find panel, the info card, and the red light (`#night`). |
-| `public/` | The manifest, the icon (`assets/starradar-logo.svg`), and the service worker (cache prefix `sternstunde:`). |
+| `public/` | The manifest, the icon (`assets/sternstunde-logo.svg`), and the service worker (cache prefix `sternstunde:`). |
 | `index.html` | The page, with the markup of the shared place panel. |
 | `test/` | The start of the app with a mock of the core, and the offline cache of the service worker. |
 

@@ -11,7 +11,7 @@
     </radialGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#sky)"/>
-  <!-- the horizon with ticks, as in the logo of sonnseite -->
+  <!-- the horizon with ticks, as in the logo of Sonnseite -->
   <path d="M64 372 H448" stroke="#ffffff" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
   <path d="M136 372 v-16 M256 372 v-24 M376 372 v-16" stroke="#ffffff" stroke-opacity="0.85" stroke-width="8" stroke-linecap="round"/>
   <!-- a constellation: the lines and the stars -->

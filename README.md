@@ -17,7 +17,7 @@ The apps had the names sunradar, starradar, and shotradar before November 2026
 ## Sonnseite
 
 <p align="center">
-  <img src="assets/logo.svg" alt="Sonnseite" width="128" height="128">
+  <img src="assets/sonnseite-logo.svg" alt="Sonnseite" width="128" height="128">
 </p>
 
 **Website and web app: <https://andiwand.github.io/almucantar/sonnseite/>**
@@ -38,6 +38,10 @@ example when you visit a flat.
 
 ## Sternstunde
 
+<p align="center">
+  <img src="assets/sternstunde-logo.svg" alt="Sternstunde" width="128" height="128">
+</p>
+
 **Website and web app: <https://andiwand.github.io/almucantar/sternstunde/>**
 
 A "Sternstunde" (literally "star hour") is the German word for a great moment. Sternstunde is the
@@ -46,6 +50,10 @@ planets, the moon in its phase, and the Milky Way, over the real horizon of the 
 offline.
 
 ## Alidade
+
+<p align="center">
+  <img src="assets/alidade-logo.svg" alt="Alidade" width="128" height="128">
+</p>
 
 **Website and web app: <https://andiwand.github.io/almucantar/alidade/>**
 

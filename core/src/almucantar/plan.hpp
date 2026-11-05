@@ -6,7 +6,7 @@
 #include "almucantar/terrain.hpp"
 #include "almucantar/types.hpp"
 
-/// The photo planner (shotradar, PLAN.md 14.1): a subject (a body of the sky) behind a landmark.
+/// The photo planner (Alidade, PLAN.md 14.1): a subject (a body of the sky) behind a landmark.
 /// "I stand here" is `find_alignments()`, "where must I stand?" is `alignment_line()`, and the
 /// checks of a match are `line_of_sight()` and `dark_windows()`.
 

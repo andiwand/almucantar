@@ -92,7 +92,7 @@ export interface TerrainEventOptions {
 /** The times when the body appears (rising) or goes away behind the terrain. */
 export interface TerrainEvents { kind: number; crossings: Crossing[] }
 
-/** The planner (shotradar): a body of the sky behind a landmark. */
+/** The planner (Alidade): a body of the sky behind a landmark. */
 export interface BodyOptions { model: number; refraction: boolean; atmosphere: Atmosphere }
 /** A point with its height above sea level: the ground, an eye, or the top of a landmark. */
 export interface Site { latitudeDeg: number; longitudeDeg: number; elevationM: number }

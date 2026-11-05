@@ -25,7 +25,7 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
   phases of a solar eclipse at a place, with the altitude of the sun; `eclipse_central_line()` gives
   the central line of a total or annular eclipse with the radius of the shadow, for a map. From
   Astronomy Engine; in C++, Python, WASM, and the AAR.
-- The photo planner (`almucantar/plan.hpp`), for shotradar: `body_position()` gives the position
+- The photo planner (`almucantar/plan.hpp`), for Alidade (shotradar before): `body_position()` gives the position
   of any body. `sight()` gives the direction to a landmark with the curvature of the Earth.
   `find_alignments()` finds the times when a body is behind a landmark ("I stand here"), one
   year of the moon in a few milliseconds. `alignment_line()` gives the places from which a body

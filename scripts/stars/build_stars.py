@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the star data of starradar: the stars, their names, and the constellations.
+"""Build the star data of Sternstunde: the stars, their names, and the constellations.
 
     python3 scripts/stars/build_stars.py [--cache DIR]
 

@@ -1,6 +1,6 @@
 # The star data
 
-`stars.json` is the sky of starradar (`PLAN.md` 14.2): 5080 stars down to magnitude 6.0 (and the
+`stars.json` is the sky of Sternstunde (`PLAN.md` 14.2): 5080 stars down to magnitude 6.0 (and the
 fainter stars of the constellation lines), 492 proper names, and the lines and names of the 89
 parts of the 88 constellations (Serpens has two parts).
 
