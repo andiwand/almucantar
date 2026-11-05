@@ -79,10 +79,18 @@ double hour_angle_deg(const Horizontal& h, const double latitude_deg) {
          kRadToDeg;
 }
 
-/// The mean rate of the hour angle of the body, in degrees per second. The moon moves east by
-/// about 13° per day, so its hour angle is slower.
+/// The mean rate of the hour angle of the body, in degrees per second: once per solar day for the
+/// sun, and once per sidereal day for the stars. The moon moves east by about 13° per day, so its
+/// hour angle is slower. The planets are near the rate of the stars.
 double hour_angle_rate(const Body body) {
-  return body == Body::moon ? 360.0 / (24.8412 * 3600) : 360.0 / 86'164.1;
+  switch (body) {
+    case Body::sun:
+      return 360.0 / kDayS;
+    case Body::moon:
+      return 360.0 / (24.8412 * 3600);
+    default:
+      return 360.0 / 86'164.1;
+  }
 }
 
 /// The planet of a body, or nothing for the sun, the moon, and the galactic center.
@@ -275,14 +283,15 @@ AlignmentLine alignment_line(const Body body, const Site& target, const double u
     const auto lerp = [f](const double a, const double c) { return a + (f * (c - a)); };
     line.spots.push_back(
         {.place = {.latitude_deg = lerp(p.place.latitude_deg, q.place.latitude_deg),
-                   .longitude_deg =
+                   .longitude_deg = internal::wrap_180(
                        p.place.longitude_deg +
-                       (f * internal::wrap_180(q.place.longitude_deg - p.place.longitude_deg))},
+                       (f * internal::wrap_180(q.place.longitude_deg - p.place.longitude_deg)))},
          .distance_m = lerp(p.distance_m, q.distance_m),
          .eye_elevation_m = lerp(p.eye_elevation_m, q.eye_elevation_m),
          .ground_elevation_m = lerp(p.ground_elevation_m, q.ground_elevation_m),
-         .body = {.azimuth_deg = p.body.azimuth_deg +
-                                 (f * internal::wrap_180(q.body.azimuth_deg - p.body.azimuth_deg)),
+         .body = {.azimuth_deg = internal::wrap_360(
+                      p.body.azimuth_deg +
+                      (f * internal::wrap_180(q.body.azimuth_deg - p.body.azimuth_deg))),
                   .altitude_deg = lerp(p.body.altitude_deg, q.body.altitude_deg)}});
   }
   return line;

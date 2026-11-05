@@ -234,6 +234,32 @@ TEST_CASE("alignment_line finds the spots on the ground", "[plan]") {
   CHECK(spot.distance_m > 3000);
 }
 
+TEST_CASE("alignment_line wraps the longitude of a spot at the date line", "[plan]") {
+  // A low sun in the west of a tower near the date line: the line goes east over it. The spot is
+  // about 4.4 km away, so for these towers it falls between two points on both sides of 180°.
+  const Observer east{.latitude_deg = 0, .longitude_deg = 179.96};
+  double t = kEquinoxUtc - (8 * 3600);
+  while (sun_position(t, east).altitude_deg > 4) {
+    t += 60;
+  }
+  ElevationGrid grid = flat_grid(east);
+  grid.columns = 481;
+  grid.heights_m.assign(static_cast<std::size_t>(grid.rows) * 481, 0.0F);
+  std::size_t spots = 0;
+  for (double lon = 179.9595; lon < 179.9610; lon += 0.0001) {
+    const Site tower{.latitude_deg = 0, .longitude_deg = lon, .elevation_m = 300};
+    for (const LinePoint& p :
+         alignment_line(Body::sun, tower, t, {grid}, {.max_distance_m = 20'000}).spots) {
+      ++spots;
+      CHECK(p.place.longitude_deg >= -180);
+      CHECK(p.place.longitude_deg <= 180);
+      CHECK(p.body.azimuth_deg >= 0);
+      CHECK(p.body.azimuth_deg < 360);
+    }
+  }
+  CHECK(spots > 0);
+}
+
 TEST_CASE("alignment_line validates the arguments", "[plan]") {
   const Site tower{.latitude_deg = 47, .longitude_deg = 11, .elevation_m = 300};
   REQUIRE_THROWS_AS(alignment_line(Body::sun, tower, kEquinoxUtc, {}, {.min_distance_m = 0}),

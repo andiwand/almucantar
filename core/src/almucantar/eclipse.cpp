@@ -156,10 +156,12 @@ std::vector<ShadowPoint> eclipse_central_line(const double peak_utc, const doubl
   for (int i = 0; i <= steps; ++i) {
     const double t = peak_utc - span + (i * step_s);
     astro_time_t time = to_astro_time(t);
-    // The axis of the shadow: from the moon away from the sun, in the equator of date, in km.
+    // The axis of the shadow: from the moon away from the sun, in the equator of date, in km. The
+    // sun has the aberration, as in the eclipse search of Astronomy Engine. Without it, the axis
+    // misses `peak_place` by about 40 km.
     const astro_rotation_t rotation = Astronomy_Rotation_EQJ_EQD(&time);
     const astro_vector_t moon_j2000 = Astronomy_GeoMoon(time);
-    const astro_vector_t sun_j2000 = Astronomy_GeoVector(BODY_SUN, time, NO_ABERRATION);
+    const astro_vector_t sun_j2000 = Astronomy_GeoVector(BODY_SUN, time, ABERRATION);
     check(moon_j2000.status);
     check(sun_j2000.status);
     const astro_vector_t moon = Astronomy_RotateVector(rotation, moon_j2000);

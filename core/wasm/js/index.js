@@ -49,7 +49,8 @@ function merge(defaults, value) {
   if (defaults.atmosphere) result.atmosphere = { ...defaults.atmosphere, ...(value?.atmosphere ?? {}) };
   if (defaults.camera) result.camera = { ...defaults.camera, ...(value?.camera ?? {}) };
   if (defaults.deviceToEnu) result.deviceToEnu = { ...defaults.deviceToEnu, ...(value?.deviceToEnu ?? {}) };
-  if (defaults.body) result.body = merge(defaults.body, value?.body);
+  // The body of the planner options is an object, but the body of TerrainEventOptions is a number.
+  if (typeof defaults.body === "object") result.body = merge(defaults.body, value?.body);
   return result;
 }
 

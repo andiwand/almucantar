@@ -78,7 +78,7 @@ TEST_CASE("eclipse_central_line goes through the place of the peak", "[eclipse]"
   }
   const ShadowPoint& at_peak = *std::ranges::min_element(
       line, {}, [&](const ShadowPoint& p) { return std::abs(p.unix_utc - egypt.peak_utc); });
-  CHECK(distance_km(at_peak.place, egypt.peak_place) < 40);
+  CHECK(distance_km(at_peak.place, egypt.peak_place) < 1);  // measured: 0.00001 km
   // The line passes Luxor. At the greatest eclipse the path is 258 km wide (NASA), and the sun is
   // high, so the radius across the axis is about half of that.
   const Observer luxor{.latitude_deg = 25.69, .longitude_deg = 32.64};

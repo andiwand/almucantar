@@ -132,9 +132,10 @@ struct LineOfSight {
   /// The angle between the target and the highest terrain in front of it: positive if the target
   /// is visible. NaN if the tiles have no data between the two sites.
   double clearance_deg = 0;
-  /// The highest terrain in front of the target, seen from the eye. NaN if there is none.
+  /// The distance from the eye to the highest terrain in front of the target. NaN if there is
+  /// none.
   double blocking_distance_m = 0;
-  Observer blocking;
+  Observer blocking;  ///< the place of the highest terrain in front of the target; NaN if none
 };
 
 /// Checks whether the eye at `from` sees `to` over the terrain of `tiles`, with the model of

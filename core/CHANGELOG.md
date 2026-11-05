@@ -14,6 +14,12 @@ starts a new empty `Unreleased`. The release refuses an empty `Unreleased`.
 
 ## Unreleased
 
+- `eclipse_central_line()` adds the aberration to the sun, as the eclipse search of Astronomy
+  Engine does. So the line goes through `SolarEclipse.peak_place`; before, it was about 40 km
+  away.
+- `alignment_line()` keeps the longitude of a spot in [-180, 180] and the azimuth of the body in
+  [0, 360). Before, a spot between two points on both sides of the date line could have a
+  longitude above 180.
 - The eclipses (`almucantar/eclipse.hpp`): `solar_eclipses()` and `lunar_eclipses()` give the
   eclipses of an interval with their kind, peak, and coverage; `local_solar_eclipses()` gives the
   phases of a solar eclipse at a place, with the altitude of the sun; `eclipse_central_line()` gives
