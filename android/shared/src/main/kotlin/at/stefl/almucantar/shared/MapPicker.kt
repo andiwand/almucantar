@@ -47,7 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val TILE_SIZE = 256
+/** The size of a map tile in pixels. */
+const val TILE_SIZE = 256
 private const val MIN_ZOOM = 3
 private const val MAX_ZOOM = 19
 
@@ -56,19 +57,19 @@ private const val MAX_ZOOM = 19
 private const val TILE_URL = "https://tile.openstreetmap.org/%d/%d/%d.png"
 
 /** Web Mercator: the world position in pixels at [zoom] (256 px tiles). */
-internal fun worldX(longitudeDeg: Double, zoom: Int) =
-    mercatorX(longitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
+fun worldX(longitudeDeg: Double, zoom: Int) = mercatorX(longitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
 
-internal fun worldY(latitudeDeg: Double, zoom: Int) =
-    mercatorY(latitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
+fun worldY(latitudeDeg: Double, zoom: Int) = mercatorY(latitudeDeg) * TILE_SIZE * 2.0.pow(zoom)
 
-internal fun longitude(worldX: Double, zoom: Int) = worldX / (TILE_SIZE * 2.0.pow(zoom)) * 360 - 180
+fun longitude(worldX: Double, zoom: Int) = worldX / (TILE_SIZE * 2.0.pow(zoom)) * 360 - 180
 
-internal fun latitude(worldY: Double, zoom: Int) =
-    mercatorLatitude(worldY / (TILE_SIZE * 2.0.pow(zoom)))
+fun latitude(worldY: Double, zoom: Int) = mercatorLatitude(worldY / (TILE_SIZE * 2.0.pow(zoom)))
 
-/** The tiles in memory, shared by all maps of the process. */
-private object TileCache {
+/**
+ * The OpenStreetMap tiles in memory, shared by all maps of the process (also the maps of the apps,
+ * for example shotradar).
+ */
+object OsmTiles {
     /** About 32 MB of tiles (a tile of 256 × 256 pixels has 256 KB). */
     val bitmaps =
         object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
@@ -157,7 +158,7 @@ fun MapPicker(center: Observer, onPick: (Observer?) -> Unit) {
                             .toInt()) {
                     val x = ((tx % n) + n) % n
                     val key = "$zoom/$x/$ty"
-                    val bitmap = TileCache.bitmaps.get(key)
+                    val bitmap = OsmTiles.bitmaps.get(key)
                     if (bitmap != null) {
                         drawImage(
                             bitmap.asImageBitmap(),
@@ -168,16 +169,16 @@ fun MapPicker(center: Observer, onPick: (Observer?) -> Unit) {
                                 ),
                             dstSize = IntSize(TILE_SIZE, TILE_SIZE),
                         )
-                    } else if (TileCache.mayLoad(key)) {
+                    } else if (OsmTiles.mayLoad(key)) {
                         val z = zoom
                         scope.launch {
                             try {
-                                val tile = TileCache.load(z, x, ty)
-                                if (tile != null) TileCache.bitmaps.put(key, tile)
-                                else TileCache.failed[key] = System.currentTimeMillis()
+                                val tile = OsmTiles.load(z, x, ty)
+                                if (tile != null) OsmTiles.bitmaps.put(key, tile)
+                                else OsmTiles.failed[key] = System.currentTimeMillis()
                             } finally {
                                 // Also if the user leaves the map during the load.
-                                TileCache.loading.remove(key)
+                                OsmTiles.loading.remove(key)
                             }
                             version++
                         }

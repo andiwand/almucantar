@@ -16,5 +16,6 @@ The changes in the PWA shotradar that a user notices. Each release has the tag
   shadow on the map of the Earth, the phases over the real terrain, and the eclipse in the shot:
   the moon in front of the sun, the corona at totality, or the red moon in the umbra.
 - In the shot, drag to look around and pinch or scroll to zoom; the time is next to its slider.
+- A high subject alone stays inside its small photo, also near the top.
 - "From where I am" (the first way), now or on some days: the moon, the Milky Way, the sun, and the planets while
   they are over the real horizon of the place, and the peaks of the horizon that they pass.

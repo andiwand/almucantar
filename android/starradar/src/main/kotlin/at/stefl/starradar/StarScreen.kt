@@ -78,6 +78,7 @@ import at.stefl.almucantar.shared.CameraPreview
 import at.stefl.almucantar.shared.Glyph
 import at.stefl.almucantar.shared.GlyphKind
 import at.stefl.almucantar.shared.HeadingTracker
+import at.stefl.almucantar.shared.MilkyWay
 import at.stefl.almucantar.shared.MoonAt
 import at.stefl.almucantar.shared.MoonPhase
 import at.stefl.almucantar.shared.OrientationFrame

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The full moon behind a summit, with the corners of a viewfinder (assets/shotradar-logo.svg). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,49 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"
+        android:fillColor="#FFFFF3D6" />
+    <path
+        android:pathData="M18,76 L36,64 L48,68 L54,55 L61,66 L68,62 L90,76 Z"
+        android:fillColor="#FF1D1426" />
+    <path
+        android:pathData="M30,38 V30 H38 M70,30 H78 V38 M78,70 V78 H70 M38,78 H30 V70"
+        android:strokeWidth="3"
+        android:strokeColor="#FFFFF3D6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

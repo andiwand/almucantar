@@ -48,7 +48,7 @@ data class TerrainState(
 )
 
 /** The cache of the elevation tiles of [TERRAIN_SOURCE], one for the process. */
-internal object TerrainStore {
+object TerrainStore {
     private var cache: DemCache? = null
 
     @Synchronized

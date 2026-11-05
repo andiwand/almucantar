@@ -583,7 +583,7 @@ function frameOf(
     ? center.altitudeDeg
     : shot.target
       ? Math.max(center.altitudeDeg, -1) + span * 0.12
-      : Math.max(span * 0.22, center.altitudeDeg - span * 0.3);
+      : Math.max(span * 0.22, center.altitudeDeg - span * 0.15);
   const view = {
     azimuthDeg: center.azimuthDeg + pan.azimuthDeg,
     altitudeDeg: Math.min(89, Math.max(-30, altitude + pan.altitudeDeg)),

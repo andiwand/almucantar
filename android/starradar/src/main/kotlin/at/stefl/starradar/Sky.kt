@@ -18,6 +18,7 @@ import at.stefl.almucantar.core.planetPosition
 import at.stefl.almucantar.core.starPositions
 import at.stefl.almucantar.core.sunPosition
 import at.stefl.almucantar.core.terrainAltitudeDeg
+import at.stefl.almucantar.shared.MilkyWay
 import at.stefl.almucantar.shared.MoonAt
 
 /** A planet at the selected time. */

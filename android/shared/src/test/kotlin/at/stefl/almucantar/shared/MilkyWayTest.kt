@@ -1,4 +1,4 @@
-package at.stefl.starradar
+package at.stefl.almucantar.shared
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -26,3 +26,4 @@ include(":shared")
 // The apps.
 include(":sunradar")
 include(":starradar")
+include(":shotradar")

@@ -203,6 +203,15 @@ fun rememberPlace(
     return state
 }
 
+/**
+ * The location of the device: the last known location, else one current location. Null without the
+ * permission or without an enabled provider.
+ */
+suspend fun deviceLocation(context: Context): Observer? =
+    (lastKnownLocation(context) ?: currentLocation(context))?.let {
+        Observer(it.latitude, it.longitude)
+    }
+
 /** The enabled location providers, the best first. */
 private fun providers(manager: LocationManager): List<String> = buildList {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(LocationManager.FUSED_PROVIDER)

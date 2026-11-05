@@ -18,7 +18,7 @@ a shared part and one part for each app.
 | Path | What | Has `AGENTS.md` |
 |---|---|---|
 | `core/` | The C++ library almucantar with all its bindings (Python, Android, WASM, and Apple). There is one core for all apps. | yes |
-| `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`, `starradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
+| `android/` | The Android apps: one Gradle project with the module `shared/` and one module per app (`sunradar/`, `starradar/`, `shotradar/`). It uses `core/android` as a composite build, and contains no C++. | yes |
 | `ios/` | The iOS apps: one XcodeGen project with `Shared/` and one folder per app (`Sunradar/`, `Starradar/`). It uses the Swift package of `core/apple`. | yes |
 | `web/` | One npm workspace: `shared/` (`@almucantar/web-shared`), the page of the family (`home/`), and for each app its PWA and its website (`sunradar/app/`, `sunradar/site/`, `starradar/app/`, `starradar/site/`, `shotradar/app/`, `shotradar/site/`). It uses `core/wasm`. The workflow `web.yml` deploys them to GitHub Pages: `/`, `/sunradar/`, `/sunradar/app/`, `/starradar/`, `/starradar/app/`, `/shotradar/`, and `/shotradar/app/`. | yes |
 | `assets/` | The logos (`logo.svg`, `starradar-logo.svg`, `shotradar-logo.svg`), the offline base map (`assets/basemap/`), and the star data (`assets/stars/`). | no |
@@ -69,7 +69,7 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 
 Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages), and one
 project for each app on each platform: `sunradar-android-vX.Y.Z`, `sunradar-ios-vX.Y.Z`,
-`sunradar-pwa-vX.Y.Z`, the same three for starradar, and `shotradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app and
+`sunradar-pwa-vX.Y.Z`, the same three for starradar, `shotradar-android-vX.Y.Z`, and `shotradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app and
 the shared part of its platform. The flow is the one of OpenDocument.core.
 
 1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that

@@ -131,6 +131,18 @@ PROJECTS = {
             )
         ],
     },
+    "shotradar-android": {
+        "paths": [
+            "android/shotradar/**",
+            "android/shared/**",
+            "android/gradle/**",
+            "android/*.kts",
+            "android/gradle.properties",
+            "assets/stars/**",
+        ],
+        "changelog": "android/shotradar/CHANGELOG.md",
+        "stamps": [],
+    },
     "shotradar-pwa": {
         "paths": [
             "web/shotradar/app/**",
