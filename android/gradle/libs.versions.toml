@@ -1,7 +1,7 @@
 [versions]
 # The same as core/android.
-agp = "9.5.0"
-# The Kotlin version that AGP 9.5.0 brings (the runtime dependency kotlin-gradle-plugin of its
+agp = "9.5.1"
+# The Kotlin version that AGP 9.5.1 brings (the runtime dependency kotlin-gradle-plugin of its
 # POM). The Compose compiler plugin must have the same version.
 kotlin = "2.2.10"
 spotless = "8.10.4"

@@ -1,6 +1,6 @@
 [versions]
 # The same version as OpenDocument.droid.
-agp = "9.5.0"
+agp = "9.5.1"
 spotless = "8.10.4"
 ktfmt = "0.64"
 # The community plugin for the Maven Central portal, the same as OpenDocument.core.
