@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderColors
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,7 +28,8 @@ const val DATE_RANGE_DAYS = 183
 
 /**
  * The date and the time of the view. [dayOffset] counts days from today. [minuteOfDay] is null for
- * the live time ("now").
+ * the live time ("now"). [textColor] and [sliderColors] let an app with light panels use dark text
+ * and its own accent.
  */
 @Composable
 fun TimePanel(
@@ -36,12 +39,14 @@ fun TimePanel(
     minuteOfDay: Int?,
     liveMinuteOfDay: Int,
     onMinuteOfDay: (Int?) -> Unit,
+    textColor: Color = Color.White,
+    sliderColors: SliderColors = SliderDefaults.colors(),
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 dateFormat().format(today.plusDays(dayOffset.toLong())),
-                color = Color.White,
+                color = textColor,
                 modifier = Modifier.width(150.dp),
             )
             Slider(
@@ -49,6 +54,7 @@ fun TimePanel(
                 onValueChange = { onDayOffset(it.roundToInt()) },
                 valueRange = -DATE_RANGE_DAYS.toFloat()..DATE_RANGE_DAYS.toFloat(),
                 modifier = Modifier.weight(1f),
+                colors = sliderColors,
             )
             TextButton(onClick = { onDayOffset(0) }, enabled = dayOffset != 0) { Text("Today") }
         }
@@ -57,7 +63,7 @@ fun TimePanel(
             Text(
                 "%02d:%02d".format(minute / 60, minute % 60) +
                     if (minuteOfDay == null) " (now)" else "",
-                color = Color.White,
+                color = textColor,
                 modifier = Modifier.width(150.dp),
             )
             Slider(
@@ -65,6 +71,7 @@ fun TimePanel(
                 onValueChange = { onMinuteOfDay(it.roundToInt()) },
                 valueRange = 0f..(24 * 60 - 1).toFloat(),
                 modifier = Modifier.weight(1f),
+                colors = sliderColors,
             )
             TextButton(onClick = { onMinuteOfDay(null) }, enabled = minuteOfDay != null) {
                 Text("Now")

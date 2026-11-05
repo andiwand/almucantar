@@ -95,6 +95,8 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
 | `.../TerrainDay.kt` | The sun path behind the terrain on one day, and the visible sunrise and sunset. |
+| `.../SkyView.kt` | The sky view without the camera, as `drawSkyView` of the web app: the sky in the colors of the sun altitude (`skyColors`, the table of `web/shared/src/panorama.ts`), the glow around the sun, and the ground. `DemoSky` uses the same table. |
+| `.../Look.kt` | The look of sonnseite, as `web/sonnseite/app/src/style.css`: the colors, the Material theme, the warm white panels, the pill buttons, and the dark labels of a bright sky view. The shared code keeps its own look. |
 | `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sonnseite/site/src/sky.ts`. |
 | `sonnseite/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sonnseite.screenshot`. The release build has a no-op version in `sonnseite/src/release/`. |
 | `sonnseite/src/test/` | JVM unit tests. |

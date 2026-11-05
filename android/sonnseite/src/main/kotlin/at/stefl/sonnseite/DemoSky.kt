@@ -29,37 +29,6 @@ fun DemoSky(modifier: Modifier, view: View, sun: Horizontal) {
     Canvas(modifier) { drawDemoSky(view, sun) }
 }
 
-private class Rgb(val r: Float, val g: Float, val b: Float) {
-    fun mix(other: Rgb, t: Float) =
-        Rgb(r + (other.r - r) * t, g + (other.g - g) * t, b + (other.b - b) * t)
-
-    fun color(alpha: Float = 1f) = Color(r / 255f, g / 255f, b / 255f, alpha)
-}
-
-/** The colors of the sky at the top and at the horizon, for a sun altitude (`SKY` of sky.ts). */
-private val SKY =
-    listOf(
-        Triple(-18f, Rgb(3f, 6f, 15f), Rgb(10f, 18f, 38f)),
-        Triple(-8f, Rgb(10f, 20f, 46f), Rgb(52f, 40f, 86f)),
-        Triple(-2f, Rgb(24f, 42f, 86f), Rgb(196f, 104f, 92f)),
-        Triple(3f, Rgb(34f, 70f, 132f), Rgb(242f, 160f, 96f)),
-        Triple(12f, Rgb(44f, 96f, 168f), Rgb(236f, 200f, 150f)),
-        Triple(30f, Rgb(40f, 106f, 190f), Rgb(150f, 202f, 238f)),
-    )
-
-private fun skyColors(altitudeDeg: Float): Pair<Rgb, Rgb> {
-    if (altitudeDeg <= SKY.first().first) return SKY.first().second to SKY.first().third
-    for (i in 1 until SKY.size) {
-        val (a1, top1, low1) = SKY[i]
-        val (a0, top0, low0) = SKY[i - 1]
-        if (altitudeDeg <= a1) {
-            val t = (altitudeDeg - a0) / (a1 - a0)
-            return top0.mix(top1, t) to low0.mix(low1, t)
-        }
-    }
-    return SKY.last().second to SKY.last().third
-}
-
 /**
  * The random generator of sky.ts (`random(seed)`), bit for bit: Kotlin Int arithmetic wraps at 32
  * bits, as `Math.imul` and `>>> 0` do in JavaScript.

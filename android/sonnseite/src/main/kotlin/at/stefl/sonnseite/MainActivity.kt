@@ -23,8 +23,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         UserAgent.init(this)
-        // The app is always dark, so the icons of the system bars are always light, also when the
-        // system uses its light theme.
+        // The top of the screen is a dark sky, a blue sky, or the camera image, so the icons of the
+        // system bars are always light, also when the system uses its light theme.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),

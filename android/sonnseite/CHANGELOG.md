@@ -6,6 +6,10 @@ Each release has the tag `sonnseite-android-vX.Y.Z`. The rules are the same as i
 
 ## Unreleased
 
+- Sonnseite has the bright look of the day of the website. Without the camera, the sky has the
+  colors of the height of the sun, with a glow around the sun and a light ground. The path of the
+  sun has a dark edge, and by day the labels and the crosshair are dark, so they are easy to see.
+  The panels are warm white with dark text, and the main button is sun yellow.
 - Sunradar has the new name Sonnseite, the Austrian word for the sunny side of a valley. The app
   has the new ID `at.stefl.sonnseite`, so Android installs it as a new app: remove Sunradar
   yourself. The stored place and the settings do not move to the new app.

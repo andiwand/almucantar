@@ -18,11 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -440,8 +438,10 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     // The tap handler of the newest composition, with the current view and detected sun.
     val currentOnTap by rememberUpdatedState(onTap)
 
+    // The place panel and the landmark map of the shared code keep their dark look. The settings
+    // dialog has the look of sonnseite.
     MaterialTheme(colorScheme = darkColorScheme()) {
-        if (showSettings) SettingsDialog(terrainSetting) { showSettings = false }
+        if (showSettings) SonnseiteTheme { SettingsDialog(terrainSetting) { showSettings = false } }
         if (pickingLandmark) {
             MapPicker(place.observer) {
                 pickingLandmark = false
@@ -463,189 +463,199 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
             return@MaterialTheme
         }
 
-        Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
-            if (scene != null && view != null) {
-                // The drawn sky of the demo mode, in place of the camera image.
-                DemoSky(Modifier.fillMaxSize(), view, sun)
-            }
-            if (cameraOn) {
-                CameraPreview(
-                    Modifier.fillMaxSize(),
-                    displayRotation,
-                    detectSun = sunNow.altitudeDeg > 0,
-                    onBlobs = { blobs = it },
-                ) {
-                    viewCamera = it
+        SonnseiteTheme {
+            Box(Modifier.fillMaxSize().background(SkyColors.sky).onSizeChanged { size = it }) {
+                if (scene != null && view != null) {
+                    // The drawn sky of the demo mode, in place of the camera image.
+                    DemoSky(Modifier.fillMaxSize(), view, sun)
                 }
-            }
-            if (view != null && center != null) {
-                Canvas(
-                    Modifier.fillMaxSize().pointerInput(Unit) {
-                        detectTapGestures { currentOnTap(it) }
+                if (cameraOn) {
+                    CameraPreview(
+                        Modifier.fillMaxSize(),
+                        displayRotation,
+                        detectSun = sunNow.altitudeDeg > 0,
+                        onBlobs = { blobs = it },
+                    ) {
+                        viewCamera = it
                     }
-                ) {
-                    detected?.let { drawDetectedSun(it) }
-                    drawSky(
-                        view,
-                        day,
-                        Terrain(terrainLines, terrainDay, fill = !cameraOn),
-                        guides,
-                        sun,
-                        moon,
-                        center,
-                        crossing,
-                        landmark
-                            ?.takeIf { aligning == AlignTarget.LANDMARK }
-                            ?.let {
-                                Horizontal(Geo.bearingDeg(place.observer, it), 0.0)
-                            },
-                    )
                 }
-            }
-
-            Column(
-                Modifier.align(Alignment.TopStart)
-                    .safeDrawingPadding()
-                    .padding(12.dp)
-                    .widthIn(max = 440.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                StatusCard(
-                    place,
-                    zone.takeIf { scene == null && it != deviceZone },
-                    tracker,
-                    day,
-                    terrainDay,
-                    terrain.status,
-                    cameraOn,
-                    viewCamera,
-                ) {
-                    message = null
-                    showPlace = true
-                }
-                message?.let { Panel { Text(it, color = Color.White) } }
-                aligning?.let { Panel { Text(alignHint(it), color = Color.White) } }
-            }
-
-            Column(
-                Modifier.align(Alignment.BottomCenter)
-                    .safeDrawingPadding()
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (showTime) {
-                    Panel {
-                        TimePanel(
-                            today,
-                            dayOffset,
-                            { dayOffset = it },
-                            minuteOfDay,
-                            liveMinute,
-                            { minuteOfDay = it },
+                if (view != null && center != null) {
+                    Canvas(
+                        Modifier.fillMaxSize().pointerInput(Unit) {
+                            detectTapGestures { currentOnTap(it) }
+                        }
+                    ) {
+                        detected?.let { drawDetectedSun(it) }
+                        drawSky(
+                            view,
+                            // The drawn sky of the demo mode stands in for the camera image.
+                            skyView = !cameraOn && scene == null,
+                            day,
+                            Terrain(terrainLines, terrainDay, fill = !cameraOn),
+                            guides,
+                            sun,
+                            moon,
+                            center,
+                            crossing,
+                            landmark
+                                ?.takeIf { aligning == AlignTarget.LANDMARK }
+                                ?.let {
+                                    Horizontal(Geo.bearingDeg(place.observer, it), 0.0)
+                                },
                         )
                     }
                 }
-                Readout(center, crosshairUsable, crossing, crosshairDates, zone)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilledTonalButton(onClick = toggleCamera, contentPadding = BUTTON_PADDING) {
-                        Text(if (cameraOn || scene != null) "Sky" else "Camera")
-                    }
-                    FilledTonalButton(
-                        onClick = { showTime = !showTime },
-                        contentPadding = BUTTON_PADDING,
+
+                Column(
+                    Modifier.align(Alignment.TopStart)
+                        .safeDrawingPadding()
+                        .padding(12.dp)
+                        .widthIn(max = 440.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatusCard(
+                        place,
+                        zone.takeIf { scene == null && it != deviceZone },
+                        tracker,
+                        day,
+                        terrainDay,
+                        terrain.status,
+                        cameraOn,
+                        viewCamera,
                     ) {
-                        Text(if (dayOffset == 0 && minuteOfDay == null) "Time" else "Time ●")
+                        message = null
+                        showPlace = true
                     }
-                    if (aligning == AlignTarget.LANDMARK) {
-                        Button(
-                            onClick = {
-                                message = alignWithLandmark(tracker, view, place, landmark)
-                                aligning = null
-                            }
-                        ) {
-                            Text("Aligned")
+                    message?.let { Panel { Text(it, color = Look.text) } }
+                    aligning?.let { Panel { Text(alignHint(it), color = Look.text) } }
+                }
+
+                Column(
+                    Modifier.align(Alignment.BottomCenter)
+                        .safeDrawingPadding()
+                        .padding(12.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (showTime) {
+                        Panel {
+                            TimePanel(
+                                today,
+                                dayOffset,
+                                { dayOffset = it },
+                                minuteOfDay,
+                                liveMinute,
+                                { minuteOfDay = it },
+                                textColor = Look.text,
+                                sliderColors = sliderColors(),
+                            )
                         }
-                    } else if (aligning != null) {
-                        Button(onClick = { aligning = null }) { Text("Cancel") }
-                    } else {
-                        FilledTonalButton(
-                            onClick = {
-                                message = null
-                                showPlace = true
-                            },
+                    }
+                    Readout(center, crosshairUsable, crossing, crosshairDates, zone)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PillButton(onClick = toggleCamera, contentPadding = BUTTON_PADDING) {
+                            Text(if (cameraOn || scene != null) "Sky" else "Camera")
+                        }
+                        PillButton(
+                            onClick = { showTime = !showTime },
                             contentPadding = BUTTON_PADDING,
                         ) {
-                            Text("Place")
+                            Text(if (dayOffset == 0 && minuteOfDay == null) "Time" else "Time ●")
                         }
-                        Box {
-                            Button(
-                                onClick = { alignMenu = true },
+                        if (aligning == AlignTarget.LANDMARK) {
+                            PillButton(
+                                onClick = {
+                                    message = alignWithLandmark(tracker, view, place, landmark)
+                                    aligning = null
+                                },
+                                primary = true,
+                            ) {
+                                Text("Aligned")
+                            }
+                        } else if (aligning != null) {
+                            PillButton(onClick = { aligning = null }) { Text("Cancel") }
+                        } else {
+                            PillButton(
+                                onClick = {
+                                    message = null
+                                    showPlace = true
+                                },
                                 contentPadding = BUTTON_PADDING,
                             ) {
-                                Text("Align")
+                                Text("Place")
                             }
-                            DropdownMenu(
-                                expanded = alignMenu,
-                                onDismissRequest = { alignMenu = false },
-                            ) {
-                                val sunUp = sunNow.altitudeDeg > 0
-                                val moonUsable =
-                                    moonNow.altitudeDeg > 0 && moonFraction >= MIN_MOON_FRACTION
-                                // A dropped place also works, for example offline without GPS,
-                                // if the user stands at it. The error of the drop is larger.
-                                val located = place.isKnown
-                                val landmarkDetail =
-                                    when {
-                                        place.source == PlaceSource.MANUAL ->
-                                            "Pick it on a map, then aim at it (you must be at the place)"
-                                        located -> "Pick it on a map, then aim at it"
-                                        else -> "Needs your location or a place (Place)"
+                            Box {
+                                PillButton(
+                                    onClick = { alignMenu = true },
+                                    primary = true,
+                                    contentPadding = BUTTON_PADDING,
+                                ) {
+                                    Text("Align")
+                                }
+                                DropdownMenu(
+                                    expanded = alignMenu,
+                                    onDismissRequest = { alignMenu = false },
+                                ) {
+                                    val sunUp = sunNow.altitudeDeg > 0
+                                    val moonUsable =
+                                        moonNow.altitudeDeg > 0 && moonFraction >= MIN_MOON_FRACTION
+                                    // A dropped place also works, for example offline without GPS,
+                                    // if the user stands at it. The error of the drop is larger.
+                                    val located = place.isKnown
+                                    val landmarkDetail =
+                                        when {
+                                            place.source == PlaceSource.MANUAL ->
+                                                "Pick it on a map, then aim at it (you must be at the place)"
+                                            located -> "Pick it on a map, then aim at it"
+                                            else -> "Needs your location or a place (Place)"
+                                        }
+                                    AlignItem(
+                                        "With the sun",
+                                        if (sunUp) "Tap the sun in the camera image"
+                                        else "The sun is below the horizon",
+                                        enabled = sunUp,
+                                    ) {
+                                        alignMenu = false
+                                        startBodyAlign(AlignTarget.SUN)
                                     }
-                                AlignItem(
-                                    "With the sun",
-                                    if (sunUp) "Tap the sun in the camera image"
-                                    else "The sun is below the horizon",
-                                    enabled = sunUp,
-                                ) {
-                                    alignMenu = false
-                                    startBodyAlign(AlignTarget.SUN)
-                                }
-                                AlignItem(
-                                    "With the moon",
-                                    when {
-                                        moonNow.altitudeDeg <= 0 -> "The moon is below the horizon"
-                                        moonFraction < MIN_MOON_FRACTION ->
-                                            "The moon is too dim (new moon)"
-                                        else -> "Tap the moon in the camera image"
-                                    },
-                                    enabled = moonUsable,
-                                ) {
-                                    alignMenu = false
-                                    startBodyAlign(AlignTarget.MOON)
-                                }
-                                AlignItem(
-                                    "With a landmark",
-                                    landmarkDetail,
-                                    enabled = located,
-                                ) {
-                                    alignMenu = false
-                                    message = null
-                                    pickingLandmark = true
+                                    AlignItem(
+                                        "With the moon",
+                                        when {
+                                            moonNow.altitudeDeg <= 0 ->
+                                                "The moon is below the horizon"
+                                            moonFraction < MIN_MOON_FRACTION ->
+                                                "The moon is too dim (new moon)"
+                                            else -> "Tap the moon in the camera image"
+                                        },
+                                        enabled = moonUsable,
+                                    ) {
+                                        alignMenu = false
+                                        startBodyAlign(AlignTarget.MOON)
+                                    }
+                                    AlignItem(
+                                        "With a landmark",
+                                        landmarkDetail,
+                                        enabled = located,
+                                    ) {
+                                        alignMenu = false
+                                        message = null
+                                        pickingLandmark = true
+                                    }
                                 }
                             }
                         }
-                    }
-                    // The settings are the last button, and they are hidden during an alignment.
-                    if (aligning == null) {
-                        FilledTonalButton(
-                            onClick = { showSettings = true },
-                            // Narrower than the default minimum width of a button (58 dp).
-                            modifier = Modifier.widthIn(min = 40.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp),
-                        ) {
-                            Glyph(GlyphKind.MORE, "Menu", tint = LocalContentColor.current)
+                        // The settings are the last button, and they are hidden during an
+                        // alignment.
+                        if (aligning == null) {
+                            PillButton(
+                                onClick = { showSettings = true },
+                                // Narrower than the default minimum width of a button (58 dp).
+                                modifier = Modifier.widthIn(min = 40.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                            ) {
+                                Glyph(GlyphKind.MORE, "Menu", tint = LocalContentColor.current)
+                            }
                         }
                     }
                 }
@@ -664,7 +674,7 @@ private fun AlignItem(title: String, detail: String, enabled: Boolean, onClick: 
                 Text(
                     detail,
                     fontSize = 12.sp,
-                    color = if (enabled) Color(0xFFBBBBBB) else Color(0xFFFFB74D),
+                    color = if (enabled) Look.secondary else Look.fair,
                 )
             }
         },
@@ -751,16 +761,6 @@ private fun applyMeasurement(
 }
 
 @Composable
-private fun Panel(content: @Composable () -> Unit) {
-    Box(
-        Modifier.background(Color(0xB3000000), RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun StatusCard(
     place: Place,
     /** The time zone of the place, if it is not the zone of the device. */
@@ -778,16 +778,16 @@ private fun StatusCard(
             // A tap on the place opens the place panel, as the button "Place" does.
             Text(
                 placeText(place),
-                color = Color.White,
+                color = Look.text,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable(onClick = onPlace),
             )
-            otherZone?.let { Text("Times in ${it.id}", color = Color(0xFFDDDDDD)) }
+            otherZone?.let { Text("Times in ${it.id}", color = Look.secondary) }
             HeadingText(tracker)
-            Text(day.summary, color = Color(0xFFDDDDDD))
-            terrainDay?.let { Text(it.summary, color = SkyColors.terrain) }
-            terrainStatus?.let { Text(it, color = Color(0xFFFFB74D), fontSize = 12.sp) }
-            if (cameraOn) Text(cameraText(camera), color = Color(0xFFDDDDDD))
+            Text(day.summary, color = Look.secondary)
+            terrainDay?.let { Text(it.summary, color = Look.good) }
+            terrainStatus?.let { Text(it, color = Look.fair, fontSize = 12.sp) }
+            if (cameraOn) Text(cameraText(camera), color = Look.secondary)
         }
     }
 }
@@ -795,16 +795,16 @@ private fun StatusCard(
 @Composable
 private fun HeadingText(tracker: HeadingTracker) {
     if (tracker.frame == OrientationFrame.NONE) {
-        Text("This device has no orientation sensor", color = Color(0xFFFF8A80))
+        Text("This device has no orientation sensor", color = Look.poor)
         return
     }
     val sigma = sqrt(tracker.estimate.varianceDeg2)
     val (text, color) =
         when {
-            sigma > 30 -> "Heading unknown: move the phone in a figure 8" to Color(0xFFFF8A80)
-            sigma > 10 -> "Heading ±%.0f° (poor, use Align)".format(sigma) to Color(0xFFFFB74D)
-            sigma > 3 -> "Heading ±%.0f°".format(sigma) to Color(0xFFFFE082)
-            else -> "Heading ±%.1f°".format(sigma) to Color(0xFFA5D6A7)
+            sigma > 30 -> "Heading unknown: move the phone in a figure 8" to Look.poor
+            sigma > 10 -> "Heading ±%.0f° (poor, use Align)".format(sigma) to Look.poor
+            sigma > 3 -> "Heading ±%.0f°".format(sigma) to Look.fair
+            else -> "Heading ±%.1f°".format(sigma) to Look.good
         }
     Text(text, color = color)
 }
@@ -827,14 +827,14 @@ private fun Readout(
                 !usable ->
                     Text(
                         "Hold the phone up to see when the sun is in that direction.",
-                        color = Color.White,
+                        color = Look.text,
                     )
                 crossing == null ->
-                    Text("The sun does not reach this direction on this day.", color = Color.White)
+                    Text("The sun does not reach this direction on this day.", color = Look.text)
                 else -> {
                     Text(
                         SkyDay.formatTime(crossing.unixUtc, zone),
-                        color = SkyColors.nearest,
+                        color = Look.time,
                         fontSize = 34.sp,
                         fontWeight = FontWeight.Bold,
                     )
@@ -843,7 +843,7 @@ private fun Readout(
                         if (altitude >= 0)
                             "The sun is in this direction, %.0f° high".format(altitude)
                         else "The sun is in this direction below the horizon",
-                        color = Color.White,
+                        color = Look.text,
                     )
                 }
             }
@@ -856,7 +856,7 @@ private fun Readout(
                                 " " +
                                 SkyDay.formatTime(it.unixUtc, zone)
                         },
-                    color = SkyColors.sun,
+                    color = Look.secondary,
                 )
             }
         }
@@ -886,11 +886,20 @@ private fun DrawScope.drawDetectedSun(sun: DetectedSun) {
     }
 }
 
+/** The dark edge of the path in the day. */
+private val PATH_EDGE = Color(180, 95, 6, (0.35f * 255).toInt())
+
+/** The disc of the sun and its glow. */
+private val SUN_DISC = Color(0xFFFFF4D2)
+private val SUN_GLOW = Color(255, 190, 60, (0.95f * 255).toInt())
+
 /** The terrain of the drawing. [fill] fills the area below the terrain line (sky view only). */
 private class Terrain(val lines: TerrainLines?, val day: TerrainDay?, val fill: Boolean)
 
 private fun DrawScope.drawSky(
     view: View,
+    /** True in the sky view without the camera image. */
+    skyView: Boolean,
     day: SkyDay,
     terrain: Terrain,
     guides: List<DirectionLine>,
@@ -901,8 +910,14 @@ private fun DrawScope.drawSky(
     landmark: Horizontal?,
 ) {
     val px = density
-    val labels = labelPaint(14 * px)
-    val small = labelPaint(12 * px, bold = false)
+    if (skyView) drawSkyView(view, sun)
+    // The sky view is bright by day, so the labels and the helpers are dark; on the camera image
+    // they are light.
+    val bright = skyView && sun.altitudeDeg > BRIGHT_SUN_ALTITUDE_DEG
+    val ink = if (bright) Look.ink else Color.White
+    val helper = if (bright) Look.helper else SkyColors.nearest
+    val labels = skyLabelPaint(14 * px, bold = true, bright)
+    val small = skyLabelPaint(12 * px, bold = false, bright)
 
     // The terrain: a light fill below the terrain line in the sky view, and the line.
     val terrainLines = terrain.lines
@@ -947,8 +962,10 @@ private fun DrawScope.drawSky(
     val terrainDay = terrain.day
     for (segment in terrainDay?.visibleSegments ?: day.daySegments) {
         val lines = projectLine(view, segment)
-        drawPolylines(lines, SkyColors.glow, Stroke(9 * px))
-        drawPolylines(lines, SkyColors.dayPath, Stroke(3 * px))
+        // A dark edge, a glow, and the line, so the path is easy to see on a bright sky.
+        drawPolylines(lines, PATH_EDGE, Stroke(6 * px))
+        drawPolylines(lines, SkyColors.glow, Stroke(12 * px))
+        drawPolylines(lines, SkyColors.dayPath, Stroke(3.5f * px))
     }
     terrainDay?.hiddenSegments?.forEach {
         drawPolylines(projectLine(view, it), SkyColors.hiddenPath, dashed(3 * px, 6 * px))
@@ -978,11 +995,11 @@ private fun DrawScope.drawSky(
         val vertical = (0..steps).map { Horizontal(center.azimuthDeg, end * it / steps) }
         drawPolylines(
             projectLine(view, DirectionLine.of(vertical)),
-            SkyColors.nearest,
+            helper,
             dashed(1.5f * px, 6 * px),
         )
         screenPoint(view, crossing.sun)?.let {
-            drawCircle(SkyColors.nearest, radius = 9 * px, center = it, style = Stroke(2.5f * px))
+            drawCircle(helper, radius = 9 * px, center = it, style = Stroke(2.5f * px))
         }
     }
 
@@ -1007,8 +1024,19 @@ private fun DrawScope.drawSky(
     val indicator = edgeIndicator(view, center, sun, bounds)
     if (indicator == null) {
         screenPoint(view, sun)?.let {
-            drawCircle(SkyColors.glow, radius = 26 * px, center = it)
-            drawCircle(SkyColors.sun, radius = 14 * px, center = it)
+            // A soft yellow glow around the disc, as the blurred shadow of the web app.
+            drawCircle(
+                Brush.radialGradient(
+                    0f to SUN_GLOW,
+                    0.35f to SUN_GLOW.copy(alpha = 0.7f),
+                    1f to SUN_GLOW.copy(alpha = 0f),
+                    center = it,
+                    radius = 40 * px,
+                ),
+                radius = 40 * px,
+                center = it,
+            )
+            drawCircle(SUN_DISC, radius = 14 * px, center = it)
         }
     } else {
         val (at, direction) = indicator
@@ -1019,8 +1047,8 @@ private fun DrawScope.drawSky(
     // The crosshair.
     val c = Offset(size.width / 2, size.height / 2)
     val arm = 16 * px
-    drawLine(Color.White, Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), strokeWidth = 1.5f * px)
-    drawLine(Color.White, Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), strokeWidth = 1.5f * px)
+    drawLine(ink, Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), strokeWidth = 1.5f * px)
+    drawLine(ink, Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), strokeWidth = 1.5f * px)
 }
 
 private fun placeText(place: Place): String {
