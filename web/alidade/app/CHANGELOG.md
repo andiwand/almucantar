@@ -5,6 +5,8 @@ The changes in the PWA alidade that a user notices. Each release has the tag
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-05
+
 - The first version, a prototype of the photo planner. Every way ends in the shot: the photo from
   the spot in first person, with the real terrain, the landmark, the subject and its path, the
   stars, a time slider, and the frame of a lens, in the look of the website.
