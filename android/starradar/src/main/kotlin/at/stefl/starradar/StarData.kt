@@ -14,6 +14,8 @@ class StarData(
     val catalog: StarCatalog,
     val mag: FloatArray,
     val bv: FloatArray,
+    /** The number of each star in the Bright Star Catalogue (HR). */
+    val hr: IntArray,
     /** The proper name of a star, by its index. */
     val names: Map<Int, String>,
     val constellations: List<Constellation>,
@@ -43,6 +45,7 @@ class StarData(
                     StarCatalog(column("ra"), column("dec"), column("pm_ra"), column("pm_dec")),
                 mag = column("mag").let { c -> FloatArray(c.size) { c[it].toFloat() } },
                 bv = column("bv").let { c -> FloatArray(c.size) { c[it].toFloat() } },
+                hr = stars.getJSONArray("hr").let { a -> IntArray(a.length()) { a.getInt(it) } },
                 names =
                     (0 until names.length()).associate {
                         val entry = names.getJSONArray(it)

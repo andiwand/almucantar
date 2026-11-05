@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +57,7 @@ import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -193,12 +196,43 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
     // field of view of the lens, so the zoom does not change it.
     var zoom by remember { mutableDoubleStateOf(1.0) }
 
+    // True while the permission prompt of the camera is open for an alignment.
+    var pendingAlign by remember { mutableStateOf(false) }
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraOn = it
-            if (!it) message = "The camera is not allowed."
+            aligning = it && pendingAlign
+            if (!it) {
+                message =
+                    if (pendingAlign) "The alignment needs the camera."
+                    else "The camera is not allowed."
+            }
+            pendingAlign = false
         }
+    // The alignment compares the drawn object with the object in the camera image. Without the
+    // camera, a tap gives the heading that the app has already, so the camera switches on first.
+    // The alignment compares with the sky now, so it sets the time back to now.
+    val toggleAlign = {
+        message = null
+        if (!aligning) {
+            dayOffset = 0
+            minuteOfDay = null
+        }
+        if (aligning || cameraOn) {
+            aligning = !aligning
+        } else if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            cameraOn = true
+            aligning = true
+        } else {
+            pendingAlign = true
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
     val toggleCamera = {
+        aligning = false
         if (cameraOn) {
             cameraOn = false
         } else if (
@@ -246,51 +280,69 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
             )
         }
 
+    // True if the last gesture had more than one finger, so its end is not a tap.
+    var pinched by remember { mutableStateOf(false) }
     // The objects of the last frame, for a tap.
     val hits = remember { mutableListOf<Hit>() }
     val density = LocalDensity.current.density
     val onTap = { at: Offset ->
         val v = view
-        if (aligning && v != null) {
-            aligning = false
-            message = alignWith(tracker, v, sky, stars, hits, at, density)
-        } else {
-            selected = nearest(hits, at, 32 * density)?.target
+        when {
+            // The end of a pinch is not a tap.
+            pinched -> {}
+            // The camera image shows the sky now, so the alignment needs the time now.
+            aligning && time != now -> {
+                aligning = false
+                message = "The alignment needs the time now."
+            }
+            // The view must have the camera model of the lens, not the one of the sky view.
+            aligning ->
+                if (v != null && viewCamera != null) {
+                    aligning = false
+                    message = alignWith(tracker, v, sky, stars, hits, at, density)
+                }
+            else -> selected = nearest(hits, at, 32 * density)?.target
         }
     }
     val currentOnTap by rememberUpdatedState(onTap)
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         if (showSettings) SettingsDialog(settings, stars.attribution) { showSettings = false }
+        // The red light: everything turns red, so the eyes stay adapted to the dark. It also
+        // covers the place panel and Find.
+        val red = settings.red.value
+        val redLight = Modifier.drawWithContent {
+            drawContent()
+            if (red) drawRect(Color(0xFFFF2010), blendMode = BlendMode.Multiply)
+        }
         if (showPlace) {
-            PlacePanel(
-                place,
-                deviceZone,
-                offline = true,
-                onDrop = { at, name, placeZone -> placeState.drop(at, name, placeZone) },
-                onUseDevice = useDeviceLocation,
-                onClose = { showPlace = false },
-            )
+            Box(redLight) {
+                PlacePanel(
+                    place,
+                    deviceZone,
+                    offline = true,
+                    onDrop = { at, name, placeZone -> placeState.drop(at, name, placeZone) },
+                    onUseDevice = useDeviceLocation,
+                    onClose = { showPlace = false },
+                )
+            }
             return@MaterialTheme
         }
         if (showFind) {
-            FindPanel(stars, onClose = { showFind = false }) {
-                selected = it
-                showFind = false
+            Box(redLight) {
+                FindPanel(stars, onClose = { showFind = false }) {
+                    selected = it
+                    showFind = false
+                }
             }
             return@MaterialTheme
         }
 
-        // The red light: everything turns red, so the eyes stay adapted to the dark.
-        val red = settings.red.value
         Box(
             Modifier.fillMaxSize()
                 .background(Color(0xFF050916))
                 .onSizeChanged { size = it }
-                .drawWithContent {
-                    drawContent()
-                    if (red) drawRect(Color(0xFFFF2010), blendMode = BlendMode.Multiply)
-                }
+                .then(redLight)
         ) {
             if (cameraOn) {
                 CameraPreview(
@@ -298,6 +350,8 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
                     displayRotation,
                     detectSun = false,
                     onBlobs = {},
+                    // The red light must also tint the camera image.
+                    tintable = true,
                 ) {
                     viewCamera = it
                 }
@@ -306,8 +360,18 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
                 Canvas(
                     Modifier.fillMaxSize()
                         .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false, PointerEventPass.Initial)
+                                pinched = false
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.changes.count { it.pressed } > 1) pinched = true
+                                } while (event.changes.any { it.pressed })
+                            }
+                        }
+                        .pointerInput(Unit) {
                             detectTapGestures(
-                                onDoubleTap = { zoom = 1.0 },
+                                onDoubleTap = { if (!pinched) zoom = 1.0 },
                                 onTap = { currentOnTap(it) },
                             )
                         }
@@ -410,13 +474,7 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
                     ) {
                         Text("Place")
                     }
-                    Button(
-                        onClick = {
-                            aligning = !aligning
-                            message = null
-                        },
-                        contentPadding = BUTTON_PADDING,
-                    ) {
+                    Button(onClick = toggleAlign, contentPadding = BUTTON_PADDING) {
                         Text(if (aligning) "Cancel" else "Align")
                     }
                     FilledTonalButton(
@@ -547,15 +605,17 @@ private fun InfoCard(
     onClose: () -> Unit,
 ) {
     // The rise and the set take some milliseconds: calculate them in the background, again for a
-    // new target, a new place, or another hour.
-    val hour = (sky.unixUtc / 3600).toLong()
-    val riseSet by
-        produceState<RiseSet?>(null, target, sky.observer, hour, profile) {
+    // new target, a new place, a new terrain, or after 10 minutes. The result keeps its target, so
+    // the card does not show the times of the last target while it calculates.
+    val step = (sky.unixUtc / 600).toLong()
+    val result by
+        produceState<Pair<Target, RiseSet>?>(null, target, sky.observer, step, profile) {
             value =
                 withContext(Dispatchers.Default) {
-                    target.riseAndSet(stars, sky.unixUtc, sky.observer, profile)
+                    target to target.riseAndSet(stars, sky.unixUtc, sky.observer, profile)
                 }
         }
+    val riseSet = result?.takeIf { it.first == target }?.second
     val d = target.direction(sky)
     val kind =
         when (target) {
@@ -604,28 +664,33 @@ private fun InfoCard(
     }
 }
 
+private val MARKS = Regex("\\p{M}")
+
 /** Without accents and in lower case, so "alnilam" finds "Alnilam". */
 private fun fold(text: String) =
-    Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
+    Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").lowercase()
+
+/** An entry of Find: the name, the kind, the target, and the folded name for the search. */
+private class FindEntry(val name: String, val kind: String, val target: Target) {
+    val key = fold(name)
+}
 
 /** Find: the stars with a name, the planets, the moon, the constellations, and the Milky Way. */
 @Composable
 private fun FindPanel(stars: StarData, onClose: () -> Unit, onPick: (Target) -> Unit) {
     val entries =
         remember(stars) {
-            PLANETS.map {
-                Triple(it.second.first, "Planet", Target.PlanetTarget(it.first) as Target)
-            } +
+            PLANETS.map { FindEntry(it.second.first, "Planet", Target.PlanetTarget(it.first)) } +
                 listOf(
-                    Triple("Moon", "Moon", Target.Moon),
-                    Triple("Sun", "Star", Target.Sun),
-                    Triple("Milky Way center", "Milky Way", Target.GalacticCenter),
+                    FindEntry("Moon", "Moon", Target.Moon),
+                    FindEntry("Sun", "Star", Target.Sun),
+                    FindEntry("Milky Way center", "Milky Way", Target.GalacticCenter),
                 ) +
                 stars.constellations.mapIndexed { i, c ->
-                    Triple(c.name, "Constellation", Target.ConstellationTarget(i) as Target)
+                    FindEntry(c.name, "Constellation", Target.ConstellationTarget(i))
                 } +
                 stars.names.map { (i, name) ->
-                    Triple(name, "Star · %.1f".format(stars.mag[i]), Target.Star(i) as Target)
+                    FindEntry(name, "Star · %.1f".format(stars.mag[i]), Target.Star(i))
                 }
         }
     // The back key closes the search, not the app.
@@ -634,11 +699,7 @@ private fun FindPanel(stars: StarData, onClose: () -> Unit, onPick: (Target) -> 
     val q = fold(query.trim())
     val found =
         if (q.isEmpty()) emptyList()
-        else
-            entries
-                .filter { fold(it.first).contains(q) }
-                .sortedBy { if (fold(it.first).startsWith(q)) 0 else 1 }
-                .take(20)
+        else entries.filter { q in it.key }.sortedBy { if (it.key.startsWith(q)) 0 else 1 }.take(20)
     Box(Modifier.fillMaxSize().background(Color(0xFF050916)).safeDrawingPadding().padding(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -652,14 +713,14 @@ private fun FindPanel(stars: StarData, onClose: () -> Unit, onPick: (Target) -> 
                 androidx.compose.material3.TextButton(onClick = onClose) { Text("Close") }
             }
             LazyColumn(Modifier.heightIn(max = 600.dp)) {
-                items(found) { (name, kind, target) ->
+                items(found) { entry ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { onPick(target) }
+                            .clickable { onPick(entry.target) }
                             .padding(vertical = 10.dp)
                     ) {
-                        Text(name, color = Color.White, modifier = Modifier.weight(1f))
-                        Text(kind, color = Color(0xFFB4C0D2), fontSize = 13.sp)
+                        Text(entry.name, color = Color.White, modifier = Modifier.weight(1f))
+                        Text(entry.kind, color = Color(0xFFB4C0D2), fontSize = 13.sp)
                     }
                 }
             }

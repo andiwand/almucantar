@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import at.stefl.almucantar.core.bodyPosition
 import at.stefl.almucantar.core.moonIlluminatedFraction
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -128,7 +129,8 @@ fun ShotScreen(model: Model, shot: Shot) {
             )
             add(
                 "From" to
-                    "%.5f°, %.5f°".format(shot.spot.latitudeDeg, shot.spot.longitudeDeg) +
+                    "%.5f°, %.5f°"
+                        .format(Locale.ROOT, shot.spot.latitudeDeg, shot.spot.longitudeDeg) +
                         (horizon?.let { " · ${it.groundM.roundToInt()} m" } ?: "")
             )
             shot.target?.let {
@@ -153,8 +155,8 @@ fun ShotScreen(model: Model, shot: Shot) {
         Exif(rows)
         ButtonRow {
             ShotButton("Navigate", Modifier.weight(1f), primary = true) {
-                val lat = "%.5f".format(java.util.Locale.ROOT, shot.spot.latitudeDeg)
-                val lon = "%.5f".format(java.util.Locale.ROOT, shot.spot.longitudeDeg)
+                val lat = "%.5f".format(Locale.ROOT, shot.spot.latitudeDeg)
+                val lon = "%.5f".format(Locale.ROOT, shot.spot.longitudeDeg)
                 // A geo URI opens the map app of the phone; it has the place, not more.
                 val intent = Intent(Intent.ACTION_VIEW, "geo:$lat,$lon?q=$lat,$lon".toUri())
                 try {
@@ -188,10 +190,13 @@ private fun Photo(
 ) {
     val density = LocalDensity.current.density
     val painter = remember { PhotoPainter(density) }
-    val frame =
-        remember(shot, t, focal, pan, sky) {
-            frameOf(shot, horizon, t, focal, false, zone, sky, pan)
+    // The sky changes with the time; a pan changes only the view, so a drag calculates no sky.
+    val track = remember(shot, zone) { trackOf(shot, zone) }
+    val base =
+        remember(shot, horizon, t, focal, zone, sky, track) {
+            frameOf(shot, horizon, t, focal, false, zone, sky, track = track)
         }
+    val frame = remember(base, pan) { base.withView(viewOf(shot, focal, false, pan)) }
     // The bright stars twinkle: a slow clock for the drawing, only at night.
     var now by remember { mutableLongStateOf(0L) }
     LaunchedEffect(frame.stars != null) {

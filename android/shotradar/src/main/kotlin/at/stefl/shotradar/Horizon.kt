@@ -127,11 +127,15 @@ fun findPeaks(
 
 /**
  * The grids of the app in memory, by the name of the tile and the level. A full grid of GLO-90 has
- * up to 1200 × 1200 heights (about 6 MB), so the cache keeps only a few of them.
+ * up to 1200 × 1200 heights (about 6 MB), so the cache keeps only a few of them: at most a quarter
+ * of the heap, because a phone can have a heap of 256 MB.
  */
 object Grids {
     private val cache =
-        object : LruCache<String, ElevationGrid>(160 * 1024 * 1024) {
+        object :
+            LruCache<String, ElevationGrid>(
+                min(160L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4).toInt()
+            ) {
             override fun sizeOf(key: String, value: ElevationGrid) = value.heightsM.size * 4
         }
 

@@ -31,10 +31,9 @@ import org.json.JSONObject
 
 // The first-person photo of shotradar: the sky in the light of the sun, the stars and the Milky
 // Way, the sun or a planet, the moon in its phase, the terrain in layers from far to near, the
-// label
-// of the landmark, the frame of a lens, and the marks of a viewfinder. It is a port of the photo of
-// the PWA and the website (web/shared/src/photo.ts) to the Android canvas, with the same colors.
-// The core calculates all directions; this file only draws.
+// label of the landmark, the frame of a lens, and the marks of a viewfinder. It is a port of the
+// photo of the PWA and the website (web/shared/src/photo.ts) to the Android canvas, with the same
+// colors. The core calculates all directions; this file only draws.
 
 /** The direction in the center of the photo, and the azimuth range across its width. */
 data class PhotoView(val azimuthDeg: Double, val altitudeDeg: Double, val spanDeg: Double)
@@ -76,7 +75,7 @@ class PhotoStars(val stars: Stars, val directions: DoubleArray, val limitMag: Do
 /** The Milky Way of the photo: the points, their directions, and its strength from 0 to 1. */
 class PhotoDust(val milkyWay: MilkyWay, val directions: DoubleArray, val strength: Double)
 
-class PhotoFrame(
+data class PhotoFrame(
     val view: PhotoView,
     val sun: Horizontal,
     val moon: Horizontal,
@@ -286,6 +285,17 @@ class PhotoPainter(private val density: Float) {
         }
     }
 
+    // The Milky Way adds its light to the sky.
+    private val cloudPaint =
+        Paint(Paint.FILTER_BITMAP_FLAG).apply {
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
+        }
+    private val grainPaint =
+        Paint().apply {
+            color = argb(rgb(236, 226, 246))
+            xfermode = cloudPaint.xfermode
+        }
+
     private fun dp(v: Number) = v.toFloat() * density
 
     private fun radial(
@@ -478,12 +488,9 @@ class PhotoPainter(private val density: Float) {
             val weight = dust.milkyWay.weight
             val cloudFlags = dust.milkyWay.cloud
             val size = (2.6 * p.k).toFloat()
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = null }
-            val grain = Paint().apply { color = argb(rgb(236, 226, 246)) }
+            val paint = cloudPaint
+            val grain = grainPaint
             val dst = RectF()
-            paint.xfermode =
-                android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
-            grain.xfermode = paint.xfermode
             for (i in weight.indices) {
                 val alt = dust.directions[2 * i + 1]
                 if (alt < 0) continue

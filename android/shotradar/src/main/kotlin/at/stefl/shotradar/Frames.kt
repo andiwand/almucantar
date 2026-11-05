@@ -10,11 +10,12 @@ import at.stefl.almucantar.core.moonPosition
 import at.stefl.almucantar.core.starPositions
 import at.stefl.almucantar.core.sunPosition
 import at.stefl.almucantar.shared.MilkyWay
+import at.stefl.almucantar.shared.angleBetweenDeg
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.floor
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -44,23 +45,14 @@ class Sky(val stars: Stars?, val milkyWay: MilkyWay)
 fun viewSpanDeg(focalMm: Int, thumb: Boolean, pan: Pan) =
     lensSpanDeg(focalMm) * (if (thumb) 1.0 else 1.3) / pan.zoom
 
-fun frameOf(
-    shot: Shot,
-    horizon: Horizon,
-    t: Double,
-    focalMm: Int,
-    thumb: Boolean,
-    zone: ZoneId,
-    sky: Sky?,
-    pan: Pan = Pan(),
-): PhotoFrame {
-    val at = shot.spot
-    val sun = sunPosition(t, at)
-    val moon = moonPosition(t, at)
-    val s = subjectOf(shot.subject)
-    val body = bodyPosition(s.body, t, at)
-    // The view: on the landmark, or on the subject alone at the time of the shot.
-    val center = shot.target?.direction ?: bodyPosition(s.body, shot.unixUtc, at)
+/**
+ * The view of the photo: on the landmark, or on the subject alone at the time of the shot, with a
+ * pan.
+ */
+fun viewOf(shot: Shot, focalMm: Int, thumb: Boolean, pan: Pan = Pan()): PhotoView {
+    val center =
+        shot.target?.direction
+            ?: bodyPosition(subjectOf(shot.subject).body, shot.unixUtc, shot.spot)
     val span = viewSpanDeg(focalMm, thumb, pan)
     // A subject alone: the horizon stays in the lower part of the photo, if the subject is low
     // enough for that; a high subject stays in the photo. An eclipse aims at the sun or the moon.
@@ -71,25 +63,78 @@ fun frameOf(
             // 0.15 of the width keeps a high subject inside a photo of 3:2.
             else -> max(span * 0.22, center.altitudeDeg - span * 0.15)
         }
-    val view =
-        PhotoView(
-            center.azimuthDeg + pan.azimuthDeg,
-            (altitude + pan.altitudeDeg).coerceIn(-30.0, 89.0),
-            span,
-        )
+    return PhotoView(
+        center.azimuthDeg + pan.azimuthDeg,
+        (altitude + pan.altitudeDeg).coerceIn(-30.0, 89.0),
+        span,
+    )
+}
+
+/**
+ * The same frame with another view. A pan moves the view and the frame of the lens, not the sky.
+ */
+fun PhotoFrame.withView(view: PhotoView): PhotoFrame =
+    copy(
+        view = view,
+        finder =
+            finder?.let {
+                PhotoFinder(Horizontal(view.azimuthDeg, view.altitudeDeg), it.focalMm, it.alpha)
+            },
+    )
+
+/**
+ * The full hours of the wall clock of [zone] from [startUtc] to [endUtc], in Unix seconds. A zone
+ * can have an offset of 30 or 45 minutes, so a full hour in UTC is not always a full hour there.
+ */
+fun fullHours(startUtc: Double, endUtc: Double, zone: ZoneId): List<Double> {
+    // The offsets of all time zones are whole quarter hours.
+    val step = 900L
+    val hours = mutableListOf<Double>()
+    var u = ceil(startUtc / step).toLong() * step
+    while (u <= endUtc) {
+        val offset = zone.rules.getOffset(Instant.ofEpochSecond(u)).totalSeconds
+        if ((u + offset).mod(3600L) == 0L) hours += u.toDouble()
+        u += step
+    }
+    return hours
+}
+
+/** The path of the subject of a shot, every 5 minutes, with a mark at each full hour of [zone]. */
+fun trackOf(shot: Shot, zone: ZoneId): PhotoTrack {
+    val body = subjectOf(shot.subject).body
+    val points = mutableListOf<Horizontal>()
+    var u = shot.pathStartUtc
+    while (u <= shot.pathEndUtc) {
+        points += bodyPosition(body, u, shot.spot)
+        u += 300
+    }
+    val ticks =
+        fullHours(shot.pathStartUtc, shot.pathEndUtc, zone).map {
+            bodyPosition(body, it, shot.spot) to clock(it, zone)
+        }
+    return PhotoTrack(points, ticks)
+}
+
+fun frameOf(
+    shot: Shot,
+    horizon: Horizon,
+    t: Double,
+    focalMm: Int,
+    thumb: Boolean,
+    zone: ZoneId,
+    sky: Sky?,
+    pan: Pan = Pan(),
+    track: PhotoTrack? = null,
+): PhotoFrame {
+    val at = shot.spot
+    val sun = sunPosition(t, at)
+    val moon = moonPosition(t, at)
+    val s = subjectOf(shot.subject)
+    val body = bodyPosition(s.body, t, at)
+    val view = viewOf(shot, focalMm, thumb, pan)
     val sunAlt = sunPosition(t, at, SunOptions(refraction = false)).altitudeDeg
     val limit = limitingMagnitude(sunAlt)
     val night = sunAlt < -8
-    // The path of the subject, with the full hours.
-    val points = mutableListOf<Horizontal>()
-    val ticks = mutableListOf<Pair<Horizontal, String>>()
-    var u = shot.pathStartUtc
-    while (u <= shot.pathEndUtc) {
-        val d = bodyPosition(s.body, u, at)
-        points += d
-        if (u.roundToInt().mod(3600) < 300) ticks += d to clock(floor(u / 3600) * 3600, zone)
-        u += 300
-    }
     val fraction = moonIlluminatedFraction(t)
     val eclipse = shot.eclipse
     val solar =
@@ -99,7 +144,11 @@ fun frameOf(
                 SolarDiscs(
                     local.sunRadiusDeg,
                     local.moonRadiusDeg,
-                    discCoverage(separationDeg(sun, moon), local.sunRadiusDeg, local.moonRadiusDeg),
+                    discCoverage(
+                        angleBetweenDeg(sun, moon),
+                        local.sunRadiusDeg,
+                        local.moonRadiusDeg,
+                    ),
                 )
             }
     val stars = sky?.stars
@@ -109,7 +158,7 @@ fun frameOf(
         moon = moon,
         moonFraction = fraction,
         terrain = horizon.terrain(),
-        track = PhotoTrack(points, ticks),
+        track = track ?: trackOf(shot, zone),
         body =
             if (s.body == Body.MOON || s.body == Body.GALACTIC_CENTER) null
             else PhotoBody(s.body == Body.SUN, body, s.name),
@@ -159,7 +208,7 @@ fun coveredNow(shot: Shot, t: Double): Double {
     val (e, local) = shot.eclipse ?: return 0.0
     if (!e.solar) return e.lunar?.let { lunarUmbra(it, t) } ?: 0.0
     return discCoverage(
-        separationDeg(sunPosition(t, shot.spot), moonPosition(t, shot.spot)),
+        angleBetweenDeg(sunPosition(t, shot.spot), moonPosition(t, shot.spot)),
         local.sunRadiusDeg,
         local.moonRadiusDeg,
     )
@@ -184,8 +233,10 @@ fun clock(unix: Double, zone: ZoneId): String = format("HH:mm", unix, zone)
 
 fun dateTime(unix: Double, zone: ZoneId): String = format("EEE d MMM yyyy, HH:mm", unix, zone)
 
-fun km(m: Double) = if (m < 10_000) "%.2f km".format(m / 1000) else "%.1f km".format(m / 1000)
+fun km(m: Double) =
+    if (m < 10_000) "%.2f km".format(Locale.ROOT, m / 1000)
+    else "%.1f km".format(Locale.ROOT, m / 1000)
 
-fun deg(d: Double, digits: Int = 1) = "%.${digits}f°".format(d)
+fun deg(d: Double, digits: Int = 1) = "%.${digits}f°".format(Locale.ROOT, d)
 
 fun percent(f: Double) = "${(min(1.0, max(0.0, f)) * 100).roundToInt()} %"

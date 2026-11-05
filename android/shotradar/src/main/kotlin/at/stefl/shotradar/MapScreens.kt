@@ -28,11 +28,13 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.stefl.almucantar.core.AlignmentLine
@@ -51,12 +53,14 @@ import at.stefl.almucantar.core.lineOfSight
 import at.stefl.almucantar.core.moonPosition
 import at.stefl.almucantar.core.sight
 import at.stefl.almucantar.shared.deviceLocation
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,7 +68,7 @@ import kotlinx.coroutines.withContext
 // the map of a shot, and the path of an eclipse on the map of the Earth.
 
 private const val LINE_DISTANCE_M = 30_000.0
-private val ORANGE = Color(0xF2E8955E)
+private val ORANGE = Shade.apricot.copy(alpha = 0.95f)
 
 /** The map with the search of places at the top and a card at the bottom. */
 @Composable
@@ -175,7 +179,7 @@ fun LandmarkScreen(model: Model) {
             Exif(
                 listOf(
                     "Ground" to (l.groundM?.let { "${it.roundToInt()} m" } ?: "…"),
-                    "Place" to "%.4f°, %.4f°".format(l.latitudeDeg, l.longitudeDeg),
+                    "Place" to "%.4f°, %.4f°".format(Locale.ROOT, l.latitudeDeg, l.longitudeDeg),
                 )
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,7 +247,7 @@ fun SpotScreen(model: Model, purpose: Screen.Purpose, locationGranted: Boolean) 
             Exif(
                 listOf(
                     "Ground" to (s.groundM?.let { "${it.roundToInt()} m" } ?: "…"),
-                    "Place" to "%.4f°, %.4f°".format(s.latitudeDeg, s.longitudeDeg),
+                    "Place" to "%.4f°, %.4f°".format(Locale.ROOT, s.latitudeDeg, s.longitudeDeg),
                 )
             )
         ButtonRow {
@@ -411,7 +415,7 @@ fun SpotsScreen(model: Model, moment: Double) {
             { shift = it },
             valueRange = -120f..120f,
             steps = 119,
-            onValueChangeFinished = { t = moment + (shift.roundToInt() / 2 * 2) * 60.0 },
+            onValueChangeFinished = { t = moment + shift.roundToInt() * 60.0 },
             colors = sliderColors(),
         )
         Exif(
@@ -464,6 +468,8 @@ fun ShotMapScreen(model: Model, shot: Shot) {
     val body = remember(shot) { bodyPosition(s.body, shot.unixUtc, shot.spot) }
     LaunchedEffect(Unit) {
         val target = shot.target
+        // The fit needs the size of the map, so it waits for the first layout.
+        snapshotFlow { model.map.size }.first { it != IntSize.Zero }
         if (target != null) model.map.fit(shot.spot, target.place)
         else model.map.center(shot.spot, 12.0)
     }
@@ -580,6 +586,8 @@ fun EclipseScreen(model: Model, e: Eclipse) {
     val zone = model.zoneAt(at)
     val local by
         produceState<LocalEclipse?>(null, at) {
+            // A new place must not show the eclipse of the last place.
+            value = null
             value = at?.let { withContext(Dispatchers.Default) { localEclipse(e, it) } }
         }
     val horizon = rememberHorizon(model, if (local?.visible == true) at else null)

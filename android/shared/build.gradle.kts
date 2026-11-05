@@ -1,6 +1,6 @@
 // The code that the apps share: the place and the offline base map, the maps, the terrain and its
-// cache, the camera, the heading tracker, the moon phase, and the sun detector. An app depends on
-// it with implementation(project(":shared")).
+// cache, the camera, the heading tracker, the moon phase, the sun detector, the time panel, and the
+// Milky Way. An app depends on it with implementation(project(":shared")).
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)

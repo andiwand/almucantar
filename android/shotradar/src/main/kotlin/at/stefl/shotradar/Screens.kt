@@ -2,6 +2,7 @@ package at.stefl.shotradar
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -50,8 +50,10 @@ import at.stefl.almucantar.core.sight
 import at.stefl.almucantar.shared.wallClockTime
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -231,8 +233,11 @@ fun SubjectScreen(model: Model) {
                     val active = s.id == model.subject
                     Box(Modifier.weight(1f)) {
                         Print(
+                            // An apricot frame marks the subject, as in the PWA. It draws over the
+                            // background of the card.
                             Modifier.fillMaxWidth().let {
-                                if (active) it.background(Shade.ink.copy(alpha = 0.06f)) else it
+                                if (active) it.border(2.dp, Shade.apricot, RoundedCornerShape(2.dp))
+                                else it
                             },
                             onClick = {
                                 model.subject = s.id
@@ -315,7 +320,17 @@ fun HorizonStatus(model: Model, at: Observer, what: String) {
 fun rememberHorizon(model: Model, at: Observer?): Horizon? {
     val horizon by
         produceState<Horizon?>(null, at) {
-            value = at?.let { runCatching { model.horizon(it) }.getOrNull() }
+            // A new place must not show the horizon of the last place.
+            value = null
+            if (at == null) return@produceState
+            value =
+                try {
+                    model.horizon(at)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
         }
     return horizon
 }
@@ -481,7 +496,7 @@ private fun CustomMoment(zone: ZoneId, onPick: (Double) -> Unit) {
             ) {
                 Chip("−", false) { minutes = (minutes - 15 + 1440) % 1440 }
                 Text(
-                    "%02d:%02d".format(minutes / 60, minutes % 60),
+                    "%02d:%02d".format(Locale.ROOT, minutes / 60, minutes % 60),
                     Modifier.weight(1f),
                     fontFamily = Mono,
                     fontSize = 14.sp,
@@ -563,7 +578,7 @@ fun PlaceScreen(model: Model) {
     val at = spot.observer
     val zone = model.zoneAt(at)
     val start =
-        remember(model.fromDay) {
+        remember(model.fromDay, zone) {
             // From noon of the first day, so its night counts.
             model.fromDay?.let { wallClockTime(it, 12 * 60, zone) }
                 ?: (System.currentTimeMillis() / 1000.0)
@@ -673,7 +688,7 @@ fun ContactSheet(
                         padding = 6.dp,
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Thumbnail(shot, horizon, zone)
+                            Thumbnail(shot, horizon, zone, model.sky)
                             Caption(shot, zone)
                         }
                     }
@@ -688,27 +703,32 @@ fun ContactSheet(
 }
 
 @Composable
-private fun Thumbnail(shot: Shot, horizon: Horizon, zone: ZoneId) {
+private fun Thumbnail(shot: Shot, horizon: Horizon, zone: ZoneId, sky: Sky?) {
     val density = LocalDensity.current.density
     val painter = remember { PhotoPainter(density) }
-    val frame =
-        remember(shot) {
-            frameOf(
-                shot,
-                horizon,
-                shot.unixUtc,
-                if (shot.target != null) 200 else 35,
-                true,
-                zone,
-                null,
-            )
+    // A sheet has many photos, so their frames are calculated in the background.
+    val frame by
+        produceState<PhotoFrame?>(null, shot, horizon, zone, sky) {
+            value =
+                withContext(Dispatchers.Default) {
+                    frameOf(
+                        shot,
+                        horizon,
+                        shot.unixUtc,
+                        if (shot.target != null) 200 else 35,
+                        true,
+                        zone,
+                        sky,
+                    )
+                }
         }
-    Canvas(Modifier.fillMaxWidth().aspectRatio(1.5f)) {
+    Canvas(Modifier.fillMaxWidth().aspectRatio(1.5f).background(Shade.night)) {
+        val f = frame ?: return@Canvas
         drawIntoCanvas { c ->
             val r = android.graphics.RectF(0f, 0f, size.width, size.height)
             c.nativeCanvas.save()
             c.nativeCanvas.clipRect(r)
-            painter.draw(c.nativeCanvas, r, frame)
+            painter.draw(c.nativeCanvas, r, f)
             c.nativeCanvas.restore()
         }
     }
@@ -769,6 +789,7 @@ fun EclipsesScreen(model: Model) {
     val locals by
         produceState<Map<Eclipse, LocalEclipse?>>(emptyMap(), events, at) {
             val list = events ?: return@produceState
+            value = emptyMap()
             value =
                 if (at == null) emptyMap()
                 else
@@ -853,5 +874,3 @@ fun overTerrain(horizon: Horizon, subject: SubjectId, t: Double): Boolean {
     val ground = profileAltitude(horizon.skyline, d.azimuthDeg)
     return d.altitudeDeg > (if (ground.isFinite()) ground else 0.0)
 }
-
-@Composable fun Spacing() = Spacer(Modifier.height(4.dp))

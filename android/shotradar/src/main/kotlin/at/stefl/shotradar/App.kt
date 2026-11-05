@@ -43,11 +43,13 @@ import at.stefl.almucantar.shared.BaseMapStore
 import at.stefl.almucantar.shared.MilkyWay
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -200,7 +202,7 @@ class Model(context: Context) {
 
     fun nameNear(at: Observer): String = baseMap?.nearest(at)?.name ?: ""
 
-    private fun key(at: Observer) = "%.5f,%.5f".format(at.latitudeDeg, at.longitudeDeg)
+    private fun key(at: Observer) = "%.5f,%.5f".format(Locale.ROOT, at.latitudeDeg, at.longitudeDeg)
 
     /** The horizon of a place, calculated once. [progress] shows the bands that are ready. */
     suspend fun horizon(at: Observer): Horizon {
@@ -210,7 +212,7 @@ class Model(context: Context) {
                 horizons.getOrPut(k) {
                     scope.async {
                         computeHorizon(app, at) { done, _ ->
-                            scope.async(Dispatchers.Main) { progress[k] = done }
+                            scope.launch(Dispatchers.Main) { progress[k] = done }
                         }
                     }
                 }
@@ -218,7 +220,8 @@ class Model(context: Context) {
         return try {
             job.await()
         } catch (e: Exception) {
-            synchronized(horizons) { horizons.remove(k) }
+            // A failed job goes, so the next call tries again. A cancelled caller keeps the job.
+            if (job.isCompleted) synchronized(horizons) { horizons.remove(k, job) }
             throw e
         }
     }
@@ -394,7 +397,7 @@ private fun Trail(flow: Flow, at: Int) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "%02d".format(i + 1),
+                    "%02d".format(Locale.ROOT, i + 1),
                     color = Shade.cream.copy(alpha = if (active || done) 0.95f else 0.45f),
                     fontFamily = Mono,
                     fontSize = 10.sp,

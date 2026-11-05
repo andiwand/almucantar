@@ -19,8 +19,8 @@ before.
 
 ## Layout
 
-`.../` is `shared/src/main/kotlin/at/stefl/almucantar/shared/` in the first table and `sunradar/src/main/kotlin/at/stefl/sunradar/` in the
-second.
+In each table, `.../` is the Kotlin package directory of the module, for example
+`shared/src/main/kotlin/at/stefl/almucantar/shared/`.
 
 ### `shared/`
 
@@ -35,7 +35,7 @@ second.
 | `.../SunDetector.kt` | Finds saturated regions in the Y plane of a camera frame. Pure Kotlin, tested in `shared/src/test/`. `CameraPreview.kt` runs it in an `ImageAnalysis` and maps the regions to the view with sensorToView * (sensorToBuffer)^-1. |
 | `.../Location.kt` | The place: the device location (coarse), a place that the user dropped (manual), the last place (`PlaceStore`, in the shared preferences), else the city of the time zone, else Vienna. The town name comes from the geocoder of the device. `deviceLocation()` gives one location of the device, for an app with its own place (shotradar). |
 | `.../TimeZonePlaces.kt` | Reads `assets/tzdata/zone.tab` (IANA, public domain). |
-| `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. |
+| `.../CameraPreview.kt` | The CameraX preview. It switches the distortion correction off, reads the Camera2 calibration, and gives the camera model after each change of the sensor-to-view transform. `tintable = true` draws the preview inside the view, so a tint over it (the red light of starradar) also tints the image. |
 | `.../CameraCalibration.kt` | Converts the Camera2 calibration and `PreviewView.getSensorToViewTransform()` to a `Camera` in view pixels. Pure Kotlin, tested in `shared/src/test/`. |
 | `.../MoonPhase.kt` | The lit part of the moon: the direction toward the sun and the outline of the phase. Tested in `shared/src/test/`. |
 | `.../ElevationSource.kt` | The source of the elevation tiles: `ElevationSource` (name, attribution, `isSurfaceModel`, the coarse level, the full level, the distance of the full tiles, the tile URL, the size of the coarse part, and the reader), `Copernicus` (the only implementation), and `TERRAIN_SOURCE` (the source of the app). `horizonOptions(source)` gives the options of the profile: a surface model ignores the terrain nearer than `NEAR_CLEARANCE_M` (2 km), because buildings and forests give a false wall in a city. The coarse check, the profile, and "Keep offline" use these options. The names are those of `web/shared/src/terrain.ts`. A new source (for example a bare-earth model) changes only this file, and it needs a new directory of the cache. |
@@ -45,12 +45,12 @@ second.
 | `.../Terrain.kt` | The terrain horizon: `rememberTerrain` loads the tiles with a `TerrainLoader` (the coarse profile first, at level 2; then level 0 nearer than 25 km if the terrain matters) and calculates the profile with `horizonOptions(TERRAIN_SOURCE)` in the background, again after a move of 500 m or a new tile. `TerrainLines` (the line and the fill) is the data of the drawing. `TerrainDay` of the app adds the sun. A device location, a manual place, and the last place get a terrain. The city of the time zone, Vienna, and the demo mode get none. `TerrainStore.cache()` (the cache of the tiles, one for the process) is public, so shotradar reads its own bands from the same cache. |
 | `.../MilkyWay.kt` | The points of the Milky Way in the galactic system, the same picture as `web/shared/src/milkyway.ts`. starradar and shotradar use it. Tested in `shared/src/test/`. |
 | `.../PlaceTime.kt` | The local time of a place: `wallClockTime`, `localDate`, and `dayBounds`. |
+| `.../TimePanel.kt` | The date and time sliders of the apps. |
+| `.../DeviceState.kt` | The rotation of the display and the time zone of the device, as Compose state. |
 | `.../UserAgent.kt` | The User-Agent of the HTTP requests. Each app calls `UserAgent.init()` at the start, because the tile policy of OpenStreetMap asks that it names the app. |
 | `shared/src/main/AndroidManifest.xml` | The permissions of the shared code (location, network, camera). The manifest merger gives them to each app. |
 | `shared/src/main/assets/tzdata/` | The IANA `zone.tab`. |
 | `shared/src/test/` | JVM unit tests of the shared code. |
-
-| `.../TimePanel.kt` | The date and time sliders of the apps. |
 
 ### `starradar/`
 
@@ -85,6 +85,8 @@ second.
 
 ### `sunradar/`
 
+`.../` is `sunradar/src/main/kotlin/at/stefl/sunradar/`.
+
 | Path | What |
 |---|---|
 | `.../MainActivity.kt` | The activity and the location permission. |
@@ -92,12 +94,12 @@ second.
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
 | `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
+| `.../TerrainDay.kt` | The sun path behind the terrain on one day, and the visible sunrise and sunset. |
 | `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sunradar/site/src/sky.ts`. |
 | `sunradar/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sunradar.screenshot`. The release build has a no-op version in `sunradar/src/release/`. |
 | `sunradar/src/test/` | JVM unit tests. |
 | `sunradar/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
-| `fastlane/` | The lanes `screenshots` and `upload_listing`. |
-| `.../TerrainDay.kt` | The sun path behind the terrain on one day, and the visible sunrise and sunset. |
+| `fastlane/` | The lanes `screenshots` and `upload_listing` (of sunradar only). |
 
 ## The place
 
@@ -136,7 +138,7 @@ with Conan, unless `ALMUCANTAR_ABIS` is empty.
 - Install on an emulator with `ANDROID_SERIAL=emulator-5554`, not on a connected phone,
   unless the user asks for it.
 - Kotlin is formatted with ktfmt in the kotlinlang style (`./gradlew spotlessApply`).
-- A change that a user notices gets an entry in `CHANGELOG.md`.
+- A change that a user notices gets an entry in the `CHANGELOG.md` of the app module.
 
 ## Screenshots
 

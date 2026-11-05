@@ -2,9 +2,9 @@ package at.stefl.shotradar
 
 import at.stefl.almucantar.core.EclipseKind
 import at.stefl.almucantar.core.HorizonProfile
-import at.stefl.almucantar.core.Horizontal
 import at.stefl.almucantar.core.LunarEclipse
 import at.stefl.almucantar.core.Observer
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,6 +64,11 @@ class SearchTest {
         assertEquals(0.25 * 0.25 / (0.27 * 0.27), discCoverage(0.0, 0.27, 0.25), 1e-12)
         // Two equal discs with the centers one radius apart cover 39.1 % of each other.
         assertEquals(0.391, discCoverage(0.27, 0.27, 0.27), 0.001)
+        // Near the touching distances the result stays a number from 0 to 1.
+        for (d in listOf(0.27 + 0.28 - 1e-15, 0.01 - 1e-15, 0.01 + 1e-15, 0.54 - 1e-16)) {
+            val c = discCoverage(d, 0.27, 0.28)
+            assertTrue("$d gives $c", c in 0.0..1.0)
+        }
     }
 
     @Test
@@ -81,6 +86,24 @@ class SearchTest {
     }
 
     @Test
+    fun fullHoursFollowTheWallClock() {
+        // 2026-01-01 00:00 UTC is 05:30 in Kolkata: its full hours are at 30 minutes past in UTC.
+        val start = 1_767_225_600.0
+        val kolkata = fullHours(start, start + 3 * 3600, ZoneId.of("Asia/Kolkata"))
+        assertEquals(listOf(start + 1800, start + 5400, start + 9000), kolkata)
+        val vienna = fullHours(start, start + 2 * 3600, ZoneId.of("Europe/Vienna"))
+        assertEquals(listOf(start, start + 3600, start + 7200), vienna)
+    }
+
+    @Test
+    fun fitCrossesTheDateLine() {
+        val map = MapState(0.0, 0.0, 2.0)
+        map.fit(Observer(-10.0, 179.0), Observer(10.0, -179.0))
+        assertEquals(180.0, kotlin.math.abs(map.longitudeDeg), 1e-9)
+        assertEquals(0.0, map.latitudeDeg, 1e-9)
+    }
+
+    @Test
     fun destinationAndCompass() {
         val vienna = Observer(48.2082, 16.3738)
         val north = destination(vienna, 0.0, 111_195.0)
@@ -90,6 +113,5 @@ class SearchTest {
         assertEquals(-179.0, destination(Observer(0.0, 179.5), 90.0, 166_793.0).longitudeDeg, 0.01)
         assertEquals("ENE", compass(67.5))
         assertEquals("N", compass(359.0))
-        assertEquals(30.0, separationDeg(Horizontal(0.0, 0.0), Horizontal(30.0, 0.0)), 1e-9)
     }
 }

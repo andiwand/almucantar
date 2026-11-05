@@ -24,6 +24,8 @@ import at.stefl.almucantar.core.sight
 import at.stefl.almucantar.core.solarEclipses
 import at.stefl.almucantar.core.sunPosition
 import at.stefl.almucantar.core.terrainEvents
+import at.stefl.almucantar.shared.angleBetweenDeg
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.asin
@@ -275,6 +277,12 @@ fun momentsFor(subject: SubjectId, at: Observer, startUtc: Double, count: Int = 
         if (now != before) {
             // About 3° over the horizon: 20 to 30 minutes after the rise or before the set.
             val time = if (now) t + 1500 else t - 1500
+            // A set just after the start gives a moment in the past.
+            if (time < startUtc) {
+                before = now
+                t += step
+                continue
+            }
             val fraction = if (s.body == Body.MOON) moonIlluminatedFraction(time) else null
             val dark = s.maxSunDeg == null || light(time, at).sunDeg <= s.maxSunDeg
             if ((fraction == null || fraction > 0.8) && dark) moments += Moment(time, now, fraction)
@@ -451,10 +459,10 @@ fun noMatchReason(
         t += 3 * 3600
     }
     val name = s.name.lowercase()
-    val range = "%.1f° to %.1f°".format(low, high)
+    val range = "%.1f° to %.1f°".format(Locale.ROOT, low, high)
     if (dec < low - s.maxSeparationDeg || dec > high + s.maxSeparationDeg) {
         return "The $name never comes to this direction in the next 12 months: the landmark is at " +
-            "the declination %.1f°, and the $name stays between $range. ".format(dec) +
+            "the declination %.1f°, and the $name stays between $range. ".format(Locale.ROOT, dec) +
             "Look from another side of the landmark, or from higher up."
     }
     if (subject == SubjectId.MILKY_WAY) {
@@ -498,15 +506,6 @@ fun upcomingEclipses(startUtc: Double): List<Eclipse> {
     return (solar + lunar).sortedBy { it.peakUtc }
 }
 
-/** The angle between two directions, with the haversine formula. */
-fun separationDeg(a: Horizontal, b: Horizontal): Double {
-    val h1 = Math.toRadians(a.altitudeDeg)
-    val h2 = Math.toRadians(b.altitudeDeg)
-    val dz = Math.toRadians(b.azimuthDeg - a.azimuthDeg)
-    val s = sin((h2 - h1) / 2).let { it * it } + cos(h1) * cos(h2) * sin(dz / 2).let { it * it }
-    return Math.toDegrees(2 * asin(min(1.0, sqrt(s))))
-}
-
 /** What a place sees of an eclipse, or null if it sees no part of a solar eclipse. */
 fun localEclipse(e: Eclipse, at: Observer): LocalEclipse? {
     if (e.solar) {
@@ -529,7 +528,7 @@ fun localEclipse(e: Eclipse, at: Observer): LocalEclipse? {
         // The radii from the contacts: at the first contact the discs touch outside (the sum of
         // the radii), at the second inside (the difference).
         fun gap(t: Double) =
-            separationDeg(sunPosition(t, at, airless), moonPosition(t, at, airlessMoon))
+            angleBetweenDeg(sunPosition(t, at, airless), moonPosition(t, at, airlessMoon))
         val outside = gap(local.partialBeginUtc)
         var sunRadius = 0.2666
         var moonRadius = outside - sunRadius
@@ -600,10 +599,11 @@ fun discCoverage(separationDeg: Double, sunRadiusDeg: Double, moonRadiusDeg: Dou
     val m = moonRadiusDeg
     if (d >= r + m) return 0.0
     if (d <= abs(m - r)) return if (m >= r) 1.0 else m * m / (r * r)
-    val a = r * r * kotlin.math.acos((d * d + r * r - m * m) / (2 * d * r))
-    val b = m * m * kotlin.math.acos((d * d + m * m - r * r) / (2 * d * m))
-    val c = 0.5 * sqrt((-d + r + m) * (d + r - m) * (d - r + m) * (d + r + m))
-    return (a + b - c) / (PI * r * r)
+    // Near the touching distances, the rounding can put the arguments a little out of [-1, 1].
+    val a = r * r * kotlin.math.acos(((d * d + r * r - m * m) / (2 * d * r)).coerceIn(-1.0, 1.0))
+    val b = m * m * kotlin.math.acos(((d * d + m * m - r * r) / (2 * d * m)).coerceIn(-1.0, 1.0))
+    val c = 0.5 * sqrt(max(0.0, (-d + r + m) * (d + r - m) * (d - r + m) * (d + r + m)))
+    return ((a + b - c) / (PI * r * r)).coerceIn(0.0, 1.0)
 }
 
 /** The point at [distanceM] from [from] in the direction [azimuthDeg], on the sphere. */

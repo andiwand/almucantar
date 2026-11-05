@@ -42,6 +42,10 @@ private const val TAG = "AlmucantarCamera"
  * The preview asks for `DISTORTION_CORRECTION_MODE_OFF`, so the image has the distortion that
  * `LENS_DISTORTION` describes. If the device cannot switch the correction off, the model has no
  * distortion.
+ *
+ * With [tintable], the preview draws into the view (a TextureView), so a draw modifier of a parent
+ * can tint it, for example a red light. Else the preview uses a SurfaceView, which is faster but
+ * lies below the window, and a tint does not reach it.
  */
 @OptIn(ExperimentalCamera2Interop::class)
 @Composable
@@ -50,12 +54,16 @@ fun CameraPreview(
     displayRotation: Int,
     detectSun: Boolean,
     onBlobs: (List<ViewBlob>) -> Unit,
+    tintable: Boolean = false,
     onCamera: (ViewCamera?) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            if (tintable) implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
     }
     // The use cases, so a rotation can update them without a rebind. The activity is not recreated
     // on a rotation (configChanges), so nobody else sets the new target rotation.

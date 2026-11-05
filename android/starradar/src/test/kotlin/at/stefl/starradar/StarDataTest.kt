@@ -21,12 +21,14 @@ class StarDataTest {
                 stars.catalog.pmRaArcsecPerYear.size,
                 stars.catalog.pmDecArcsecPerYear.size,
                 stars.bv.size,
+                stars.hr.size,
             )) {
             assertEquals(n, column)
         }
         // Sorted by magnitude: Sirius first.
         assertEquals("Sirius", stars.names[0])
         assertEquals(0, stars.indexOf("Sirius"))
+        assertEquals(2491, stars.hr[0])
         assertTrue(stars.mag[0] < stars.mag[1])
         assertEquals(89, stars.constellations.size)
         for (c in stars.constellations) for (line in c.lines) for (i in line) assertTrue(i < n)

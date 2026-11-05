@@ -13,7 +13,11 @@ The changes in the Android app starradar that a user notices. Each release has t
   object shows its rise and set over the terrain.
 - Tap a star, a planet, the moon, or a constellation for its name, brightness, height, and rise
   and set. "Find" searches the stars, the planets, and the constellations, and an arrow at the
-  border of the screen leads to the object.
-- "Align": tap a bright star, a planet, or the moon to correct the heading of the compass.
+  border of the screen leads to the object. The end of a pinch does not select an object.
+- "Align": tap a bright star, a planet, or the moon in the camera image to correct the heading of
+  the compass. "Align" switches the camera on, because the alignment compares the drawn object
+  with the real one, and it sets the time back to now.
+- A star without a proper name shows its number in the Bright Star Catalogue, for example
+  "HR 4731".
 - The time panel, the place panel with the offline map and "Keep offline", and a red light that
   keeps the eyes adapted to the dark.

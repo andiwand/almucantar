@@ -7,12 +7,14 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -23,6 +25,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -44,11 +48,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 // The map of shotradar: OpenStreetMap tiles (they show the names and the heights of the peaks),
-// with
-// a continuous zoom, and the marks of the app: the landmark, the spot, lines (the line of the
-// spots,
-// the direction of a subject, the path of the shadow of an eclipse), and dots (the spots). A drag
-// moves the map, a pinch zooms it, and a tap gives the place.
+// with a continuous zoom, and the marks of the app: the landmark, the spot, lines (the line of the
+// spots, the direction of a subject, the path of the shadow of an eclipse), and dots (the spots).
+// A drag moves the map, a pinch zooms it, and a tap gives the place.
 
 /** A line of the map. [widthM] gives a band of that width on the ground instead of [widthDp]. */
 class MapLine(
@@ -124,11 +126,12 @@ class MapState(latitudeDeg: Double, longitudeDeg: Double, zoom: Double) {
         zoom = newZoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
     }
 
-    /** Shows both places, with a margin. */
+    /** Shows both places, with a margin. Across the date line if that is shorter. */
     fun fit(a: Observer, b: Observer) {
+        val dLon = ((b.longitudeDeg - a.longitudeDeg) % 360 + 540) % 360 - 180
         latitudeDeg = (a.latitudeDeg + b.latitudeDeg) / 2
-        longitudeDeg = (a.longitudeDeg + b.longitudeDeg) / 2
-        val dx = abs(worldX(a.longitudeDeg, 0) - worldX(b.longitudeDeg, 0))
+        longitudeDeg = ((a.longitudeDeg + dLon / 2) % 360 + 540) % 360 - 180
+        val dx = abs(dLon) / 360 * TILE_SIZE
         val dy = abs(worldY(a.latitudeDeg, 0) - worldY(b.latitudeDeg, 0))
         val room = max(1, min(size.width, size.height)) * 0.6
         val z = ln(room / density / max(max(dx, dy), 1e-6)) / ln(2.0)
@@ -163,24 +166,27 @@ fun ShotMap(
     onTap: (Observer, Offset) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
+    // The tap handler changes with each composition; the gesture reads the newest one.
+    val tap by rememberUpdatedState(onTap)
+    val density = LocalDensity.current.density
+    SideEffect { state.density = density }
     Box(modifier.fillMaxSize().background(Color(0xFFE9E4DA))) {
         Canvas(
             Modifier.fillMaxSize()
+                .onSizeChanged { state.size = it }
                 .pointerInput(state) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         state.pan(pan)
                         if (zoom != 1f) state.zoomBy(zoom)
                     }
                 }
-                .pointerInput(state, onTap) {
+                .pointerInput(state) {
                     detectTapGestures(
                         onDoubleTap = { state.zoomBy(2f) },
-                        onTap = { onTap(state.place(it), it) },
+                        onTap = { tap(state.place(it), it) },
                     )
                 }
         ) {
-            state.size = IntSize(size.width.toInt(), size.height.toInt())
-            state.density = density
             state.version.let {} // read the state, so a loaded tile draws the map again
             drawTiles(state) { z, x, y, key ->
                 scope.launch {

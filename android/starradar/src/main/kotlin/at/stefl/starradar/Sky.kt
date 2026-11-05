@@ -17,7 +17,6 @@ import at.stefl.almucantar.core.planetMagnitude
 import at.stefl.almucantar.core.planetPosition
 import at.stefl.almucantar.core.starPositions
 import at.stefl.almucantar.core.sunPosition
-import at.stefl.almucantar.core.terrainAltitudeDeg
 import at.stefl.almucantar.shared.MilkyWay
 import at.stefl.almucantar.shared.MoonAt
 
@@ -112,7 +111,7 @@ sealed interface Target {
 
 fun Target.name(data: StarData): String =
     when (this) {
-        is Target.Star -> data.names[index] ?: "Star"
+        is Target.Star -> data.names[index] ?: "HR ${data.hr[index]}"
         is Target.PlanetTarget -> PLANETS.first { it.first == planet }.second.first
         Target.Moon -> "Moon"
         Target.Sun -> "Sun"
@@ -168,9 +167,20 @@ fun Target.directionAt(data: StarData, unixUtc: Double, observer: Observer): Hor
 /** The next rise and set in 24 hours; [always] is true (up), false (down), or null (both). */
 data class RiseSet(val rise: Double?, val set: Double?, val always: Boolean?)
 
-/** The altitude of the visible horizon in a direction: the terrain, or 0°. */
-fun horizonAt(profile: HorizonProfile?, azimuthDeg: Double): Double =
-    profile?.let { terrainAltitudeDeg(it, azimuthDeg).takeUnless { a -> a.isNaN() } } ?: 0.0
+/**
+ * The altitude of the visible horizon in a direction: the terrain, or 0° without data. It has the
+ * interpolation of `terrainAltitudeDeg` of the core in Kotlin, because each native call copies the
+ * whole profile, and the screen asks for each star in each frame.
+ */
+fun horizonAt(profile: HorizonProfile?, azimuthDeg: Double): Double {
+    val altitude = profile?.altitudeDeg ?: return 0.0
+    val n = altitude.size
+    val position = ((azimuthDeg % 360 + 360) % 360) / profile.azimuthStepDeg
+    val i = minOf(position.toInt(), n - 1)
+    val a = altitude[i]
+    val h = a + (position - i) * (altitude[(i + 1) % n] - a)
+    return if (h.isNaN()) 0.0 else h
+}
 
 /**
  * The next rise and set of a target in the 24 hours after [unixUtc], over the terrain if there is a
