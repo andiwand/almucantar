@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 // the skyline and its peaks, the ground at a place, the summit near a tap, and the grids for the
 // line of spots and the line of sight. The grids come from the shared cache of Copernicus GLO-90
 // tiles: the full level near the spot, the coarse level far away. The PWA has the same bands
-// (web/shotradar/app/src/horizon.ts).
+// (web/alidade/app/src/horizon.ts).
 
 /** The bands of the terrain, from near to far: the minimum and the maximum distance in meters. */
 val BANDS = listOf(250.0 to 2_500.0, 2_500.0 to 9_000.0, 9_000.0 to 30_000.0, 30_000.0 to 90_000.0)

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Alidade</title>
+  <defs>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1f3d"/>
+      <stop offset="0.55" stop-color="#8a4a55"/>
+      <stop offset="1" stop-color="#e8955e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3d6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fff3d6" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="frame">
+      <rect width="512" height="512" rx="112"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="512" height="512" fill="url(#dusk)"/>
+    <!-- the full moon, rising exactly behind the summit -->
+    <circle cx="256" cy="232" r="96" fill="url(#glow)"/>
+    <circle cx="256" cy="232" r="52" fill="#fff3d6"/>
+    <!-- the mountain: a far ridge and the peak in front of it -->
+    <path d="M0 360 L96 318 L168 340 L232 300 L300 334 L380 306 L512 350 V512 H0 Z" fill="#5a3346" opacity="0.8"/>
+    <path d="M40 512 L176 352 L222 372 L256 276 L292 350 L330 330 L470 512 Z" fill="#1d1426"/>
+  </g>
+  <!-- the corners of a viewfinder -->
+  <path d="M92 132 V96 H128 M384 96 H420 V132 M420 380 V416 H384 M128 416 H92 V380" fill="none" stroke="#fff3d6" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

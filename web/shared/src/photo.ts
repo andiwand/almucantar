@@ -1,7 +1,7 @@
-// The first-person photo of shotradar: the sky in the light of the sun, the stars and the Milky
+// The first-person photo of alidade: the sky in the light of the sun, the stars and the Milky
 // Way, the sun or a planet, the moon in its phase, the terrain in layers from far to near, the label
 // of the landmark, the frame of a lens, and the marks of a viewfinder. The website and the PWA of
-// shotradar draw the same photo. The core calculates all directions; this module only draws.
+// alidade draw the same photo. The core calculates all directions; this module only draws.
 
 import type { Horizontal } from "@almucantar/core";
 import type { MilkyWayDust } from "./milkyway";
@@ -99,7 +99,7 @@ const wrap180 = (deg: number) => (((deg % 360) + 540) % 360) - 180;
 const DEG = Math.PI / 180;
 export const MONO = 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace';
 
-// The colors of the logo of shotradar: dusk violet, rose, and cream.
+// The colors of the logo of alidade: dusk violet, rose, and cream.
 const INK: Rgb = [42, 31, 61];
 const ROSE: Rgb = [138, 74, 85];
 const CREAM: Rgb = [255, 243, 214];

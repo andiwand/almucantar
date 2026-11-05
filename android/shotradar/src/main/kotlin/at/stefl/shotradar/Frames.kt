@@ -21,7 +21,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 // The frame of the photo of a shot at a time, with a lens and a pan, and the formats of the
-// numbers. The PWA builds the same frame (frameOf in web/shotradar/app/src/main.ts).
+// numbers. The PWA builds the same frame (frameOf in web/alidade/app/src/main.ts).
 
 val LENSES = listOf(24, 50, 135, 300, 600)
 

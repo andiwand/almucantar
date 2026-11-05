@@ -7,7 +7,7 @@ One Gradle project for all Android apps of the repository (PLAN.md 14). The modu
 | `shared/` | An Android library with the code that the apps share: the place and the offline base map, the maps, the terrain and its cache, the camera, the heading tracker, the moon phase, the sun detector, and the drawing helpers. Package `at.stefl.almucantar.shared`. |
 | `sunradar/` | The app sunradar (`at.stefl.sunradar`): the sky view, the settings, and the demo mode. |
 | `starradar/` | The app starradar (`at.stefl.starradar`, PLAN.md 14.2): the stars, the constellations, the planets, the moon, and the Milky Way over the terrain. |
-| `shotradar/` | The app shotradar (`at.stefl.shotradar`, PLAN.md 14.1), the photo planner: the shot in first person from a spot, behind a landmark, from a place, or of an eclipse. The PWA `web/shotradar/app/` is the reference. |
+| `shotradar/` | The app shotradar (`at.stefl.shotradar`, PLAN.md 14.1), the photo planner: the shot in first person from a spot, behind a landmark, from a place, or of an eclipse. The PWA `web/alidade/app/` is the reference. |
 
 The modules use the AAR `at.stefl.almucantar:core-android` from source: `settings.gradle.kts`
 includes `../core/android` as a composite build. The apps contain no C++ and no JNI code. Read
@@ -67,7 +67,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 ### `shotradar/`
 
 `.../` is `shotradar/src/main/kotlin/at/stefl/shotradar/`. The screens follow the PWA
-(`web/shotradar/app/src/main.ts`), and the rules of the search are the same as in its `search.ts`.
+(`web/alidade/app/src/main.ts`), and the rules of the search are the same as in its `search.ts`.
 
 | Path | What |
 |---|---|
@@ -95,7 +95,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
 | `.../TerrainDay.kt` | The sun path behind the terrain on one day, and the visible sunrise and sunset. |
-| `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sunradar/site/src/sky.ts`. |
+| `.../DemoSky.kt` | The drawn sky of the demo mode, in place of the camera image: the sky of `web/sonnseite/site/src/sky.ts`. |
 | `sunradar/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sunradar.screenshot`. The release build has a no-op version in `sunradar/src/release/`. |
 | `sunradar/src/test/` | JVM unit tests. |
 | `sunradar/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |

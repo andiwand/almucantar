@@ -492,7 +492,7 @@ export class Terrain {
 }
 
 /** The Cache API store of the tiles. The name does not start with the prefix of the app cache. */
-export function cacheStorageStore(name = "sunradar-terrain-v1"): BlobStore {
+export function cacheStorageStore(name = "sonnseite-terrain-v1"): BlobStore {
   const open = () => caches.open(name);
   return {
     async get(url) {
@@ -511,10 +511,10 @@ export function cacheStorageStore(name = "sunradar-terrain-v1"): BlobStore {
 /**
  * The index of the tile cache in localStorage. The apps of one site share localStorage, so each
  * app has its own prefix, the same as the name of its Cache Storage (cacheStorageStore). The
- * default is the prefix of sunradar, which had no parameter before.
+ * default is the prefix of sonnseite, which had no parameter before.
  */
 export function localStorageIndex(
-  prefix = "sunradar-terrain",
+  prefix = "sonnseite-terrain",
 ): Pick<TileCacheDeps, "loadIndex" | "saveIndex" | "loadKept" | "saveKept"> {
   const INDEX_KEY = `${prefix}-index-v1`;
   const KEPT_KEY = `${prefix}-kept-v1`;

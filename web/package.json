@@ -6,12 +6,12 @@
   "workspaces": [
     "shared",
     "home",
-    "sunradar/app",
-    "sunradar/site",
-    "starradar/app",
-    "starradar/site",
-    "shotradar/app",
-    "shotradar/site"
+    "sonnseite/app",
+    "sonnseite/site",
+    "sternstunde/app",
+    "sternstunde/site",
+    "alidade/app",
+    "alidade/site"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",

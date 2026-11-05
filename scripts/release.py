@@ -70,18 +70,18 @@ PROJECTS = {
             )
         ],
     },
-    "sunradar-pwa": {
+    "sonnseite-pwa": {
         "paths": [
-            "web/sunradar/app/**",
+            "web/sonnseite/app/**",
             "web/shared/**",
             "web/package.json",
             "web/package-lock.json",
             "assets/basemap/**",
         ],
-        "changelog": "web/sunradar/app/CHANGELOG.md",
+        "changelog": "web/sonnseite/app/CHANGELOG.md",
         "stamps": [
             (
-                "web/sunradar/app/package.json",
+                "web/sonnseite/app/package.json",
                 r'("version": ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )
@@ -119,19 +119,19 @@ PROJECTS = {
             )
         ],
     },
-    "starradar-pwa": {
+    "sternstunde-pwa": {
         "paths": [
-            "web/starradar/app/**",
+            "web/sternstunde/app/**",
             "web/shared/**",
             "web/package.json",
             "web/package-lock.json",
             "assets/basemap/**",
             "assets/stars/**",
         ],
-        "changelog": "web/starradar/app/CHANGELOG.md",
+        "changelog": "web/sternstunde/app/CHANGELOG.md",
         "stamps": [
             (
-                "web/starradar/app/package.json",
+                "web/sternstunde/app/package.json",
                 r'("version": ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )
@@ -150,19 +150,19 @@ PROJECTS = {
         "changelog": "android/shotradar/CHANGELOG.md",
         "stamps": [],
     },
-    "shotradar-pwa": {
+    "alidade-pwa": {
         "paths": [
-            "web/shotradar/app/**",
+            "web/alidade/app/**",
             "web/shared/**",
             "web/package.json",
             "web/package-lock.json",
             "assets/basemap/**",
             "assets/stars/**",
         ],
-        "changelog": "web/shotradar/app/CHANGELOG.md",
+        "changelog": "web/alidade/app/CHANGELOG.md",
         "stamps": [
             (
-                "web/shotradar/app/package.json",
+                "web/alidade/app/package.json",
                 r'("version": ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )

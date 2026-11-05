@@ -107,15 +107,15 @@ jobs:
         run: |
           mkdir -p ../site
           cp -r home/dist/. ../site/
-          mkdir -p ../site/sunradar
-          cp -r sunradar/site/dist/. ../site/sunradar/
-          cp -r sunradar/app/dist ../site/sunradar/app
-          mkdir -p ../site/starradar
-          cp -r starradar/site/dist/. ../site/starradar/
-          cp -r starradar/app/dist ../site/starradar/app
-          mkdir -p ../site/shotradar
-          cp -r shotradar/site/dist/. ../site/shotradar/
-          cp -r shotradar/app/dist ../site/shotradar/app
+          mkdir -p ../site/sonnseite
+          cp -r sonnseite/site/dist/. ../site/sonnseite/
+          cp -r sonnseite/app/dist ../site/sonnseite/app
+          mkdir -p ../site/sternstunde
+          cp -r sternstunde/site/dist/. ../site/sternstunde/
+          cp -r sternstunde/app/dist ../site/sternstunde/app
+          mkdir -p ../site/alidade
+          cp -r alidade/site/dist/. ../site/alidade/
+          cp -r alidade/app/dist ../site/alidade/app
 
       - uses: actions/upload-artifact@v4
         with:

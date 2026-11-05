@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Calculate the scene of the shotradar website: a full moon that rises behind a peak.
+"""Calculate the scene of the alidade website: a full moon that rises behind a peak.
 
     python3 scripts/site/build_shot.py OUT [--cache DIR]
 
-The website of shotradar tells one story: the full moon of 24 November 2026 rises exactly behind
+The website of alidade tells one story: the full moon of 24 November 2026 rises exactly behind
 the summit of the Grossglockner, seen from a ridge above Kals in East Tyrol. A website must not
 download the elevation tiles for this, so this script calculates the terrain once, with the Python
 binding of the core (PYTHONPATH must contain the build of core/python) and the Terrarium tiles of

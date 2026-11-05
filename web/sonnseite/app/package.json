@@ -1,0 +1,27 @@
+{
+  "name": "sonnseite-pwa",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Sonnseite as a progressive web app",
+  "license": "MPL-2.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "format": "prettier --write src test *.ts *.json public/*.webmanifest public/*.js index.html",
+    "format:check": "prettier --check src test *.ts *.json public/*.webmanifest public/*.js index.html"
+  },
+  "dependencies": {
+    "@almucantar/core": "file:../../../core/build/emscripten-wasm-release/wasm/dist",
+    "@almucantar/web-shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}

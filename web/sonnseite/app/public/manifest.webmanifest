@@ -1,0 +1,14 @@
+{
+  "name": "Sonnseite",
+  "short_name": "Sonnseite",
+  "description": "See when the sun is where in the sky",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b1a30",
+  "theme_color": "#0b1a30",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

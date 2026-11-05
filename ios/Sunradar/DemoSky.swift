@@ -2,7 +2,7 @@ import Almucantar
 import SwiftUI
 
 /// The drawn sky of the store screenshots: it replaces the camera image in the demo mode. It is the
-/// sky of the website (web/sunradar/site/src/sky.ts), drawn with the projection of the app: the gradient from
+/// sky of the website (web/sonnseite/site/src/sky.ts), drawn with the projection of the app: the gradient from
 /// the altitude of the sun, the glow, the stars, and the skyline with its lit windows.
 struct DemoSky: SwiftUI.View {
     let view: Almucantar.View

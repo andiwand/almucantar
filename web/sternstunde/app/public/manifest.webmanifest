@@ -1,0 +1,14 @@
+{
+  "name": "Sternstunde",
+  "short_name": "Sternstunde",
+  "description": "The stars, the planets, and the Milky Way over the real horizon",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#050916",
+  "theme_color": "#050916",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

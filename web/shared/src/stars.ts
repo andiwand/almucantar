@@ -1,7 +1,7 @@
-// The star data of starradar (assets/stars/stars.json, made by scripts/stars/build_stars.py): the
+// The star data of sternstunde (assets/stars/stars.json, made by scripts/stars/build_stars.py): the
 // stars as typed columns for the core, their names, and the constellations. And how a star looks:
 // its size from the magnitude, its color from the B-V color index, and the faintest magnitude that
-// the eye sees in a sky of a given darkness. The app and the website of starradar use this module.
+// the eye sees in a sky of a given darkness. The app and the website of sternstunde use this module.
 
 import type { Planet, StarCatalog } from "@almucantar/core";
 

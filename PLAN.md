@@ -536,7 +536,7 @@ contain the same core.
 - TypeScript, Vite. Uses `@almucantar/core` (`core/wasm`) from the WASM build output (a
   `file:` dependency). The core runs on the main thread, because a frame needs less than
   1 ms; the values are plain objects, so a Web Worker is possible later.
-- GitHub Pages serves the website (`web/sunradar/site/`) and the PWA (`web/sunradar/`) under `/app/`.
+- GitHub Pages serves the website (`web/sonnseite/site/`) and the PWA (`web/sonnseite/`) under `/app/`.
 - Camera: `getUserMedia`. Orientation: `AbsoluteOrientationSensor`, with
   `deviceorientation` as a fallback. iOS needs a permission prompt for the sensors.
 - FOV: a slider, or calibration with two sun or moon taps.
@@ -578,7 +578,10 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. shotradar, the photo planner (14.1): the field test of the PWA and the Android app.
+2. The new names of the apps (14.4): Android, iOS, the logos, and the documentation. The web
+   is done. Then the first upload to the Play Store.
+3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
+   app.
 
 Smaller items: the terrain line as a heading calibration (13.1), the Windows wheels (M10), and
 WMM2030 before the end of 2029.
@@ -855,12 +858,12 @@ Python, and WASM first (the PWA needs it); the AAR and the Swift package follow 
 #### The order of the work
 
 **Status (2026-11-05):** steps 1 to 3 are done (`plan.hpp` in C++, Python, WASM, and Android). A
-prototype of the PWA (`web/shotradar/app`) and the website (`web/shotradar/site`) exist. The
+prototype of the PWA (`web/alidade/app`) and the website (`web/alidade/site`) exist. The
 Android app (`android/shotradar/`) follows the PWA. iOS has no shotradar app yet.
 
 1. The core (`plan.hpp`), with the Python and the WASM bindings.
-2. The PWA (`web/shotradar/app`): the workflow above, on the map of `web/shared`.
-3. The website (`web/shotradar/site`): a scroll story like the other two, with its own design. It
+2. The PWA (`web/alidade/app`): the workflow above, on the map of `web/shared`.
+3. The website (`web/alidade/site`): a scroll story like the other two, with its own design. It
    follows the workflow: the subject, the landmark, the calendar, the spot, and the shot.
 4. A native app, if the prototype is good.
 
@@ -910,7 +913,7 @@ catalogue as plain arrays, so the bindings stay simple.
 - Precision: 0.01° is sufficient, because a star on the screen is several pixels large. Test
   against JPL Horizons for some bright stars, as for the sun.
 
-#### The PWA (`web/starradar/app`)
+#### The PWA (`web/sternstunde/app`)
 
 1. **The sky view:** the stars as points (size from the magnitude, color from B−V), the
    constellation lines and names, the planets with their names, the moon with its phase, the
@@ -925,7 +928,7 @@ catalogue as plain arrays, so the bindings stay simple.
 6. **A red night mode**, so the eyes stay adapted to the dark.
 7. From the shared package: the place panel, the terrain, the orientation, and the time zone.
 
-#### The website (`web/starradar/site`)
+#### The website (`web/sternstunde/site`)
 
 The same form as the sunradar website: a scroll story with a sticky card for each chapter over a
 sky that the core calculates, then a playground, then the facts.
@@ -943,7 +946,7 @@ sky that the core calculates, then a playground, then the facts.
 | Play | "Your sky" | the place, the date, and the time of the user |
 | Rest | precise, offline, open source, and a link to sunradar | dim |
 
-The drawing of the sky of the sunradar website (`web/sunradar/site/src/sky.ts`) is a panorama. The
+The drawing of the sky of the sunradar website (`web/sonnseite/site/src/sky.ts`) is a panorama. The
 star sky needs the same panorama plus the stars, so the common parts (the colors of the sky, the
 projection of the panorama, the horizon, the terrain) move to `web/shared`.
 
@@ -952,15 +955,15 @@ projection of the panorama, the horizon, the terrain) move to `web/shared`.
 **Decided (2026-11-03):** one folder for each app on GitHub Pages: `/` is a short page of the
 family, `/sunradar/` and `/sunradar/app/` are sunradar, and `/starradar/` and `/starradar/app/`
 are starradar. Each PWA has its own scope, so the two apps install and cache apart. In the
-workspace: `web/home/`, `web/sunradar/{app,site}/`, `web/starradar/{app,site}/`, and
+workspace: `web/home/`, `web/sonnseite/{app,site}/`, `web/sternstunde/{app,site}/`, and
 `web/shared/`.
 
 #### The order of the work
 
 **Status (2026-11-04):** steps 1 to 5 are done. The core has `star_positions()` and
 `project_points()` (5080 stars in about 1 ms in WebAssembly, tested against an independent
-calculation and for the aberration and the proper motion). The PWA (`web/starradar/app`) and the
-website (`web/starradar/site`) are on GitHub Pages under `/starradar/`. The licenses of the star
+calculation and for the aberration and the proper motion). The PWA (`web/sternstunde/app`) and the
+website (`web/sternstunde/site`) are on GitHub Pages under `/sternstunde/`. The licenses of the star
 data are in `assets/stars/README.md`; the one of the Bright Star Catalogue rests on an answer of
 the ADC, not on a license text. The Android app (`android/starradar`) is done too, with the same
 features as the PWA, and so is the iOS app (`ios/Starradar`). Next: the field test of the
@@ -990,3 +993,57 @@ alignment with a star.
   a flat place needs about 3 MB in the native apps, not 44 MB.
 - The planets and the Milky Way do not come to sunradar. They are for the photo planner and the
   sky map.
+
+### 14.4 The names of the apps
+
+**Decided (2026-11-05):** the apps get their own names before the first upload to the Play Store.
+The suffix "-radar" goes, because the three names were too alike, and "radar" says nothing about
+the apps.
+
+| Old name | New name | Meaning | Package ID |
+|---|---|---|---|
+| sunradar | **Sonnseite** | The Austrian word for the sunny side of a valley: the side that the app finds. | `at.stefl.sonnseite` |
+| starradar | **Sternstunde** | "Star hour", the German word for a great moment. | `at.stefl.sternstunde` |
+| shotradar | **Alidade** | The sighting rule of an astrolabe (German "Alhidade"): you aim it at a target, as the planner aims the shot at a landmark. | `at.stefl.alidade` |
+
+The family keeps the name almucantar: the repository, the core, and the page of the family. The
+three names belong together: two German compounds of the same form (Sonn-seite, Stern-stunde),
+and a part of the instrument that gives the family its name.
+
+How we chose:
+
+- Four agents made names from four angles (old instruments, plain English words, coined
+  Latin and Greek words, and myths and Alpine words), and then voted on all names together.
+- The checks were web searches of the stores and of the trademark aggregators, not of the
+  official registers. Heliora had the most votes for the sun app, but it is a live US trademark
+  in class 9 (software), so it is out. Sunside is out, because SunnySide is an iOS app that
+  finds sunny terraces. Stargaze is a common word, and an App Store app has the name.
+- Known conflicts of the chosen names: an iOS app "Alidade" (a viewer for Minecraft maps), so the
+  App Store title needs more words. "Sternstunde Philosophie" is a TV show of SRF, in a different
+  field. Sonnseite has no app, and no mark that we found.
+
+The store titles add a description, because the names alone say little to a user who does not
+speak German, and because App Store titles must be unique: "Sonnseite – Sun Path & Sunlight",
+"Sternstunde – Stargazing Sky Map", and "Alidade – Photo Planner". Google Play and the App Store
+also let each language have its own title.
+
+The rename, step by step:
+
+1. Before the first upload: search the three names in TMview (EUIPO, the Austrian office, and
+   USPTO). **Open.**
+2. The web: the folders of the npm workspace, the pages under `/sonnseite/`, `/sternstunde/`, and
+   `/alidade/`, the PWAs, their storage keys, and the release projects `sonnseite-pwa`,
+   `sternstunde-pwa`, and `alidade-pwa`. **Done (2026-11-05).** The old addresses
+   (`/sunradar/`, `/starradar/`, `/shotradar/`) are not redirected: few users have them. A
+   PWA under an old address does not update, and the stored place and settings do not move,
+   because the storage keys changed.
+3. Android: the modules, the Kotlin packages, the `applicationId`s, the signing variables
+   (`SONNSEITE_*`, `STERNSTUNDE_*`, `ALIDADE_*`), the fastlane lanes, and the release projects.
+   A new `applicationId` is a new app on the phone, so an installed sunradar APK does not update.
+   This is acceptable before the first upload to the Play Store. **Open.**
+4. iOS: the targets, the folders, the bundle IDs, and the release projects. **Open.**
+5. The logos (`assets/`), the store screenshots, the README, and the rest of the documentation.
+   **Open.**
+
+The first release of a renamed project gives its version in the input `version` of the workflow
+`release`, because git cliff finds no tag of the new name. The old tags stay as they are.

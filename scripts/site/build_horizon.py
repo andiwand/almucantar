@@ -3,7 +3,7 @@
 
     python3 scripts/site/build_horizon.py NAME LATITUDE LONGITUDE OUT [--cache DIR]
 
-The website of starradar shows the real horizon of Innsbruck in one chapter. A website must not
+The website of sternstunde shows the real horizon of Innsbruck in one chapter. A website must not
 download 10 MB of elevation tiles for one chapter, so this script calculates the profile once,
 with the Python binding of the core (PYTHONPATH must contain the build of core/python) and the
 tiles of Copernicus DEM GLO-90 (the source of the native apps), and the website reads the result.

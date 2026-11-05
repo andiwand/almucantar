@@ -1,6 +1,6 @@
 // The panorama of the websites: the sky with the azimuth on x and the altitude on y, so a whole
 // path of the sun or a wide part of the night sky fits on the screen. And the colors of the sky
-// for an altitude of the sun. The websites of sunradar and starradar use this module.
+// for an altitude of the sun. The websites of sonnseite and sternstunde use this module.
 
 export type Rgb = [number, number, number];
 
@@ -58,7 +58,7 @@ export interface PanoramaOptions {
   topAltitudeDeg: number;
 }
 
-/** The layout of the sunradar website: wide and low, for the path of the sun. */
+/** The layout of the sonnseite website: wide and low, for the path of the sun. */
 export function sunPanorama(width: number): PanoramaOptions {
   return width < 700
     ? { spanDeg: 170, horizonFraction: 0.5, topAltitudeDeg: 68 }

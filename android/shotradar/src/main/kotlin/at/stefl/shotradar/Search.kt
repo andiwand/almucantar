@@ -40,7 +40,7 @@ import kotlin.math.tan
 // The searches of shotradar, without the screens: the subjects, the dates for a spot and a
 // landmark ("I know my spot"), the moments for the line of spots ("Find me a spot"), the shots from
 // a place ("I am here"), and the eclipses. The core finds the alignments and the eclipses; this
-// file chooses and sorts. The PWA has the same rules (web/shotradar/app/src/search.ts).
+// file chooses and sorts. The PWA has the same rules (web/alidade/app/src/search.ts).
 
 enum class SubjectId {
     MOON,
