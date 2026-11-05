@@ -8,8 +8,8 @@ the milestones, and the plan of the apps (section 14).
 | App | What | Status |
 |---|---|---|
 | **sunradar** | The path of the sun on the camera image: when is the sun at this place in the sky? | pre-release |
-| **starradar** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | web app: <https://andiwand.github.io/almucantar/starradar/> |
-| **shotradar** | The photo planner: from where and when is the moon, the Milky Way, or the sun behind a landmark? | prototype: <https://andiwand.github.io/almucantar/shotradar/> |
+| **starradar** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | web app: <https://andiwand.github.io/almucantar/starradar/>; the Android and iOS apps build from `android/` and `ios/` |
+| **shotradar** | The photo planner: from where and when is the moon, the Milky Way, or the sun behind a landmark? | prototype: <https://andiwand.github.io/almucantar/shotradar/>; the Android app builds from `android/` |
 
 ## sunradar
 

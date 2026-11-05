@@ -10,7 +10,7 @@ user documentation is in [`README.md`](README.md). A module with its own
 almucantar is one C++ core that calculates the sky, and the apps that use it (PLAN.md 14). The
 first app is sunradar: it shows the path of the sun on top of the camera image, so you can see
 when the sun is at a given place in the sky. The second app is starradar, the sky map. The third
-app is shotradar, the photo planner (on the web first).
+app is shotradar, the photo planner (web and Android, no iOS app yet).
 
 The repository is a monorepo. The apps are grouped by platform: each platform is one build, with
 a shared part and one part for each app.
@@ -53,8 +53,8 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 
 - Format before each commit: `scripts/format`. CI runs `scripts/format --check`.
 - Commit messages follow Conventional Commits. The scope is the project or the
-  binding: `feat(core): ...`, `fix(python): ...`, `feat(android): ...`, `ci: ...`, `docs: ...`. The release
-  calculates the next version from the commit messages, so write them carefully.
+  binding: `feat(core): ...`, `fix(python): ...`, `feat(android): ...`, `ci: ...`, `docs: ...`.
+  The release calculates the next version from the commit messages, so write them carefully.
 - A change that a user of a project notices gets an entry under `## Unreleased` in
   the `CHANGELOG.md` of that project (`core/`, or the folder of the app, for example
   `android/sunradar/`), in the same commit or pull request.
@@ -69,18 +69,20 @@ phone can be connected. For Apple, install Xcode and XcodeGen (`brew install xco
 
 Each project has its own version and tag: `core-vX.Y.Z` (the core and all its packages), and one
 project for each app on each platform: `sunradar-android-vX.Y.Z`, `sunradar-ios-vX.Y.Z`,
-`sunradar-pwa-vX.Y.Z`, the same three for starradar, `shotradar-android-vX.Y.Z`, and `shotradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app and
-the shared part of its platform. The flow is the one of OpenDocument.core.
+`sunradar-pwa-vX.Y.Z`, the same three for starradar, `shotradar-android-vX.Y.Z`, and
+`shotradar-pwa-vX.Y.Z`. The paths of a project in `scripts/release.py` are the paths of its app,
+the shared part of its platform, and the assets that it uses. The flow is the one of
+OpenDocument.core.
 
 1. Write the changes under `## Unreleased` of the changelog of the project, in the commit that
    makes them. An empty `## Unreleased` stops the release.
 2. Run the workflow `release` (Actions → release → Run workflow) with the project. Keep
    `dry_run` on first: the summary shows the version, the stamp, and the release notes.
-3. Run it again without `dry_run`. Set `prerelease` for a version that is not ready for all users. It commits `chore(release): <tag> [skip ci]` and creates a
-   draft release.
+3. Run it again without `dry_run`. Set `prerelease` for a version that is not ready for all
+   users. The workflow commits `chore(release): <tag> [skip ci]` and creates a draft release.
 4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
-   Maven Central, and the Swift package) or `android-release.yml` (the APK). The PWA needs no publish step, because
-   GitHub Pages deploys `main`. The iOS apps have no publish
+   Maven Central, and the Swift package) or `android-release.yml` (the APK of the app). A PWA
+   needs no publish step, because GitHub Pages deploys `main`. The iOS apps have no publish
    workflow yet, because the App Store needs an Apple developer account.
 
 `scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,

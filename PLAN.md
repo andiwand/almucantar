@@ -130,11 +130,11 @@ almucantar/
 │   ├── CMakeLists.txt
 │   ├── CHANGELOG.md
 │   └── AGENTS.md
-├── android/                   the Android apps: shared/, sunradar/ (one Gradle project)
-├── ios/                       the iOS apps: Shared/, Sunradar/ (one XcodeGen project)
-├── web/                       one npm workspace: shared/, sunradar/ (the PWA), website/
-├── assets/                    the logo, and the offline base map (assets/basemap/)
-├── scripts/                   format, release.py, the base map, the store screenshots
+├── android/                   the Android apps: shared/ and one module per app (one Gradle project)
+├── ios/                       the iOS apps: Shared/ and one folder per app (one XcodeGen project)
+├── web/                       one npm workspace: shared/, home/, and <app>/app/ and <app>/site/
+├── assets/                    the logos, the offline base map (basemap/), and the star data (stars/)
+├── scripts/                   format, release.py, the base map, the star data, the store screenshots
 ├── screenshots/               the design of the store screenshots
 ├── .github/workflows/         one workflow per project and per package
 ├── Package.swift              the Swift package of the core (SwiftPM needs it at the root)
@@ -477,9 +477,9 @@ One workflow per project and per package, each with a path filter, so a change i
 | `core.yml` | `core/**` | builds and tests the core on Linux and macOS, runs clang-tidy |
 | `python.yml` | `core/**` | builds wheels, runs pytest |
 | `core-android.yml` | `core/**` | builds the AAR (the native libraries come from the reusable `native-android.yml`), runs the instrumented tests on an emulator |
-| `android.yml` | `android/**`, `core/**` | builds and tests the shared module and the apps, runs lint and ktfmt |
-| `web.yml` | `core/**`, `web/**` | builds the npm package (`node --test`), tests and builds the workspace `web/` (prettier, vitest), deploys GitHub Pages |
-| `apple.yml` | `core/**`, `ios/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds the shared framework alone and tests it, builds the iOS apps |
+| `android.yml` | `android/**`, `core/**`, `assets/basemap/**`, `assets/stars/**` | builds and tests the shared module and the apps, runs lint and ktfmt |
+| `web.yml` | `core/**`, `web/**`, `assets/**` | builds the npm package (`node --test`), tests and builds the workspace `web/` (prettier, vitest), deploys GitHub Pages |
+| `apple.yml` | `core/**`, `ios/**`, `assets/basemap/**`, `assets/stars/**`, `Package.swift` | builds the xcframework, runs `swift test`, builds the shared framework alone and tests it, builds the iOS apps |
 | `format.yml` | all | clang-format, black |
 | `screenshots.yml` | manual | makes the store screenshots with the demo mode (M12) |
 | `release.yml`, `publish-core.yml`, `android-release.yml` | manual, release | the release flow (see below) |
@@ -578,7 +578,7 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. shotradar, the photo planner (14.1): the core (`plan.hpp`), then the PWA and the website.
+2. shotradar, the photo planner (14.1): the field test of the PWA and the Android app.
 
 Smaller items: the terrain line as a heading calibration (13.1), the Windows wheels (M10), and
 WMM2030 before the end of 2029.
@@ -854,8 +854,9 @@ Python, and WASM first (the PWA needs it); the AAR and the Swift package follow 
 
 #### The order of the work
 
-**Status (2026-11-04):** step 1 is done (`plan.hpp` in C++, Python, and WASM). A prototype of the
-PWA (`web/shotradar/app`) and the website (`web/shotradar/site`) exist.
+**Status (2026-11-05):** steps 1 to 3 are done (`plan.hpp` in C++, Python, WASM, and Android). A
+prototype of the PWA (`web/shotradar/app`) and the website (`web/shotradar/site`) exist. The
+Android app (`android/shotradar/`) follows the PWA. iOS has no shotradar app yet.
 
 1. The core (`plan.hpp`), with the Python and the WASM bindings.
 2. The PWA (`web/shotradar/app`): the workflow above, on the map of `web/shared`.
