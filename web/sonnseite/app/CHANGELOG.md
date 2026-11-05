@@ -6,6 +6,10 @@ same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+- The app has a bright look of the day, like the website: in the sky view the sky has the colors
+  of the height of the sun, with a glow around the sun and a light ground. The panels are warm
+  white with dark text, and the main button is sun yellow.
+
 ## 0.2.0 - 2026-11-05
 
 - Sunradar has the new name Sonnseite, the Austrian word for the sunny side of a valley.

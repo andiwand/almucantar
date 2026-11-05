@@ -19,6 +19,7 @@ import {
   upright,
   withCompass,
 } from "@almucantar/web-shared/orientation";
+import { css, mix, skyColors } from "@almucantar/web-shared/panorama";
 import { DEFAULT_PLACE, gpsPlace, loadPlace } from "@almucantar/web-shared/place";
 import type { StoredPlace } from "@almucantar/web-shared/place";
 import { setupPlacePanel } from "@almucantar/web-shared/placePanel";
@@ -357,6 +358,66 @@ function drawTerrain(view: View, profile: HorizonProfile) {
   strokeLines(almucantar.projectLine(view, line), "rgba(190, 230, 170, 0.9)", 2);
 }
 
+/**
+ * The sky view without the camera: a sky in the colors of the height of the sun, a glow around
+ * the sun, and the ground below the horizon, light by day.
+ */
+function drawSkyView(view: View, sun: Horizontal, w: number, h: number) {
+  const [top, low] = skyColors(sun.altitudeDeg);
+  const day = Math.min(1, Math.max(0, (sun.altitudeDeg + 6) / 12));
+  // The horizon below the middle of the screen gives the end of the gradient.
+  const middle = almucantar.unproject(view, { x: w / 2, y: h / 2 });
+  const azimuth = Number.isFinite(middle.azimuthDeg) ? middle.azimuthDeg : 180;
+  const horizon = almucantar.project(view, { azimuthDeg: azimuth, altitudeDeg: 0 });
+  const zenith = almucantar.project(view, { azimuthDeg: azimuth, altitudeDeg: 60 });
+  const y0 = zenith.valid ? zenith.point.y : 0;
+  const y1 = horizon.valid ? horizon.point.y : h;
+  const sky = ctx.createLinearGradient(0, Math.min(y0, y1 - 1), 0, y1);
+  sky.addColorStop(0, css(top));
+  sky.addColorStop(1, css(low));
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+  const s = almucantar.project(view, sun);
+  if (s.valid && sun.altitudeDeg > -10) {
+    const strength = Math.min(1, (sun.altitudeDeg + 10) / 14);
+    const glow = ctx.createRadialGradient(
+      s.point.x,
+      s.point.y,
+      0,
+      s.point.x,
+      s.point.y,
+      Math.max(w, h) * 0.6,
+    );
+    glow.addColorStop(0, `rgba(255, 220, 150, ${0.45 * strength})`);
+    glow.addColorStop(0.35, `rgba(255, 180, 90, ${0.12 * strength})`);
+    glow.addColorStop(1, "rgba(255, 180, 90, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+  }
+  // The ground: each piece of the horizon line moved far toward the nadir closes the area below.
+  const below = almucantar.project(view, { azimuthDeg: azimuth, altitudeDeg: -30 });
+  let dx = 0;
+  let dy = 1;
+  if (horizon.valid && below.valid) {
+    const length = Math.hypot(below.point.x - horizon.point.x, below.point.y - horizon.point.y);
+    if (length > 1) {
+      dx = (below.point.x - horizon.point.x) / length;
+      dy = (below.point.y - horizon.point.y) / length;
+    }
+  }
+  const far = (w + h) * 2;
+  ctx.fillStyle = css(mix([10, 14, 22], [214, 204, 186], day));
+  for (const line of almucantar.horizonLine(view)) {
+    if (line.length < 2) continue;
+    ctx.beginPath();
+    line.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    for (let i = line.length - 1; i >= 0; i--)
+      ctx.lineTo(line[i].x + dx * far, line[i].y + dy * far);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 function draw(
   view: View,
   d: Day,
@@ -368,14 +429,16 @@ function draw(
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
-  if (!cameraOn) {
-    ctx.fillStyle = "#0b1a30";
-    ctx.fillRect(0, 0, w, h);
-  }
+  if (!cameraOn) drawSkyView(view, sun, w, h);
+  // In the sky view the sky is bright by day, so the helpers are dark; on the camera image they
+  // are light.
+  const bright = !cameraOn && sun.altitudeDeg > -4;
+  const helper = bright ? "#1f4f8f" : "#7fd8ff";
+  const ink = bright ? "#1f2633" : "white";
   ctx.textAlign = "center";
-  ctx.shadowColor = "black";
+  ctx.shadowColor = bright ? "rgba(255, 255, 255, 0.85)" : "black";
   ctx.shadowBlur = 4;
-  ctx.fillStyle = "white";
+  ctx.fillStyle = ink;
   ctx.font = "bold 14px system-ui";
 
   const profile = terrainProfile();
@@ -400,8 +463,9 @@ function draw(
     strokeLines(almucantar.projectLine(view, s), "rgba(255,200,61,0.45)", 2, [3, 5]);
   for (const s of d.daySegments) {
     const lines = almucantar.projectLine(view, s);
-    strokeLines(lines, "rgba(255,200,61,0.25)", 9);
-    strokeLines(lines, "#ffc83d", 3);
+    strokeLines(lines, "rgba(180,95,6,0.35)", 6);
+    strokeLines(lines, "rgba(255,200,61,0.25)", 12);
+    strokeLines(lines, "#ffc83d", 3.5);
   }
   for (const mark of d.hours) {
     const p = almucantar.project(view, mark.direction);
@@ -410,7 +474,7 @@ function draw(
     ctx.arc(p.point.x, p.point.y, 4, 0, 2 * Math.PI);
     ctx.fillStyle = "#ffc83d";
     ctx.fill();
-    ctx.fillStyle = "white";
+    ctx.fillStyle = ink;
     uprightLabel(view, mark.direction, mark.label, 10);
   }
 
@@ -421,12 +485,12 @@ function draw(
       azimuthDeg: center.azimuthDeg,
       altitudeDeg: (end * i) / steps,
     }));
-    strokeLines(almucantar.projectLine(view, vertical), "#7fd8ff", 1.5, [6, 5]);
+    strokeLines(almucantar.projectLine(view, vertical), helper, 1.5, [6, 5]);
     const p = almucantar.project(view, crossing.sun);
     if (p.valid) {
       ctx.beginPath();
       ctx.arc(p.point.x, p.point.y, 9, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#7fd8ff";
+      ctx.strokeStyle = helper;
       ctx.lineWidth = 2.5;
       ctx.stroke();
     }
@@ -437,21 +501,25 @@ function draw(
     const m = almucantar.project(view, moon.direction);
     if (m.valid) {
       drawMoon(view, moon, sun, m.point.x, m.point.y, 11);
-      ctx.fillStyle = "white";
+      ctx.fillStyle = ink;
       uprightLabel(view, moon.direction, "moon", 16);
     }
   }
 
   const s = almucantar.project(view, sun);
   if (s.valid) {
+    ctx.save();
+    ctx.shadowColor = "rgba(255, 190, 60, 0.95)";
+    ctx.shadowBlur = 26;
     ctx.beginPath();
     ctx.arc(s.point.x, s.point.y, 14, 0, 2 * Math.PI);
-    ctx.fillStyle = "#ffe08a";
+    ctx.fillStyle = "#fff4d2";
     ctx.fill();
+    ctx.restore();
   }
 
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = "white";
+  ctx.strokeStyle = ink;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(w / 2 - 16, h / 2);

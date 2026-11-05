@@ -7,13 +7,13 @@ npm workspace `web/` (see [`../AGENTS.md`](../../AGENTS.md)). GitHub Pages serve
 
 ## Layout
 
-| Path | What |
-|---|---|
-| `src/main.ts` | The app: state, the frame (projection and drawing), sensors, location, camera, input. |
+| Path                | What                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`       | The app: state, the frame (projection and drawing), sensors, location, camera, input.                                                         |
 | `src/main.ts` (end) | The place panel comes from `@almucantar/web-shared/placePanel`; the app gives it its place and calls `refresh()` after a change of the place. |
-| `src/style.css` | The layout. |
-| `public/` | The manifest, the icon (`assets/sonnseite-logo.svg`), and the service worker. |
-| `index.html` | The page. |
+| `src/style.css`     | The layout.                                                                                                                                   |
+| `public/`           | The manifest, the icon (`assets/sonnseite-logo.svg`), and the service worker.                                                                 |
+| `index.html`        | The page.                                                                                                                                     |
 
 ## Build and test
 
