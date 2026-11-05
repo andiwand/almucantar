@@ -45,12 +45,12 @@ targets:
         GENERATE_INFOPLIST_FILE: true
         SWIFT_VERSION: "5.0"
 
-  SunradarApp:
+  SonnseiteApp:
     type: application
     platform: iOS
     sources:
       - Shared
-      - path: Sunradar
+      - path: Sonnseite
         excludes: [CHANGELOG.md]
       # The offline base map (Natural Earth). The app reads it from the bundle; see assets/basemap/README.md.
       - path: ../assets/basemap/basemap.json
@@ -60,9 +60,9 @@ targets:
         product: Almucantar
     settings:
       base:
-        PRODUCT_NAME: Sunradar
-        PRODUCT_MODULE_NAME: SunradarApp
-        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.sunradar
+        PRODUCT_NAME: Sonnseite
+        PRODUCT_MODULE_NAME: SonnseiteApp
+        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.sonnseite
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
@@ -72,24 +72,24 @@ targets:
     scheme:
       testTargets: [AlmucantarSharedTests]
     info:
-      path: Sunradar/Info.plist
+      path: Sonnseite/Info.plist
       properties:
-        CFBundleDisplayName: Sunradar
+        CFBundleDisplayName: Sonnseite
         UILaunchScreen: {}
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: Sunradar shows the path of the sun on the camera image.
-        NSLocationWhenInUseUsageDescription: Sunradar needs your place to calculate the position of the sun.
-        NSMotionUsageDescription: Sunradar uses the motion sensors to know where the phone points.
-  StarradarApp:
+        NSCameraUsageDescription: Sonnseite shows the path of the sun on the camera image.
+        NSLocationWhenInUseUsageDescription: Sonnseite needs your place to calculate the position of the sun.
+        NSMotionUsageDescription: Sonnseite uses the motion sensors to know where the phone points.
+  SternstundeApp:
     type: application
     platform: iOS
     sources:
       - Shared
-      - path: Starradar
+      - path: Sternstunde
         excludes: [CHANGELOG.md]
       - path: ../assets/basemap/basemap.json
         buildPhase: resources
@@ -101,9 +101,9 @@ targets:
         product: Almucantar
     settings:
       base:
-        PRODUCT_NAME: Starradar
-        PRODUCT_MODULE_NAME: StarradarApp
-        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.starradar
+        PRODUCT_NAME: Sternstunde
+        PRODUCT_MODULE_NAME: SternstundeApp
+        PRODUCT_BUNDLE_IDENTIFIER: at.stefl.sternstunde
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
@@ -111,57 +111,57 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
-      testTargets: [StarradarTests]
+      testTargets: [SternstundeTests]
     info:
-      path: Starradar/Info.plist
+      path: Sternstunde/Info.plist
       properties:
-        CFBundleDisplayName: Starradar
+        CFBundleDisplayName: Sternstunde
         UILaunchScreen: {}
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: Starradar shows the stars on the camera image.
-        NSLocationWhenInUseUsageDescription: Starradar needs your place to calculate the positions of the stars.
-        NSMotionUsageDescription: Starradar uses the motion sensors to know where the phone points.
-  # The tests of the data of starradar. They run in the app, because the app owns the code.
-  StarradarTests:
+        NSCameraUsageDescription: Sternstunde shows the stars on the camera image.
+        NSLocationWhenInUseUsageDescription: Sternstunde needs your place to calculate the positions of the stars.
+        NSMotionUsageDescription: Sternstunde uses the motion sensors to know where the phone points.
+  # The tests of the data of sternstunde. They run in the app, because the app owns the code.
+  SternstundeTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - StarradarTests
+      - SternstundeTests
       - path: ../assets/stars/stars.json
         buildPhase: resources
     dependencies:
-      - target: StarradarApp
+      - target: SternstundeApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
         SWIFT_VERSION: "5.0"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Starradar.app/Starradar"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Sternstunde.app/Sternstunde"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
   # The store screenshots: a UI test that starts the app in its demo mode (screenshots/README.md).
-  SunradarUITests:
+  SonnseiteUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [SunradarUITests]
+    sources: [SonnseiteUITests]
     dependencies:
-      - target: SunradarApp
+      - target: SonnseiteApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
-        TEST_TARGET_NAME: SunradarApp
+        TEST_TARGET_NAME: SonnseiteApp
         SWIFT_VERSION: "5.0"
 schemes:
   # fastlane snapshot runs this scheme. The tests run in Debug, because only a debug build has the
   # demo mode.
-  Sunradar Screenshots:
+  Sonnseite Screenshots:
     build:
       targets:
-        SunradarApp: all
-        SunradarUITests: [test]
+        SonnseiteApp: all
+        SonnseiteUITests: [test]
     test:
       config: Debug
-      targets: [SunradarUITests]
+      targets: [SonnseiteUITests]

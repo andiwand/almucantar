@@ -1,7 +1,7 @@
 # Changelog
 
-The changes in the iOS app starradar that a user notices. Each release has the tag
-`starradar-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
+The changes in the iOS app Sternstunde (starradar before) that a user notices. Each release has
+the tag `sternstunde-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 

@@ -1,9 +1,12 @@
 # Changelog
 
-The changes in the iOS app sunradar that a user notices. Each release has the tag
-`sunradar-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
+The changes in the iOS app Sonnseite that a user notices. Each release has the tag
+`sonnseite-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.md`.
 
 ## Unreleased
+
+- The app has the name Sonnseite (sunradar before), the Austrian word for the sunny side of a
+  valley, and the bundle ID `at.stefl.sonnseite`.
 
 - The compass uses the magnetic declination of the place from the start. Before, it used the
   declination of Vienna when the app started with the last place or a dropped place, so the

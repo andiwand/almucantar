@@ -41,15 +41,15 @@ struct ScreenshotScene {
 }
 
 /// The demo mode for the store screenshots. It exists only in debug builds: the UI test starts
-/// the app with the launch argument `-SunradarScreenshot <screen>`, and `UserDefaults` reads it.
+/// the app with the launch argument `-SonnseiteScreenshot <screen>`, and `UserDefaults` reads it.
 /// A release build always gives nil, so the app works as usual.
 enum ScreenshotMode {
     /// The accessibility identifier that the UI test waits for.
-    static let readyIdentifier = "sunradar-screenshot-ready"
+    static let readyIdentifier = "sonnseite-screenshot-ready"
 
     static let scene: ScreenshotScene? = {
         #if DEBUG
-            guard let name = UserDefaults.standard.string(forKey: "SunradarScreenshot") else { return nil }
+            guard let name = UserDefaults.standard.string(forKey: "SonnseiteScreenshot") else { return nil }
             return ScreenshotScene.scenes[name]
         #else
             return nil

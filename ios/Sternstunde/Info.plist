@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Starradar</string>
+	<string>Sternstunde</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,11 +21,11 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Starradar shows the stars on the camera image.</string>
+	<string>Sternstunde shows the stars on the camera image.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Starradar needs your place to calculate the positions of the stars.</string>
+	<string>Sternstunde needs your place to calculate the positions of the stars.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Starradar uses the motion sensors to know where the phone points.</string>
+	<string>Sternstunde uses the motion sensors to know where the phone points.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

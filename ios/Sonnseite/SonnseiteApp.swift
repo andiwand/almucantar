@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SunradarApp: App {
+struct SonnseiteApp: App {
     init() {
         ScreenshotMode.prepare()
     }

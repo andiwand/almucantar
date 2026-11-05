@@ -1,7 +1,7 @@
 import XCTest
 
 /// Takes the store screenshots. Each screen is a new launch of the app in its demo mode
-/// (`-SunradarScreenshot <screen>`, see Sunradar/ScreenshotMode.swift and screenshots/README.md).
+/// (`-SonnseiteScreenshot <screen>`, see Sonnseite/ScreenshotMode.swift and screenshots/README.md).
 final class ScreenshotTests: XCTestCase {
     private static let screens = ["01-path", "02-date", "03-align", "04-moon"]
 
@@ -21,10 +21,10 @@ final class ScreenshotTests: XCTestCase {
         app.launchEnvironment["TZ"] = "Europe/Vienna"
         let arguments = app.launchArguments
         for screen in Self.screens {
-            app.launchArguments = arguments + ["-SunradarScreenshot", screen]
+            app.launchArguments = arguments + ["-SonnseiteScreenshot", screen]
             app.launch()
             XCTAssertTrue(
-                app.descendants(matching: .any)["sunradar-screenshot-ready"].waitForExistence(timeout: 120),
+                app.descendants(matching: .any)["sonnseite-screenshot-ready"].waitForExistence(timeout: 120),
                 "\(screen) did not get ready")
             if screen == "03-align" {
                 // A SwiftUI menu does not open from code, so the test opens it.

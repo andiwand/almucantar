@@ -55,7 +55,7 @@ default_platform(:ios)
 IOS_DIR = File.expand_path("..").freeze
 REPO_DIR = File.expand_path("../..").freeze
 PROJECT = File.join(IOS_DIR, "Almucantar.xcodeproj").freeze
-SCHEME = "Sunradar Screenshots"
+SCHEME = "Sonnseite Screenshots"
 
 FRAME_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "frame.py").freeze
 STORE_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "store.py").freeze
@@ -73,11 +73,11 @@ SCREENSHOT_DEVICES = {
   "ipad" => ["iPad Pro 13-inch (M5)", "iPad Pro 13-inch (M4)"],
 }.freeze
 
-NARROWING = %w[SUNRADAR_SCREENSHOT_DEVICE SUNRADAR_SCREENSHOT_DEVICES SUNRADAR_SCREENSHOT_IOS].freeze
+NARROWING = %w[SONNSEITE_SCREENSHOT_DEVICE SONNSEITE_SCREENSHOT_DEVICES SONNSEITE_SCREENSHOT_IOS].freeze
 
-# The Python of the repository (.venv, with Pillow), else python3. SUNRADAR_PYTHON overrides it.
+# The Python of the repository (.venv, with Pillow), else python3. SONNSEITE_PYTHON overrides it.
 def python
-  given = ENV["SUNRADAR_PYTHON"].to_s.strip
+  given = ENV["SONNSEITE_PYTHON"].to_s.strip
   return given unless given.empty?
 
   venv = File.join(REPO_DIR, ".venv", "bin", "python")
@@ -97,9 +97,9 @@ def simulators_by_ios
   end
 end
 
-# The device kinds of this run: both, unless SUNRADAR_SCREENSHOT_DEVICE names one.
+# The device kinds of this run: both, unless SONNSEITE_SCREENSHOT_DEVICE names one.
 def screenshot_kinds
-  given = ENV["SUNRADAR_SCREENSHOT_DEVICE"].to_s.strip.downcase
+  given = ENV["SONNSEITE_SCREENSHOT_DEVICE"].to_s.strip.downcase
   return SCREENSHOT_DEVICES.keys if given.empty?
 
   UI.user_error!("no device #{given}: use one of #{SCREENSHOT_DEVICES.keys.join(', ')}") unless SCREENSHOT_DEVICES.key?(given)
@@ -117,19 +117,19 @@ end
 
 # The pairs (device, iOS version) to capture. Each device can have a different runtime, because a
 # new runtime often has new iPad simulators but no iPhone Pro Max yet.
-# SUNRADAR_SCREENSHOT_DEVICES (names, comma-separated) and SUNRADAR_SCREENSHOT_IOS override the choice.
+# SONNSEITE_SCREENSHOT_DEVICES (names, comma-separated) and SONNSEITE_SCREENSHOT_IOS override the choice.
 def screenshot_targets
   runtimes = simulators_by_ios
-  pinned = ENV["SUNRADAR_SCREENSHOT_IOS"].to_s.strip
+  pinned = ENV["SONNSEITE_SCREENSHOT_IOS"].to_s.strip
   runtimes = runtimes.select { |version, _| version == pinned } unless pinned.empty?
   UI.user_error!("no iOS simulator runtime #{pinned.empty? ? '' : pinned + ' '}is installed") if runtimes.empty?
 
-  given = ENV["SUNRADAR_SCREENSHOT_DEVICES"].to_s.strip
+  given = ENV["SONNSEITE_SCREENSHOT_DEVICES"].to_s.strip
   wanted = given.empty? ? screenshot_kinds.map { |kind| SCREENSHOT_DEVICES.fetch(kind) } : given.split(",").map { |name| [name.strip] }
 
   wanted.map do |names|
     newest_with(names, runtimes) ||
-      UI.user_error!("no runtime has #{names.join(' or ')}. Create the simulator, or set SUNRADAR_SCREENSHOT_DEVICES and SUNRADAR_SCREENSHOT_IOS.")
+      UI.user_error!("no runtime has #{names.join(' or ')}. Create the simulator, or set SONNSEITE_SCREENSHOT_DEVICES and SONNSEITE_SCREENSHOT_IOS.")
   end
 end
 
@@ -218,12 +218,12 @@ platform :ios do
       UI.user_error!("no screenshots in #{FRAMED_DIR}: run the lane screenshots first")
     end
 
-    shots_dir = Dir.mktmpdir("sunradar-screenshots")
+    shots_dir = Dir.mktmpdir("sonnseite-screenshots")
     key_path = nil
     begin
       sh(python, STORE_SCREENSHOTS, "--platform", "ios", "--screenshots", FRAMED_DIR, "--stage", shots_dir)
       key_path = api_key_file
-      version = ENV["SUNRADAR_VERSION"].to_s.strip
+      version = ENV["SONNSEITE_VERSION"].to_s.strip
 
       options = {
         api_key: app_store_connect_api_key(

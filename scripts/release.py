@@ -51,21 +51,21 @@ PROJECTS = {
         "changelog": "android/sonnseite/CHANGELOG.md",
         "stamps": [],
     },
-    "sunradar-ios": {
+    "sonnseite-ios": {
         "paths": [
-            "ios/Sunradar/**",
-            "ios/SunradarUITests/**",
+            "ios/Sonnseite/**",
+            "ios/SonnseiteUITests/**",
             "ios/Shared/**",
             "ios/SharedTests/**",
             "ios/project.yml",
             "ios/fastlane/**",
             "assets/basemap/**",
         ],
-        "changelog": "ios/Sunradar/CHANGELOG.md",
+        "changelog": "ios/Sonnseite/CHANGELOG.md",
         "stamps": [
             (
                 "ios/project.yml",
-                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.sunradar\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
+                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.sonnseite\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )
         ],
@@ -100,21 +100,21 @@ PROJECTS = {
         "changelog": "android/sternstunde/CHANGELOG.md",
         "stamps": [],
     },
-    "starradar-ios": {
+    "sternstunde-ios": {
         "paths": [
-            "ios/Starradar/**",
-            "ios/StarradarTests/**",
+            "ios/Sternstunde/**",
+            "ios/SternstundeTests/**",
             "ios/Shared/**",
             "ios/SharedTests/**",
             "ios/project.yml",
             "assets/basemap/**",
             "assets/stars/**",
         ],
-        "changelog": "ios/Starradar/CHANGELOG.md",
+        "changelog": "ios/Sternstunde/CHANGELOG.md",
         "stamps": [
             (
                 "ios/project.yml",
-                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.starradar\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
+                r'(PRODUCT_BUNDLE_IDENTIFIER: at\.stefl\.sternstunde\n(?:.*\n)*?\s*MARKETING_VERSION: ")[^"]*(")',
                 r"\g<1>{version}\g<2>",
             )
         ],

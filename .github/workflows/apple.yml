@@ -48,8 +48,8 @@ jobs:
           # The framework builds the shared code alone, so it fails if the shared code uses an app.
           xcodebuild -project Almucantar.xcodeproj -scheme AlmucantarShared \
             -destination "id=${device}" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO test
-          xcodebuild -project Almucantar.xcodeproj -scheme SunradarApp \
+          xcodebuild -project Almucantar.xcodeproj -scheme SonnseiteApp \
             -destination "id=${device}" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build
-          # The scheme of starradar builds the app and runs its tests in it.
-          xcodebuild -project Almucantar.xcodeproj -scheme StarradarApp \
+          # The scheme of sternstunde builds the app and runs its tests in it.
+          xcodebuild -project Almucantar.xcodeproj -scheme SternstundeApp \
             -destination "id=${device}" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO test

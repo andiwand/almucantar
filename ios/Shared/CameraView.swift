@@ -47,10 +47,10 @@ struct CameraView: UIViewRepresentable {
         nonisolated(unsafe) private let session = AVCaptureSession()
         /// One serial queue for the configuration, the start, and the stop of the session, so a
         /// fast stop cannot come before the start.
-        private let sessionQueue = DispatchQueue(label: "at.stefl.sunradar.session")
+        private let sessionQueue = DispatchQueue(label: "at.stefl.almucantar.camera.session")
         /// Access only on sessionQueue. The permission reply can arrive after stop().
         nonisolated(unsafe) private var wantsRunning = false
-        private let frames = DispatchQueue(label: "at.stefl.sunradar.frames")
+        private let frames = DispatchQueue(label: "at.stefl.almucantar.camera.frames")
         private var device: AVCaptureDevice?
 
         func start() {

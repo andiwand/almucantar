@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sunradar</string>
+	<string>Sonnseite</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,11 +21,11 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Sunradar shows the path of the sun on the camera image.</string>
+	<string>Sonnseite shows the path of the sun on the camera image.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Sunradar needs your place to calculate the position of the sun.</string>
+	<string>Sonnseite needs your place to calculate the position of the sun.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Sunradar uses the motion sensors to know where the phone points.</string>
+	<string>Sonnseite uses the motion sensors to know where the phone points.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

@@ -418,7 +418,7 @@ struct SkyScreen: SwiftUI.View {
 
     // MARK: - Drawing
 
-    /// A label of sunradar: bold and white, upright relative to the horizon.
+    /// A label of sonnseite: bold and white, upright relative to the horizon.
     private func label(_ context: inout GraphicsContext, _ view: Almucantar.View, _ direction: Horizontal, _ text: String, gap: Double) {
         SkyDrawing.label(
             &context, view, direction, Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(.white), gap: gap)

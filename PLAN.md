@@ -578,8 +578,8 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. The new names of the apps (14.4): iOS, the logos, and the documentation. The web and Android
-   are done. Then the first upload to the Play Store.
+2. The new names of the apps (14.4): the logos and the rest of the documentation. The web,
+   Android, and iOS are done. Then the first upload to the Play Store.
 3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
    app.
 
@@ -977,7 +977,7 @@ alignment with a star.
 4. The PWA: the sky view first (stars, constellations, planets, moon, terrain), then tap, search,
    alignment, and the night mode.
 5. The website, with the shared panorama.
-6. The native apps (`android/starradar/`, `ios/Starradar/`), when the PWA is stable.
+6. The native apps (`android/sternstunde/`, `ios/Sternstunde/`), when the PWA is stable.
 
 ### 14.3 What this means for sunradar
 
@@ -1044,7 +1044,11 @@ The rename, step by step:
    variables of the store screenshots (`SUNRADAR_SCREENSHOT_*`) keep their names until step 4,
    because the iOS lanes use them too. The releases `sunradar-android-v0.1.0` and `v0.2.0` have
    the new tags `sonnseite-android-v0.1.0` and `v0.2.0`, so git cliff finds the last version.
-4. iOS: the targets, the folders, the bundle IDs, and the release projects. **Open.**
+4. iOS: the targets, the folders, the bundle IDs, and the release projects. **Done
+   (2026-11-05).** The variables of the store screenshots are now `SONNSEITE_SCREENSHOT_*` on
+   both platforms, and the camera queues of `Shared/` have the family name
+   (`at.stefl.almucantar.camera.*`), because both apps use them. iOS had no release, so no tag
+   changes.
 5. The logos (`assets/`), the store screenshots, the README, and the rest of the documentation.
    **Open.**
 

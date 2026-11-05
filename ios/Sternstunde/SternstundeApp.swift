@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct StarradarApp: App {
+struct SternstundeApp: App {
     /// The star data is a few hundred kilobytes; the app reads it once. The file is a resource of
     /// the app, so an error is a defect of the build.
     private let stars: StarData = {

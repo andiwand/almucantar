@@ -20,7 +20,7 @@ final class HitList {
     }
 }
 
-/// The sky view of starradar: the stars, the constellations, the planets, the moon, and the Milky
+/// The sky view of sternstunde: the stars, the constellations, the planets, the moon, and the Milky
 /// Way in the direction of the phone, over the terrain of the place. With the camera, the same
 /// overlay lies on the camera image. A tap on an object shows its name and its rise and set; Find
 /// leads to an object; Align corrects the heading with a bright star. Without motion sensors (the

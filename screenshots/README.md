@@ -21,9 +21,9 @@ bundle install                                              # fastlane, from the
 
 ```sh
 cd android && bundle exec fastlane screenshots              # phone; one emulator with API 35 or later
-cd android && SUNRADAR_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
+cd android && SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
 cd ios && bundle exec fastlane screenshots                  # iPhone and iPad
-cd ios && SUNRADAR_SCREENSHOT_DEVICE=ipad bundle exec fastlane screenshots
+cd ios && SONNSEITE_SCREENSHOT_DEVICE=ipad bundle exec fastlane screenshots
 .venv/bin/python scripts/screenshots/frame.py --platform android   # frame again only
 ```
 
@@ -36,7 +36,7 @@ The demo mode exists only in debug builds. The UI test starts it with the name o
 
 - Android: the intent extra `sonnseite.screenshot` of `MainActivity`. A release build has a no-op
   version of the code in `src/release/`.
-- iOS: the launch argument `-SunradarScreenshot <screen>`, read with `UserDefaults` inside
+- iOS: the launch argument `-SonnseiteScreenshot <screen>`, read with `UserDefaults` inside
   `#if DEBUG`.
 
 In the demo mode, the app:
@@ -50,7 +50,7 @@ In the demo mode, the app:
 - shows the heading as aligned, ±0.5°, except where the table says otherwise;
 - shows the time of the table, as if the user had chosen it in the time panel;
 - gives a signal when the screen is ready: on iOS the accessibility identifier
-  `sunradar-screenshot-ready`, on Android an idle main thread after the first frame.
+  `sonnseite-screenshot-ready`, on Android an idle main thread after the first frame.
 
 | Screen | Local time (Europe/Vienna) | View azimuth, pitch | State |
 |---|---|---|---|

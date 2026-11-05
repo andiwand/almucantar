@@ -1,7 +1,7 @@
 # The store screenshots of the Android app (see screenshots/README.md at the root).
 #
 #   bundle exec fastlane screenshots                                   the phone set
-#   SUNRADAR_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
+#   SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing       the images to Google Play
 #
 # The capture needs one emulator with API 35 or later. ANDROID_SERIAL selects it if there are more
@@ -38,15 +38,15 @@ def python
 end
 
 def screenshot_device
-  given = ENV["SUNRADAR_SCREENSHOT_DEVICE"].to_s.strip.downcase
+  given = ENV["SONNSEITE_SCREENSHOT_DEVICE"].to_s.strip.downcase
   return SCREENSHOT_DEVICES.first if given.empty?
 
-  UI.user_error!("SUNRADAR_SCREENSHOT_DEVICE must be one of #{SCREENSHOT_DEVICES.join(', ')}") unless SCREENSHOT_DEVICES.include?(given)
+  UI.user_error!("SONNSEITE_SCREENSHOT_DEVICE must be one of #{SCREENSHOT_DEVICES.join(', ')}") unless SCREENSHOT_DEVICES.include?(given)
   given
 end
 
 def screenshot_languages
-  given = ENV["SUNRADAR_SCREENSHOT_LANGUAGES"].to_s.split(",").map(&:strip).reject(&:empty?)
+  given = ENV["SONNSEITE_SCREENSHOT_LANGUAGES"].to_s.split(",").map(&:strip).reject(&:empty?)
   return given unless given.empty?
 
   sh(python, STORE, "--platform", "android", "--languages", log: false).strip.split(",")
@@ -54,7 +54,7 @@ end
 
 # A run for some locales only cannot give a complete set, so the lane does not check it.
 def screenshots_narrowed?
-  !ENV["SUNRADAR_SCREENSHOT_LANGUAGES"].to_s.strip.empty?
+  !ENV["SONNSEITE_SCREENSHOT_LANGUAGES"].to_s.strip.empty?
 end
 
 platform :android do

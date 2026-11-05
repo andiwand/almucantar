@@ -147,7 +147,7 @@ the root). Run them on an emulator with API 35 or later:
 
 ```sh
 ANDROID_SERIAL=emulator-5554 bundle exec fastlane screenshots
-ANDROID_SERIAL=emulator-5554 SUNRADAR_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
+ANDROID_SERIAL=emulator-5554 SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
 ```
 
 - The demo mode exists only in the debug build. It uses no sensors, no location, and no camera,

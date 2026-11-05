@@ -45,7 +45,7 @@ jobs:
         device: [phone, tablet]
     env:
       ALMUCANTAR_ABIS: ""
-      SUNRADAR_SCREENSHOT_DEVICE: ${{ matrix.device }}
+      SONNSEITE_SCREENSHOT_DEVICE: ${{ matrix.device }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +77,7 @@ jobs:
       - name: Pick the device profile
         id: avd
         run: |
-          if [ "${SUNRADAR_SCREENSHOT_DEVICE}" = tablet ]; then
+          if [ "${SONNSEITE_SCREENSHOT_DEVICE}" = tablet ]; then
             candidates="pixel_tablet pixel_c"
           else
             candidates="pixel_9_pro_xl pixel_8_pro pixel_7_pro pixel_6_pro"
@@ -133,7 +133,7 @@ jobs:
       matrix:
         device: [iphone, ipad]
     env:
-      SUNRADAR_SCREENSHOT_DEVICE: ${{ matrix.device }}
+      SONNSEITE_SCREENSHOT_DEVICE: ${{ matrix.device }}
     steps:
       - uses: actions/checkout@v4
 

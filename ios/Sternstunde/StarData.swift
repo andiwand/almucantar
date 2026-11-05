@@ -2,7 +2,7 @@ import Almucantar
 import Foundation
 import SwiftUI
 
-/// The star data of starradar (`assets/stars/stars.json`, made by `scripts/stars/build_stars.py`):
+/// The star data of sternstunde (`assets/stars/stars.json`, made by `scripts/stars/build_stars.py`):
 /// the stars as columns for the core, their names, and the constellations. The stars are sorted by
 /// magnitude, the brightest first. The Android app and the web app read the same file.
 struct StarData: Sendable {

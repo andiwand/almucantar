@@ -1,7 +1,7 @@
 import Almucantar
 import XCTest
 
-@testable import StarradarApp
+@testable import SternstundeApp
 
 final class StarDataTests: XCTestCase {
     private static let stars: StarData = {

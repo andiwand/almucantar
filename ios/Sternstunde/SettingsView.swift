@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The keys of the settings of starradar in UserDefaults. The terrain uses the shared key.
+/// The keys of the settings of sternstunde in UserDefaults. The terrain uses the shared key.
 enum StarSettings {
     /// The lines and the names of the constellations. On by default.
     static let lines = "constellationLines"

@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import StarradarApp
+@testable import SternstundeApp
 
 final class MilkyWayTests: XCTestCase {
     func testGalacticDirectionsConvertToJ2000() {

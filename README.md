@@ -11,8 +11,8 @@ the milestones, and the plan of the apps (section 14).
 | **Sternstunde** | The stars, the constellations, the planets, and the Milky Way in the direction of the phone, over the real horizon. | pre-release of the web app; the Android and iOS apps build from `android/` and `ios/` |
 | **Alidade** | The photo planner: from where and when is the moon, the Milky Way, or the sun behind a landmark? | prototype of the web app; the Android app builds from `android/` |
 
-The apps had the names sunradar, starradar, and shotradar before November 2026. The web and the
-Android apps use the new names; the iOS apps get them later ([PLAN.md](PLAN.md) section 14.4).
+The apps had the names sunradar, starradar, and shotradar before November 2026
+([PLAN.md](PLAN.md) section 14.4).
 
 ## Sonnseite
 
@@ -89,7 +89,7 @@ are grouped by platform: each platform is one build with a shared part and one p
 |---|---|
 | `core/` | the C++20 core and its bindings: `core/python/` (PyPI `almucantar`), `core/android/` (AAR), `core/wasm/` (npm `@almucantar/core`), `core/apple/` (Swift package `Almucantar`, `Package.swift` at the root) |
 | `android/` | the Android apps (Kotlin, Jetpack Compose): `shared/`, `sonnseite/`, `sternstunde/`, and `alidade/` |
-| `ios/` | the iOS apps (SwiftUI): `Shared/`, `Sunradar/` (Sonnseite), and `Starradar/` (Sternstunde) |
+| `ios/` | the iOS apps (SwiftUI): `Shared/`, `Sonnseite/`, and `Sternstunde/` |
 | `web/` | one npm workspace: `shared/`, `home/` (the page of the family), and for each app `app/` and `site/` (on GitHub Pages under `/sonnseite/`, `/sternstunde/`, and `/alidade/`) |
 | `assets/` | the logos, the offline base map, and the star data |
 
