@@ -171,19 +171,28 @@ fun light(unixUtc: Double, at: Observer): Light {
     return Light(a, label, a < -12)
 }
 
-/** The smallest lit part of the moon that a photo shows. A new moon is not visible. */
+/** A moon with less light than this shows only as a crescent in the twilight. */
 private const val MIN_MOON_FRACTION = 0.1
+
+/** The thinnest crescent that a photo shows. It is still near the sun. */
+private const val MIN_CRESCENT_FRACTION = 0.03
+
+/** The sun must be this low for a thin crescent: then the twilight and the earthshine show. */
+private const val CRESCENT_MAX_SUN_DEG = -3.0
 
 /** The path of an alignment: an hour before and after it. */
 private const val AROUND_S = 3600.0
 
 /** True if the subject is visible at the shot: a dark enough sky, and a moon that is lit. */
 fun darkEnough(s: Shot): Boolean {
-    if (s.subject == SubjectId.MOON && moonIlluminatedFraction(s.unixUtc) < MIN_MOON_FRACTION) {
-        return false
+    val sunDeg = light(s.unixUtc, s.spot).sunDeg
+    if (s.subject == SubjectId.MOON) {
+        val fraction = moonIlluminatedFraction(s.unixUtc)
+        if (fraction < MIN_CRESCENT_FRACTION) return false
+        if (fraction < MIN_MOON_FRACTION && sunDeg > CRESCENT_MAX_SUN_DEG) return false
     }
     val limit = subjectOf(s.subject).maxSunDeg
-    return limit == null || light(s.unixUtc, s.spot).sunDeg <= limit
+    return limit == null || sunDeg <= limit
 }
 
 private val COMPASS =

@@ -196,6 +196,12 @@ class Model(context: Context) {
         stack += Screen.Home
     }
 
+    /** Goes back to the last screen of a done step of the strip. */
+    fun backToStep(step: Int) {
+        val index = stack.indexOfLast { stepOf(flow, it) == step }
+        if (index >= 0) stack.removeRange(index + 1, stack.size)
+    }
+
     /** The time zone of a place: all dates and times of a shot use the zone of its spot. */
     fun zoneAt(at: Observer?): ZoneId =
         at?.let { baseMap?.timeZoneAt(it, ZoneId.systemDefault()) } ?: ZoneId.systemDefault()
@@ -376,13 +382,15 @@ private fun Bar(model: Model, screen: Screen, modifier: Modifier) {
             }
         }
         Spacer(Modifier.weight(1f))
-        if (screen != Screen.Home) Trail(model.flow, stepOf(model.flow, screen))
+        if (screen != Screen.Home) {
+            Trail(model.flow, stepOf(model.flow, screen), model::backToStep)
+        }
     }
 }
 
-/** The strip of film: the steps of the way, the done ones and the active one. */
+/** The strip of film: the steps of the way. A tap on a done step goes back to it. */
 @Composable
-private fun Trail(flow: Flow, at: Int) {
+private fun Trail(flow: Flow, at: Int, onStep: (Int) -> Unit) {
     Row(
         Modifier.background(Shade.night, RoundedCornerShape(3.dp)).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -391,7 +399,8 @@ private fun Trail(flow: Flow, at: Int) {
             val active = i == at
             val done = i < at
             Row(
-                Modifier.border(1.dp, Shade.cream.copy(alpha = if (active) 0.6f else 0.14f))
+                Modifier.let { if (done) it.clickable { onStep(i) } else it }
+                    .border(1.dp, Shade.cream.copy(alpha = if (active) 0.6f else 0.14f))
                     .background(if (active) Shade.rose else Shade.night)
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
