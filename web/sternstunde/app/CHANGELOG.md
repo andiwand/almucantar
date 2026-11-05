@@ -5,6 +5,8 @@ The changes in the PWA of sternstunde that a user notices. Each release has the 
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-05
+
 - The first version: the stars to magnitude 6 (size from the brightness, color from the
   temperature), the 88 constellations with their lines and names, the planets, the moon with its
   phase, and the Milky Way, in the direction of the phone or in a sky view that you drag. The sky
