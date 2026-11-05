@@ -6,13 +6,13 @@ website and puts the PWA under `/app/`.
 
 ## Layout
 
-| Path | What |
-|---|---|
-| `index.html` | The page: the hero, the chapters (`data-chapter`), the playground, and the rest. |
-| `src/main.ts` | The chapters: each chapter sets the time and the parts of the sky from the scroll progress. The input and the readouts. |
-| `src/sky.ts` | The drawing of the sky: a panorama (azimuth to x, altitude to y, from `@almucantar/web-shared/panorama`), so a whole summer path fits on the screen. It draws only; the core calculates the sun and the moon. |
-| `src/style.css` | The layout. |
-| `public/images/` | The logo and the image for link previews. |
+| Path             | What                                                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`     | The page: the hero, the chapters (`data-chapter`), the playground, and the rest.                                                                                                                              |
+| `src/main.ts`    | The chapters: each chapter sets the time and the parts of the sky from the scroll progress. The input and the readouts.                                                                                       |
+| `src/sky.ts`     | The drawing of the sky: a panorama (azimuth to x, altitude to y, from `@almucantar/web-shared/panorama`), so a whole summer path fits on the screen. It draws only; the core calculates the sun and the moon. |
+| `src/style.css`  | The layout.                                                                                                                                                                                                   |
+| `public/images/` | The logo and the image for link previews.                                                                                                                                                                     |
 
 ## Build
 

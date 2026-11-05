@@ -1,13 +1,20 @@
+/* The look of Sonnseite: the light of the day. A bright sky, warm white cards like sunlit walls,
+   a clean type, and a rail of small windows that light up. */
+
 :root {
-  --sky: #0b1a30;
+  --sky: #4f86c6;
+  --paper: #faf6ee;
   --sun: #ffc83d;
-  --sun-light: #ffe08a;
-  --accent: #7fd8ff;
-  --text: #f1f4fa;
-  --muted: #b4c0d2;
-  --glass: rgba(8, 14, 28, 0.58);
-  --glass-edge: rgba(255, 255, 255, 0.12);
-  color-scheme: dark;
+  --sun-deep: #f0a91c;
+  --amber: #b45f06;
+  --ink: #1f2633;
+  --ink-soft: #485264;
+  --muted: #7a8394;
+  --card: rgba(255, 252, 245, 0.9);
+  --edge: rgba(31, 38, 51, 0.1);
+  --display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
 }
 
 * {
@@ -15,22 +22,18 @@
 }
 
 html {
-  background: var(--sky);
+  background: var(--paper);
 }
 
 body {
   margin: 0;
-  color: var(--text);
-  font:
-    17px/1.6 system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  color: var(--ink);
+  font: 17px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: var(--accent);
+  color: var(--amber);
 }
 
 /* The sky is behind the page. Only the text and the controls take the pointer, so a drag on an
@@ -77,6 +80,7 @@ main {
 .hero-inner {
   max-width: 700px;
   pointer-events: none;
+  color: #fff;
 }
 .hero-inner .actions,
 .hero-inner a {
@@ -84,51 +88,57 @@ main {
 }
 .logo {
   border-radius: 22px;
-  box-shadow: 0 10px 40px rgba(255, 200, 61, 0.25);
+  box-shadow:
+    0 0 0 6px rgba(255, 255, 255, 0.18),
+    0 14px 44px rgba(255, 190, 60, 0.45);
 }
 h1 {
-  font-size: clamp(44px, 8vw, 76px);
-  line-height: 1.05;
-  margin: 14px 0 0;
-  letter-spacing: -0.03em;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(48px, 8.4vw, 84px);
+  line-height: 1.02;
+  margin: 18px 0 0;
+  letter-spacing: -0.035em;
+  text-shadow: 0 2px 30px rgba(20, 50, 100, 0.35);
 }
 .tagline {
-  font-size: clamp(21px, 3vw, 28px);
-  color: var(--sun-light);
-  margin: 6px 0 14px;
+  font-family: var(--display);
+  font-size: clamp(20px, 2.8vw, 27px);
+  color: #fff4cc;
+  margin: 8px 0 16px;
   font-weight: 600;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 2px 20px rgba(20, 50, 100, 0.4);
 }
 .lead {
   margin: 0 auto;
-  color: var(--text);
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6);
+  max-width: 600px;
+  text-shadow: 0 1px 16px rgba(20, 50, 100, 0.55);
 }
-/* The hints have a dark background, so they are easy to read on a bright sky too. */
+/* The hints are bright chips, so they are easy to read on any sky. */
 .hint {
   display: table;
   margin: 18px auto 0;
-  padding: 5px 14px;
+  padding: 6px 16px;
   border-radius: 999px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
-  background: var(--glass);
-  border: 1px solid var(--glass-edge);
+  color: var(--ink);
+  background: rgba(255, 252, 245, 0.85);
+  box-shadow: 0 6px 24px rgba(20, 50, 100, 0.18);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 .drag-hint {
-  margin-top: 6px;
-  color: var(--muted);
+  margin-top: 8px;
+  color: var(--ink-soft);
+  background: rgba(255, 252, 245, 0.6);
 }
 html:not(.ready) .drag-hint {
   visibility: hidden;
 }
 
 .actions {
-  margin-top: 24px;
+  margin-top: 26px;
   display: flex;
   gap: 10px;
   justify-content: center;
@@ -139,22 +149,103 @@ html:not(.ready) .drag-hint {
 }
 .button {
   display: inline-block;
-  padding: 11px 20px;
+  padding: 12px 22px;
   border-radius: 999px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  color: var(--text);
-  background: rgba(10, 18, 36, 0.5);
+  color: var(--ink);
+  background: rgba(255, 252, 245, 0.82);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 6px 20px rgba(20, 50, 100, 0.15);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(20, 50, 100, 0.2);
 }
 .button.primary {
-  background: var(--sun);
+  background: linear-gradient(180deg, #ffd45e, var(--sun-deep));
   border-color: transparent;
   color: #2b1d00;
+  box-shadow: 0 8px 28px rgba(240, 169, 28, 0.45);
+}
+.card .button {
+  border-color: var(--edge);
+  box-shadow: none;
+}
+
+/* --- The rail: a small window for each chapter -------------------------------------------- */
+
+#rail {
+  position: fixed;
+  right: clamp(10px, 2vw, 26px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: opacity 0.4s;
+}
+#rail.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+/* A window: a frame with a cross. The window of the chapter on the screen is lit by the sun. */
+#rail button {
+  position: relative;
+  width: 22px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 3px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) center / 2px 100% no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) 0 40% / 100% 2px no-repeat,
+    rgba(40, 70, 110, 0.35);
+  box-shadow: 0 2px 10px rgba(20, 50, 100, 0.2);
+  cursor: pointer;
+  transition:
+    background-color 0.3s,
+    box-shadow 0.3s,
+    transform 0.3s;
+}
+#rail button.done {
+  background-color: rgba(255, 220, 140, 0.55);
+}
+#rail button.active {
+  background-color: var(--sun);
+  box-shadow:
+    0 0 0 3px rgba(255, 200, 61, 0.35),
+    0 0 24px rgba(255, 200, 61, 0.8);
+  transform: scale(1.12);
+}
+#rail button span {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: 0 4px 14px rgba(20, 50, 100, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#rail button:hover span,
+#rail button:focus-visible span {
+  opacity: 1;
 }
 
 /* --- The chapters ---------------------------------------------------------------------------- */
@@ -168,42 +259,67 @@ html:not(.ready) .drag-hint {
   position: sticky;
   top: 14vh;
   max-width: 410px;
-  padding: 22px 24px;
-  border-radius: 22px;
-  background: var(--glass);
-  border: 1px solid var(--glass-edge);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  padding: 24px 26px 22px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 24px 60px rgba(20, 50, 100, 0.22);
 }
 .card p {
   margin: 0 0 10px;
+  color: var(--ink-soft);
 }
 .step {
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--sun);
+  color: var(--amber) !important;
+}
+.step span {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: #2b1d00;
+  background: radial-gradient(circle at 35% 35%, #ffe7a3, var(--sun) 60%, var(--sun-deep));
+  box-shadow: 0 0 16px rgba(255, 200, 61, 0.6);
 }
 h2 {
-  font-size: clamp(26px, 3.4vw, 34px);
+  font-family: var(--display);
+  font-size: clamp(26px, 3.3vw, 34px);
+  font-weight: 700;
   line-height: 1.15;
+  letter-spacing: -0.02em;
   margin: 0 0 12px;
-  letter-spacing: -0.015em;
+  color: var(--ink);
 }
 .readout {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid var(--glass-edge);
+  border-top: 1px solid var(--edge);
   font-variant-numeric: tabular-nums;
   min-height: 92px;
+  color: var(--ink);
 }
 .big {
+  font-family: var(--display);
   font-size: 34px;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--sun-light);
+  letter-spacing: -0.01em;
+  color: var(--amber);
   margin-bottom: 4px;
 }
 .muted {
@@ -222,13 +338,11 @@ h2 {
     flex-direction: column;
     justify-content: flex-end;
   }
-  /* The card is at the end of the chapter. A sticky bottom keeps it on the screen until the
-     chapter ends. */
   .card {
     top: auto;
     bottom: 12px;
     margin-bottom: 12px;
-    padding: 16px 18px;
+    padding: 18px 18px 14px;
   }
   .chapter .card p:not(.step) {
     font-size: 15px;
@@ -241,6 +355,21 @@ h2 {
   }
   .big {
     font-size: 26px;
+  }
+  #rail {
+    top: 14px;
+    right: 10px;
+    transform: none;
+    flex-direction: row;
+    gap: 6px;
+  }
+  #rail button {
+    width: 14px;
+    height: 17px;
+    border-width: 1.5px;
+  }
+  #rail button span {
+    display: none;
   }
 }
 
@@ -263,51 +392,68 @@ h2 {
 }
 .play input[type="range"] {
   width: 100%;
-  accent-color: var(--sun);
+  accent-color: var(--sun-deep);
 }
 
-/* --- The rest of the page -------------------------------------------------------------------- */
+/* --- The rest of the page: bright paper ---------------------------------------------------- */
 
 .rest {
   max-width: 1040px;
   margin: 0 auto;
-  padding: 10vh 20px 0;
+  padding: 12vh 20px 0;
 }
 .rest section {
-  margin: 0 0 72px;
+  margin: 0 0 80px;
+}
+.rest h2 {
+  font-size: clamp(30px, 4vw, 42px);
+}
+.rest p {
+  color: var(--ink-soft);
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 18px;
 }
 .tile {
-  background: var(--glass);
-  border: 1px solid var(--glass-edge);
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--edge);
   border-radius: 18px;
-  padding: 18px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  padding: 22px 22px 20px;
+  box-shadow: 0 14px 40px rgba(60, 50, 30, 0.08);
+  overflow: hidden;
 }
 .tile h3 {
   margin: 0 0 6px;
-  font-size: 18px;
-  color: var(--sun-light);
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
 }
 .tile p {
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-soft);
 }
 table {
   border-collapse: collapse;
   margin: 16px 0;
   width: 100%;
+  background: #fff;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 14px 40px rgba(60, 50, 30, 0.08);
 }
 th,
 td {
   text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--glass-edge);
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--edge);
+}
+tr:last-child th,
+tr:last-child td {
+  border-bottom: 0;
 }
 th {
   color: var(--muted);
@@ -319,7 +465,10 @@ footer {
   color: var(--muted);
   font-size: 14px;
   padding: 40px 0 56px;
-  border-top: 1px solid var(--glass-edge);
+  border-top: 1px solid var(--edge);
+}
+footer p {
+  color: var(--muted) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

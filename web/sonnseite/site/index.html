@@ -14,12 +14,13 @@
       property="og:image"
       content="https://andiwand.github.io/almucantar/sonnseite/images/browser.jpg"
     />
-    <meta name="theme-color" content="#0b1a30" />
+    <meta name="theme-color" content="#4f86c6" />
     <link rel="icon" href="images/logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <canvas id="sky" aria-hidden="true"></canvas>
+    <nav id="rail" aria-label="Chapters"></nav>
 
     <header class="hero" data-chapter="hero">
       <div class="hero-inner">
@@ -33,14 +34,9 @@
         </p>
         <div class="actions">
           <a class="button primary" href="app/">Try it in the browser</a>
-          <a
-            class="button"
-            href="https://github.com/andiwand/almucantar/releases/tag/sonnseite-android-v0.2.0"
-            >Android (pre-release)</a
-          >
-          <a class="button" href="https://github.com/andiwand/almucantar">Source on GitHub</a>
+          <a class="button" href="#everywhere">Android and iOS</a>
         </div>
-        <p class="hint" id="hero-readout">The sky right now</p>
+        <p class="hint" id="hero-readout">The sky today</p>
         <p class="hint drag-hint">Drag the sky to move the sun · scroll to see more</p>
       </div>
     </header>
@@ -48,7 +44,7 @@
     <main>
       <section class="chapter" data-chapter="day">
         <div class="card">
-          <p class="step">1 · The day</p>
+          <p class="step"><span>01</span> The day</p>
           <h2>One path across the sky</h2>
           <p>
             Each day, the sun follows one path across your sky. Sonnseite draws this path on the
@@ -64,7 +60,7 @@
 
       <section class="chapter" data-chapter="year">
         <div class="card">
-          <p class="step">2 · The year</p>
+          <p class="step"><span>02</span> The year</p>
           <h2>Every day of the year</h2>
           <p>
             In June the path is high and long. In December it is low and short. The dashed lines
@@ -79,7 +75,7 @@
 
       <section class="chapter" data-chapter="window">
         <div class="card">
-          <p class="step">3 · The flat</p>
+          <p class="step"><span>03</span> The flat</p>
           <h2>Does the sun come through this window?</h2>
           <p>
             Made for the moment you visit a flat. Point the phone at the window, and Sonnseite shows
@@ -95,7 +91,7 @@
 
       <section class="chapter" data-chapter="moon">
         <div class="card">
-          <p class="step">4 · The night</p>
+          <p class="step"><span>04</span> The night</p>
           <h2>The moon, too</h2>
           <p>
             At night, Sonnseite shows the moon and its path. You can also use the moon to align the
@@ -111,7 +107,7 @@
 
       <section class="chapter" data-chapter="compass">
         <div class="card">
-          <p class="step">5 · The compass</p>
+          <p class="step"><span>05</span> The compass</p>
           <h2>A compass you can trust indoors</h2>
           <p>
             Steel in buildings disturbs the compass of a phone. Sonnseite knows how far it can trust
@@ -127,7 +123,7 @@
 
       <section class="play" data-chapter="play">
         <div class="card wide">
-          <p class="step">Your turn</p>
+          <p class="step"><span>06</span> Your turn</p>
           <h2>Your sky</h2>
           <label>
             <span>Date</span>
@@ -179,18 +175,18 @@
           <p class="muted small">The sky on this page comes from the same code as the app.</p>
         </section>
 
-        <section>
+        <section id="everywhere">
           <h2>Everywhere</h2>
           <div class="grid">
             <div class="tile">
               <h3>Android</h3>
               <p>
-                The native app with the camera overlay, the heading filter, and sun detection. Get
-                the APK of the
+                The native app with the camera overlay, the heading filter, and sun detection. It
+                comes to Google Play. Until then, get the APK of the
                 <a
                   href="https://github.com/andiwand/almucantar/releases/tag/sonnseite-android-v0.2.0"
                   >0.2.0 pre-release</a
-                >; it is not in Google Play yet.
+                >.
               </p>
             </div>
             <div class="tile">
@@ -203,8 +199,8 @@
             <div class="tile">
               <h3>iOS</h3>
               <p>
-                The native app in SwiftUI, with the same features as the Android app. Build it from
-                the repository; it is not in the App Store yet.
+                The native app in SwiftUI, with the same features as the Android app. It is in
+                testing and comes to the App Store.
               </p>
             </div>
             <div class="tile">

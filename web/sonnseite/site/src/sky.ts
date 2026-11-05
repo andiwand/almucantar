@@ -183,10 +183,10 @@ export class Sky {
       ctx.stroke();
     }
 
-    this.skyline(p, day);
+    this.skyline(p, day, frame.sun);
 
     if (frame.window && frame.window.alpha > 0) {
-      this.room(p, frame.window, day);
+      this.room(p, frame.window, day, frame.sun);
       // The hour marks stay on top of the frame and the cross of the window, but only in the
       // window: the wall hides the path, so a mark there would have no path.
       ctx.save();
@@ -200,7 +200,8 @@ export class Sky {
     }
 
     if (frame.dim > 0) {
-      ctx.fillStyle = `rgba(4, 8, 18, ${frame.dim})`;
+      // The page below the chapters is bright: the sky fades to the color of the paper.
+      ctx.fillStyle = `rgba(250, 246, 238, ${frame.dim})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
   }
@@ -323,20 +324,27 @@ export class Sky {
     ctx.restore();
   }
 
-  private skyline(p: Panorama, day: number) {
+  private skyline(p: Panorama, day: number, sun: Horizontal) {
     const ctx = this.ctx;
-    const ground: Rgb = mix([5, 7, 13], [22, 30, 44], day);
-    ctx.fillStyle = css(ground);
+    // In the day the city is a soft blue-grey in the haze, and the ground is light. At night it is
+    // dark, with lit windows.
+    const building: Rgb = mix([5, 7, 13], [104, 124, 156], day);
+    const ground = ctx.createLinearGradient(0, p.horizonY, 0, this.height);
+    ground.addColorStop(0, css(mix([5, 7, 13], [126, 144, 170], day)));
+    ground.addColorStop(1, css(mix([8, 10, 18], [226, 216, 200], day)));
+    ctx.fillStyle = ground;
     ctx.fillRect(0, p.horizonY, this.width, this.height - p.horizonY);
+    const sunX = p.x(sun.azimuthDeg);
+    const warm = Math.max(0, Math.min(1, 1 - sun.altitudeDeg / 30));
+    const rim = `rgba(255, ${Math.round(236 - 50 * warm)}, ${Math.round(196 - 80 * warm)}, ${0.85 * day})`;
     for (const b of BUILDINGS) {
       const x0 = p.x(b.azimuth);
       const w = b.width * p.pxPerDegX;
-      // The building can be at the edge of the panorama: draw it at both edges.
       for (const x of [x0, x0 - 360 * p.pxPerDegX, x0 + 360 * p.pxPerDegX]) {
         if (x + w < 0 || x > this.width) continue;
         const h = b.height * p.pxPerDegY;
         const top = p.horizonY - h;
-        ctx.fillStyle = css(ground);
+        ctx.fillStyle = css(building);
         ctx.beginPath();
         if (b.roof < 0.2) {
           ctx.moveTo(x, top + h * 0.15);
@@ -349,6 +357,13 @@ export class Sky {
         ctx.lineTo(x + w, p.horizonY + 1);
         ctx.lineTo(x, p.horizonY + 1);
         ctx.fill();
+        // The edge toward the sun catches the light.
+        if (day > 0.05 && sun.altitudeDeg > -1) {
+          ctx.fillStyle = rim;
+          const left = sunX < x + w / 2;
+          ctx.fillRect(left ? x : x + w - 2, top + (b.roof < 0.2 ? h * 0.15 : 0), 2, h);
+          ctx.fillRect(x, b.roof < 0.2 ? top + h * 0.15 : top, w, 1.5);
+        }
         if (day < 0.7) {
           ctx.fillStyle = `rgba(255, 206, 120, ${0.75 * (1 - day / 0.7)})`;
           for (const light of b.lights) {
@@ -359,20 +374,140 @@ export class Sky {
     }
   }
 
-  /** A dark wall with a window: only the sky in the window stays visible. */
-  private room(p: Panorama, win: NonNullable<Frame["window"]>, day: number) {
+  /**
+   * A room with a window: a wall, a floor in perspective, and the sunlight that falls through the
+   * four panes onto the floor. The patch of light follows the direction and the height of the sun.
+   * Only the sky in the window stays visible.
+   */
+  private room(p: Panorama, win: NonNullable<Frame["window"]>, day: number, sun: Horizontal) {
     const ctx = this.ctx;
     const [x0, y0, x1, y1] = windowRect(p, win);
-    const wall: Rgb = mix([10, 11, 16], [36, 34, 38], day);
+    // The room in meters: a wide window, 2.8 m wide, with its sill 0.45 m above the floor. The eye
+    // is 1.5 m high and 5.2 m from the wall. The scale comes from the window on the screen.
+    const width = 2.8;
+    const sill = 0.45;
+    const s = (x1 - x0) / width;
+    const head = sill + (y1 - y0) / s;
+    const eye = 1.5;
+    const distance = 5.2;
+    const xc = (x0 + x1) / 2;
+    const wallFloorY = y1 + sill * s;
+    /** A point on the floor at `x` meters from the middle and `z` meters from the wall. */
+    const floor = (x: number, z: number): [number, number] => {
+      const k = distance / Math.max(0.2, distance - z);
+      return [xc + x * s * k, y1 - (eye - sill) * s + eye * s * k];
+    };
+
     ctx.save();
     ctx.globalAlpha = win.alpha;
-    ctx.fillStyle = css(wall);
+    // The wall: warm plaster in the day, dark at night. A soft light from the window on it.
+    const plaster: Rgb = mix([18, 18, 24], [226, 214, 196], day);
+    ctx.fillStyle = css(plaster);
     ctx.beginPath();
-    ctx.rect(0, 0, this.width, this.height);
-    ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 6);
+    ctx.rect(0, 0, this.width, Math.min(this.height, wallFloorY));
+    ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 4);
     ctx.fill("evenodd");
+    const glow = ctx.createRadialGradient(xc, (y0 + y1) / 2, 0, xc, (y0 + y1) / 2, (x1 - x0) * 1.6);
+    glow.addColorStop(0, `rgba(255, 244, 222, ${0.35 * day})`);
+    glow.addColorStop(1, "rgba(255, 244, 222, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.rect(0, 0, this.width, Math.min(this.height, wallFloorY));
+    ctx.rect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fill("evenodd");
+
+    // The floor: wooden boards in perspective.
+    if (wallFloorY < this.height) {
+      const wood: Rgb = mix([20, 16, 14], [168, 124, 88], day);
+      const g = ctx.createLinearGradient(0, wallFloorY, 0, this.height);
+      g.addColorStop(0, css(mix(wood, [0, 0, 0], 0.25)));
+      g.addColorStop(1, css(wood));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, wallFloorY, this.width, this.height - wallFloorY);
+      ctx.strokeStyle = css(mix(wood, [0, 0, 0], 0.18));
+      ctx.lineWidth = 1;
+      for (let x = -12; x <= 12; x += 0.25) {
+        const [ax, ay] = floor(x, 0);
+        const [bx, by] = floor(x, distance - 0.4);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      }
+      // The skirting board.
+      ctx.fillStyle = css(mix(plaster, [255, 255, 255], 0.35));
+      ctx.fillRect(0, wallFloorY - 7, this.width, 7);
+    }
+
+    // The sunlight on the floor: each pane of the window gives one patch, so the cross of the
+    // window throws its shadow. A ray from the sun goes down by tan(altitude) for each meter into
+    // the room, and sideways by the angle between the sun and the wall.
+    const facing =
+      ((((sun.azimuthDeg - (win.azimuth[0] + win.azimuth[1]) / 2) % 360) + 540) % 360) - 180;
+    if (sun.altitudeDeg > 0.5 && Math.abs(facing) < 80) {
+      const t = Math.tan(sun.altitudeDeg * DEG);
+      const into = Math.cos(facing * DEG) / t;
+      const side = -Math.sin(facing * DEG) / t;
+      const strength = Math.min(1, sun.altitudeDeg / 4) * day;
+      const crossX = 0;
+      const crossH = head - (head - sill) * 0.38;
+      const panes: [number, number, number, number][] = [
+        [-width / 2, crossX - 0.03, crossH + 0.03, head],
+        [crossX + 0.03, width / 2, crossH + 0.03, head],
+        [-width / 2, crossX - 0.03, sill, crossH - 0.03],
+        [crossX + 0.03, width / 2, sill, crossH - 0.03],
+      ];
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, wallFloorY, this.width, this.height - wallFloorY);
+      ctx.clip();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = "rgba(255, 210, 140, 0.9)";
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = `rgba(255, 214, 150, ${0.42 * strength})`;
+      for (const [xa, xb, ha, hb] of panes) {
+        const corners = [
+          [xa, ha],
+          [xb, ha],
+          [xb, hb],
+          [xa, hb],
+        ].map(([x, h]) => floor(x + side * h, into * h));
+        ctx.beginPath();
+        corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      // The shaft of light in the air, very faint: the hull of the window and its patch.
+      const points: [number, number][] = [
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x0, y1],
+        ...[
+          [-width / 2, head],
+          [width / 2, head],
+          [width / 2, sill],
+          [-width / 2, sill],
+        ].map(([x, h]) => floor(x + side * h, into * h)),
+      ];
+      const hull = convexHull(points);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const shaft = ctx.createLinearGradient(0, y0, 0, Math.max(...hull.map(([, y]) => y)));
+      shaft.addColorStop(0, `rgba(255, 230, 180, ${0.08 * strength})`);
+      shaft.addColorStop(1, `rgba(255, 230, 180, ${0.02 * strength})`);
+      ctx.fillStyle = shaft;
+      ctx.beginPath();
+      hull.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     // The frame and the cross of the window.
-    ctx.strokeStyle = css(mix(wall, [255, 255, 255], 0.25));
+    const frameColor: Rgb = mix([40, 40, 46], [250, 248, 242], day);
+    ctx.strokeStyle = css(frameColor);
     ctx.lineWidth = 10;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     ctx.lineWidth = 6;
@@ -383,10 +518,30 @@ export class Sky {
     ctx.lineTo(x1, y0 + (y1 - y0) * 0.38);
     ctx.stroke();
     // The window sill.
-    ctx.fillStyle = css(mix(wall, [255, 255, 255], 0.18));
+    ctx.fillStyle = css(mix(frameColor, [0, 0, 0], 0.06));
     ctx.fillRect(x0 - 18, y1 + 5, x1 - x0 + 36, 10);
     ctx.restore();
   }
+}
+
+/** The convex hull of points on the screen (monotone chain). */
+function convexHull(points: [number, number][]): [number, number][] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: number[], a: number[], b: number[]) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0)
+      lower.pop();
+    lower.push(p);
+  }
+  const upper: [number, number][] = [];
+  for (const p of sorted.reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0)
+      upper.pop();
+    upper.push(p);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
 /** The window on the screen: left, top, right, and bottom. */

@@ -169,8 +169,18 @@ function moonArc(): MoonArc {
   return moonArcValue;
 }
 
+/**
+ * The time of the hero: now if the sun is up, else 10:30 today, so the page opens in daylight.
+ * The page is about the day.
+ */
+function brightNow(): number {
+  const t = now();
+  if (almucantar.sunPosition(t, observer).altitudeDeg > 8) return t;
+  return startOfDay(t) + 10.5 * 3600;
+}
+
 const chapters: Record<string, (p: number) => Partial<Target>> = {
-  hero: () => ({ time: now() + dragHours * 3600 }),
+  hero: () => ({ time: brightNow() + dragHours * 3600 }),
   day: (p) => {
     const d = dayAt(now());
     const from = (d.sunrise ?? d.start + 6 * 3600) - 1800;
@@ -188,8 +198,9 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
   },
   window: (p) => {
     const d = dayAt(now());
-    const from = d.start + 8 * 3600;
-    const to = d.start + 17 * 3600;
+    // The bright hours, so the room is in daylight also on a short winter day.
+    const from = d.start + 9 * 3600;
+    const to = d.start + 15 * 3600;
     return { time: from + (to - from) * p, window: 1 };
   },
   moon: (p) => {
@@ -204,7 +215,7 @@ const chapters: Record<string, (p: number) => Partial<Target>> = {
     return { time, band: 12 - 11.5 * aligned, tap: clamp((p - 0.45) / 0.1) };
   },
   play: () => ({ time: playTime(), guides: 1 }),
-  rest: () => ({ time: now(), dim: 0.62 }),
+  rest: () => ({ time: brightNow(), dim: 0.9 }),
 };
 
 // --- The playground -----------------------------------------------------------------------------
@@ -219,7 +230,7 @@ function playTime(): number {
 }
 
 function resetPlay() {
-  const t = now();
+  const t = brightNow();
   const year = localYear(t);
   playDate.value = String(Math.floor((startOfDay(t) - dateStart(year, 0, 1) + 7200) / DAY));
   playHour.value = String(Math.round((t - startOfDay(t)) / 60));
@@ -263,6 +274,42 @@ function scrollState(): { name: string; progress: number } {
     }
   }
   return { name: "rest", progress: 0 };
+}
+
+// --- The rail: one small window for each chapter; the window of the chapter on the screen is lit --
+
+const rail = $("rail");
+const railStops = sections
+  .filter((section) => section.dataset.chapter !== "rest")
+  .map((section) => {
+    const step = section.querySelector(".step");
+    const label =
+      section.dataset.chapter === "hero"
+        ? "Sonnseite"
+        : (step?.textContent ?? "").replace(/^\s*\d+\s*·?\s*/, "");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", label);
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.append(text);
+    button.addEventListener("click", () => {
+      const top = section.getBoundingClientRect().top + scrollY;
+      // The middle of a chapter: there its card and its sky are in place.
+      const travel = Math.max(0, section.offsetHeight - innerHeight);
+      scrollTo({ top: top + travel * 0.5, behavior: reducedMotion.matches ? "auto" : "smooth" });
+    });
+    rail.append(button);
+    return { name: section.dataset.chapter!, button };
+  });
+
+function updateRail(name: string) {
+  const active = railStops.findIndex((stop) => stop.name === name);
+  rail.classList.toggle("hidden", active < 0);
+  railStops.forEach((stop, i) => {
+    stop.button.classList.toggle("active", i === active);
+    stop.button.classList.toggle("done", active >= 0 && i < active);
+  });
 }
 
 // --- The input: drag the sky to move the sun ----------------------------------------------------
@@ -340,7 +387,8 @@ function readouts(name: string, time: number, sun: Horizontal, band: number) {
       ? `${sun.altitudeDeg.toFixed(0)}° above the horizon`
       : `${(-sun.altitudeDeg).toFixed(0)}° below the horizon`;
   if (name === "hero") {
-    setText("hero-readout", `${placeName} · ${hhmm(time)} · the sun is ${height}`);
+    const today = Math.abs(time - now()) > 600 ? "today " : "";
+    setText("hero-readout", `${placeName} · ${today}${hhmm(time)} · the sun is ${height}`);
   } else if (name === "day") {
     setText("day-time", hhmm(time));
     setText("day-detail", `The sun is ${height}, in the direction ${sun.azimuthDeg.toFixed(0)}°.`);
@@ -552,6 +600,7 @@ function frame(ms: number) {
   };
   sky.draw(frameData, ms);
   readouts(name, time, sun, shown.band);
+  updateRail(name);
   requestAnimationFrame(frame);
 }
 
