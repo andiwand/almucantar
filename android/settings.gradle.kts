@@ -24,6 +24,6 @@ includeBuild("../core/android")
 include(":shared")
 
 // The apps.
-include(":sunradar")
-include(":starradar")
-include(":shotradar")
+include(":sonnseite")
+include(":sternstunde")
+include(":alidade")

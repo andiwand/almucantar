@@ -38,8 +38,8 @@ sunradar is a pre-release. It is not ready for all users yet.
 
 | What | Where |
 |---|---|
-| Android app | the APK of [sunradar-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sunradar-android-v0.2.0) (a debug build: allow the installation from this source) |
-| Web app | <https://andiwand.github.io/almucantar/sunradar/app/> (also offline after the first visit) |
+| Android app | the APK of [sonnseite-android-v0.2.0](https://github.com/andiwand/almucantar/releases/tag/sonnseite-android-v0.2.0) (a debug build: allow the installation from this source) |
+| Web app | <https://andiwand.github.io/almucantar/sonnseite/app/> (also offline after the first visit) |
 | iOS app | build it from `ios/` (see [`ios/AGENTS.md`](ios/AGENTS.md)); it is not in the App Store |
 
 ## The core packages

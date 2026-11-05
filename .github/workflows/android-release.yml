@@ -1,9 +1,9 @@
-# Builds an Android app when its release is published (sunradar-android-v*, starradar-android-v*,
-# or shotradar-android-v*), and attaches the APK to the release. With the signing secrets of the
-# app, the APK is signed for release. For sunradar, the secrets are:
-#   SUNRADAR_KEYSTORE (base64 of the keystore), SUNRADAR_KEYSTORE_PASSWORD, SUNRADAR_KEY_ALIAS,
-#   SUNRADAR_KEY_PASSWORD.
-# starradar and shotradar use the same names with STARRADAR_ and SHOTRADAR_.
+# Builds an Android app when its release is published (sonnseite-android-v*, sternstunde-android-v*,
+# or alidade-android-v*), and attaches the APK to the release. With the signing secrets of the
+# app, the APK is signed for release. For Sonnseite, the secrets are:
+#   SONNSEITE_KEYSTORE (base64 of the keystore), SONNSEITE_KEYSTORE_PASSWORD, SONNSEITE_KEY_ALIAS,
+#   SONNSEITE_KEY_PASSWORD.
+# Sternstunde and Alidade use the same names with STERNSTUNDE_ and ALIDADE_.
 # Without them, the workflow attaches a debug build, named so.
 name: android-release
 
@@ -15,8 +15,8 @@ on:
       app:
         description: The app to build
         type: choice
-        options: [sunradar, starradar, shotradar]
-        default: sunradar
+        options: [sonnseite, sternstunde, alidade]
+        default: sonnseite
       version:
         description: The version to build (nothing is attached)
         type: string
@@ -26,9 +26,9 @@ jobs:
   native:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.release.tag_name, 'sunradar-android-v') ||
-      startsWith(github.event.release.tag_name, 'starradar-android-v') ||
-      startsWith(github.event.release.tag_name, 'shotradar-android-v')
+      startsWith(github.event.release.tag_name, 'sonnseite-android-v') ||
+      startsWith(github.event.release.tag_name, 'sternstunde-android-v') ||
+      startsWith(github.event.release.tag_name, 'alidade-android-v')
     uses: ./.github/workflows/native-android.yml
 
   apk:

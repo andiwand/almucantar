@@ -34,7 +34,7 @@ The raw captures go to `<app>/fastlane/screenshots/en-US/`, and the framed image
 
 The demo mode exists only in debug builds. The UI test starts it with the name of the screen:
 
-- Android: the intent extra `sunradar.screenshot` of `MainActivity`. A release build has a no-op
+- Android: the intent extra `sonnseite.screenshot` of `MainActivity`. A release build has a no-op
   version of the code in `src/release/`.
 - iOS: the launch argument `-SunradarScreenshot <screen>`, read with `UserDefaults` inside
   `#if DEBUG`.

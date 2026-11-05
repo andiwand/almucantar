@@ -67,7 +67,7 @@ fun latitude(worldY: Double, zoom: Int) = mercatorLatitude(worldY / (TILE_SIZE *
 
 /**
  * The OpenStreetMap tiles in memory, shared by all maps of the process (also the maps of the apps,
- * for example shotradar).
+ * for example alidade).
  */
 object OsmTiles {
     /** About 32 MB of tiles (a tile of 256 × 256 pixels has 256 KB). */

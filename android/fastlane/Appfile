@@ -1,3 +1,3 @@
 # The Google Play listing of the app. The upload key comes from SUPPLY_JSON_KEY_DATA (the JSON key of
 # a service account), so it is not in this file.
-package_name("at.stefl.sunradar")
+package_name("at.stefl.sonnseite")

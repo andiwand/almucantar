@@ -38,9 +38,9 @@ PROJECTS = {
     },
     # An app on one platform: its own paths and the shared code of the platform. The paths of
     # another app on the same platform do not change the version of this app.
-    "sunradar-android": {
+    "sonnseite-android": {
         "paths": [
-            "android/sunradar/**",
+            "android/sonnseite/**",
             "android/shared/**",
             "android/gradle/**",
             "android/*.kts",
@@ -48,7 +48,7 @@ PROJECTS = {
             "android/fastlane/**",
             "assets/basemap/**",
         ],
-        "changelog": "android/sunradar/CHANGELOG.md",
+        "changelog": "android/sonnseite/CHANGELOG.md",
         "stamps": [],
     },
     "sunradar-ios": {
@@ -87,9 +87,9 @@ PROJECTS = {
             )
         ],
     },
-    "starradar-android": {
+    "sternstunde-android": {
         "paths": [
-            "android/starradar/**",
+            "android/sternstunde/**",
             "android/shared/**",
             "android/gradle/**",
             "android/*.kts",
@@ -97,7 +97,7 @@ PROJECTS = {
             "assets/basemap/**",
             "assets/stars/**",
         ],
-        "changelog": "android/starradar/CHANGELOG.md",
+        "changelog": "android/sternstunde/CHANGELOG.md",
         "stamps": [],
     },
     "starradar-ios": {
@@ -137,9 +137,9 @@ PROJECTS = {
             )
         ],
     },
-    "shotradar-android": {
+    "alidade-android": {
         "paths": [
-            "android/shotradar/**",
+            "android/alidade/**",
             "android/shared/**",
             "android/gradle/**",
             "android/*.kts",
@@ -147,7 +147,7 @@ PROJECTS = {
             "assets/basemap/**",
             "assets/stars/**",
         ],
-        "changelog": "android/shotradar/CHANGELOG.md",
+        "changelog": "android/alidade/CHANGELOG.md",
         "stamps": [],
     },
     "alidade-pwa": {

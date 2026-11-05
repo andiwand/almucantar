@@ -54,19 +54,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build, test, lint, and check the format
-        run: ./gradlew :shared:testDebugUnitTest :shared:lintDebug :sunradar:assembleDebug :sunradar:testDebugUnitTest :sunradar:lintDebug :starradar:assembleDebug :starradar:testDebugUnitTest :starradar:lintDebug :shotradar:assembleDebug :shotradar:testDebugUnitTest :shotradar:lintDebug spotlessCheck
+        run: ./gradlew :shared:testDebugUnitTest :shared:lintDebug :sonnseite:assembleDebug :sonnseite:testDebugUnitTest :sonnseite:lintDebug :sternstunde:assembleDebug :sternstunde:testDebugUnitTest :sternstunde:lintDebug :alidade:assembleDebug :alidade:testDebugUnitTest :alidade:lintDebug spotlessCheck
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sunradar-debug-apk
-          path: android/sunradar/build/outputs/apk/debug/*.apk
+          name: sonnseite-debug-apk
+          path: android/sonnseite/build/outputs/apk/debug/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: starradar-debug-apk
-          path: android/starradar/build/outputs/apk/debug/*.apk
+          name: sternstunde-debug-apk
+          path: android/sternstunde/build/outputs/apk/debug/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: shotradar-debug-apk
-          path: android/shotradar/build/outputs/apk/debug/*.apk
+          name: alidade-debug-apk
+          path: android/alidade/build/outputs/apk/debug/*.apk

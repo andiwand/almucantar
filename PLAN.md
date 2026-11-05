@@ -578,8 +578,8 @@ only attached to the GitHub release. iOS has no release yet.
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
    (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
    can get a publish workflow.
-2. The new names of the apps (14.4): Android, iOS, the logos, and the documentation. The web
-   is done. Then the first upload to the Play Store.
+2. The new names of the apps (14.4): iOS, the logos, and the documentation. The web and Android
+   are done. Then the first upload to the Play Store.
 3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
    app.
 
@@ -1040,7 +1040,10 @@ The rename, step by step:
 3. Android: the modules, the Kotlin packages, the `applicationId`s, the signing variables
    (`SONNSEITE_*`, `STERNSTUNDE_*`, `ALIDADE_*`), the fastlane lanes, and the release projects.
    A new `applicationId` is a new app on the phone, so an installed sunradar APK does not update.
-   This is acceptable before the first upload to the Play Store. **Open.**
+   This is acceptable before the first upload to the Play Store. **Done (2026-11-05).** The
+   variables of the store screenshots (`SUNRADAR_SCREENSHOT_*`) keep their names until step 4,
+   because the iOS lanes use them too. The releases `sunradar-android-v0.1.0` and `v0.2.0` have
+   the new tags `sonnseite-android-v0.1.0` and `v0.2.0`, so git cliff finds the last version.
 4. iOS: the targets, the folders, the bundle IDs, and the release projects. **Open.**
 5. The logos (`assets/`), the store screenshots, the README, and the rest of the documentation.
    **Open.**

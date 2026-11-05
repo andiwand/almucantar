@@ -12,7 +12,7 @@ on:
       project:
         description: The project to release
         type: choice
-        options: [core, sunradar-android, sunradar-ios, sonnseite-pwa, starradar-android, starradar-ios, sternstunde-pwa, shotradar-android, alidade-pwa]
+        options: [core, sonnseite-android, sunradar-ios, sonnseite-pwa, sternstunde-android, starradar-ios, sternstunde-pwa, alidade-android, alidade-pwa]
         required: true
       version:
         description: The version (empty for the version from the commits)

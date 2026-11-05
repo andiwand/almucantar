@@ -15,7 +15,7 @@ import kotlin.math.sqrt
  * the galactic center and in the star clouds of Cygnus, Scutum, and Carina, with the Great Rift as
  * a dark lane. The positions are J2000, so the core moves them like stars. This is a picture for
  * the eye, not a measurement. The web has the same picture (`web/shared/src/milkyway.ts`).
- * starradar and shotradar use it.
+ * sternstunde and alidade use it.
  */
 class MilkyWay(
     val catalog: StarCatalog,

@@ -4,7 +4,7 @@ The web app alidade, the photo planner (PLAN.md 14.1): the moon, the Milky Way, 
 planet behind a landmark. Vite, TypeScript, the core `@almucantar/core`, and the shared code
 `@almucantar/web-shared`. It is a package of the npm workspace `web/` (see
 [`../../AGENTS.md`](../../AGENTS.md)). GitHub Pages serves it under `/alidade/app/`.
-The Android app (`android/shotradar/`) follows this PWA: its screens and its search are the same.
+The Android app (`android/alidade/`) follows this PWA: its screens and its search are the same.
 
 ## The workflow
 

@@ -12,7 +12,7 @@ require "tmpdir"
 
 default_platform(:android)
 
-PACKAGE_NAME = "at.stefl.sunradar".freeze
+PACKAGE_NAME = "at.stefl.sonnseite".freeze
 
 # Absolute paths, because a lane and an action can have different working directories.
 ANDROID = File.expand_path("..", __dir__).freeze
@@ -28,7 +28,7 @@ SCREENSHOT_DEVICES = %w[phone tablet].freeze
 # Gradle copies the additionalTestOutputDir of the test to here before it uninstalls the app. The
 # directory between is the name of the emulator, so the lane globs it.
 ADDITIONAL_OUTPUT = File.join(
-  ANDROID, "sunradar", "build", "outputs", "connected_android_test_additional_output",
+  ANDROID, "sonnseite", "build", "outputs", "connected_android_test_additional_output",
   "debugAndroidTest", "connected"
 ).freeze
 
@@ -66,9 +66,9 @@ platform :android do
 
     gradle(
       project_dir: ANDROID,
-      task: ":sunradar:connectedDebugAndroidTest",
+      task: ":sonnseite:connectedDebugAndroidTest",
       properties: {
-        "android.testInstrumentationRunnerArguments.class" => "at.stefl.sunradar.ScreenshotTests",
+        "android.testInstrumentationRunnerArguments.class" => "at.stefl.sonnseite.ScreenshotTests",
         "android.testInstrumentationRunnerArguments.device" => device,
         # A plus, not a comma: AGP cuts an instrumentation argument at the first comma.
         "android.testInstrumentationRunnerArguments.locales" => languages.join("+")
@@ -109,7 +109,7 @@ platform :android do
   lane :upload_listing do
     UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
 
-    Dir.mktmpdir("sunradar-listing") do |staged|
+    Dir.mktmpdir("sonnseite-listing") do |staged|
       sh(python, STORE, "--platform", "android", "--screenshots", FRAMED_DIR, "--stage", staged)
       upload_to_play_store(
         package_name: PACKAGE_NAME,
