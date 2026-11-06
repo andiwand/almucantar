@@ -31,6 +31,14 @@ Capture the store screenshots on the emulator and frame them
 
 Upload the framed screenshots to Google Play (images only, no app and no text)
 
+### android deploy
+
+```sh
+[bundle exec] fastlane android deploy
+```
+
+Upload the app bundle of an app to a track of Google Play (the bundle only, no listing)
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.

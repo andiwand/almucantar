@@ -1,10 +1,22 @@
 # Builds an Android app when its release is published (sonnseite-android-v*, sternstunde-android-v*,
-# or alidade-android-v*), and attaches the APK to the release. With the signing secrets of the
-# app, the APK is signed for release. For Sonnseite, the secrets are:
+# or alidade-android-v*), attaches the APK to the release, and uploads the app bundle to Google Play.
+#
+# With the signing secrets of the app, the APK and the app bundle are signed for release. The
+# keystore is the upload key of Google Play (Play App Signing keeps the app signing key). For
+# Sonnseite, the secrets are:
 #   SONNSEITE_KEYSTORE (base64 of the keystore), SONNSEITE_KEYSTORE_PASSWORD, SONNSEITE_KEY_ALIAS,
 #   SONNSEITE_KEY_PASSWORD.
 # Sternstunde and Alidade use the same names with STERNSTUNDE_ and ALIDADE_.
-# Without them, the workflow attaches a debug build, named so.
+# Without them, the workflow attaches a debug build, named so, and uploads nothing.
+#
+# The upload to Google Play needs the secret GOOGLE_PLAY_JSON_KEY: the JSON key of a service
+# account with the permission "Release apps to testing tracks" (and "Release to production" for
+# the track production). Without it, the workflow skips the upload with a notice.
+# A published release goes to the track internal. A manual run uploads only if it names a track.
+# The repository variable PLAY_RELEASE_STATUS sets the status of the release on Google Play:
+# draft (the default, because a draft app accepts only draft releases) or completed.
+# Google Play takes the first app bundle of an app only in the Play Console: upload the bundle of
+# the artifact by hand once.
 name: android-release
 
 on:
@@ -21,6 +33,11 @@ on:
         description: The version to build (nothing is attached)
         type: string
         default: 0.0.1
+      track:
+        description: The track of Google Play for the upload (none uploads nothing)
+        type: choice
+        options: [none, internal, alpha, beta, production]
+        default: none
 
 jobs:
   native:
@@ -44,6 +61,7 @@ jobs:
       TAG: ${{ github.event.release.tag_name }}
       INPUT_APP: ${{ inputs.app }}
       INPUT_VERSION: ${{ inputs.version }}
+      INPUT_TRACK: ${{ inputs.track }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,14 +71,17 @@ jobs:
           if [ -n "${TAG}" ]; then
             app="${TAG%%-android-v*}"
             version="${TAG#*-android-v}"
+            track=internal
           else
             app="${INPUT_APP}"
             version="${INPUT_VERSION}"
+            track="${INPUT_TRACK}"
           fi
           {
             echo "app=${app}"
             echo "prefix=$(echo "${app}" | tr '[:lower:]' '[:upper:]')"
             echo "version=${version}"
+            echo "track=${track}"
           } >> "${GITHUB_OUTPUT}"
 
       - uses: actions/download-artifact@v4
@@ -95,8 +116,10 @@ jobs:
             export "${PREFIX}_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}"
             export "${PREFIX}_KEY_ALIAS=${KEY_ALIAS}"
             export "${PREFIX}_KEY_PASSWORD=${KEY_PASSWORD}"
-            ./gradlew ":${APP}:assembleRelease"
+            ./gradlew ":${APP}:assembleRelease" ":${APP}:bundleRelease"
             cp "${APP}/build/outputs/apk/release/${APP}-release.apk" "out/${APP}-${VERSION}.apk"
+            cp "${APP}/build/outputs/bundle/release/${APP}-release.aab" "out/${APP}-${VERSION}.aab"
+            cp "${APP}/build/outputs/mapping/release/mapping.txt" "out/${APP}-${VERSION}-mapping.txt"
           else
             echo "::notice::No signing secrets; the release gets a debug build"
             ./gradlew ":${APP}:assembleDebug"
@@ -112,4 +135,49 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: android/out/*.apk
+          path: |
+            android/out/*.apk
+            android/out/*.aab
+            android/out/*-mapping.txt
+
+      # A debug build has no app bundle, so the step needs the signing secrets too.
+      - name: Check the upload to Google Play
+        id: play
+        env:
+          TRACK: ${{ steps.app.outputs.track }}
+          AAB: out/${{ steps.app.outputs.app }}-${{ steps.app.outputs.version }}.aab
+          HAS_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        run: |
+          if [ "${TRACK}" = "none" ] || [ -z "${TRACK}" ]; then
+            echo "upload=false" >> "${GITHUB_OUTPUT}"
+          elif [ "${HAS_KEY}" != "true" ]; then
+            echo "::notice::No GOOGLE_PLAY_JSON_KEY; the workflow does not upload to Google Play"
+            echo "upload=false" >> "${GITHUB_OUTPUT}"
+          elif [ ! -f "${AAB}" ]; then
+            echo "::notice::No signed app bundle; the workflow does not upload to Google Play"
+            echo "upload=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "upload=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.play.outputs.upload == 'true'
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Upload to Google Play
+        if: steps.play.outputs.upload == 'true'
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          APP: ${{ steps.app.outputs.app }}
+          VERSION: ${{ steps.app.outputs.version }}
+          TRACK: ${{ steps.app.outputs.track }}
+          RELEASE_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+        run: >-
+          bundle exec fastlane deploy
+          "app:${APP}"
+          "aab:${PWD}/out/${APP}-${VERSION}.aab"
+          "mapping:${PWD}/out/${APP}-${VERSION}-mapping.txt"
+          "track:${TRACK}"
+          "release_status:${RELEASE_STATUS}"

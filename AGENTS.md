@@ -83,8 +83,9 @@ OpenDocument.core.
 3. Run it again without `dry_run`. Set `prerelease` for a version that is not ready for all
    users. The workflow commits `chore(release): <tag> [skip ci]` and creates a draft release.
 4. Publish the draft on GitHub. The published release starts `publish-core.yml` (npm, PyPI,
-   Maven Central, and the Swift package) or `android-release.yml` (the APK of the app). A PWA
-   needs no publish step, because GitHub Pages deploys `main`. The iOS apps have no publish
+   Maven Central, and the Swift package) or `android-release.yml` (the APK of the app, and the
+   app bundle to the track internal of Google Play). A PWA needs no publish step, because GitHub
+   Pages deploys `main`. The iOS apps have no publish
    workflow yet, because the App Store needs an Apple developer account.
 
 `scripts/release.py` runs the same steps by hand (`version`, `check`, `stamp --dry-run`,

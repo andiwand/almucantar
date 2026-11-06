@@ -576,10 +576,13 @@ only attached to the GitHub release. iOS has no release yet.
 ### Next
 
 1. Set up the accounts and secrets of M10 and M12: npm (the organization "almucantar"), PyPI
-   (`almucantar`), Maven Central, the Play Store, and the Apple developer account. Then the iOS app
-   can get a publish workflow.
+   (`almucantar`), Maven Central, and the Apple developer account. Then the iOS app can get a
+   publish workflow. The Play Store account and its three apps are done (14.4). The secrets of
+   `android-release.yml` are on GitHub (2026-11-06): the upload keystores of the three apps and
+   the JSON key of the service account `play-release` (Cloud project `almucantar-513919`).
 2. The first upload to the Play Store, with the new names of the apps (14.4). Before it,
-   search the names in TMview.
+   search the names in TMview. Google Play takes the first app bundle of an app only in the Play
+   Console, so upload it by hand. `android-release.yml` uploads the later versions.
 3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
    app.
 
@@ -1023,9 +1026,17 @@ How we chose:
   field. Sonnseite has no app, and no mark that we found.
 
 The store titles add a description, because the names alone say little to a user who does not
-speak German, and because App Store titles must be unique: "Sonnseite – Sun Path & Sunlight",
-"Sternstunde – Stargazing Sky Map", and "Alidade – Photo Planner". Google Play and the App Store
-also let each language have its own title.
+speak German, and because App Store titles must be unique: "Sonnseite – Sunpath & Sunlight",
+"Sternstunde – Star Sky Map", and "Alidade – Photo Planner". Google Play allows a maximum of 30
+characters in a title, so the first plan ("Sonnseite – Sun Path & Sunlight", "Sternstunde –
+Stargazing Sky Map") was too long. Google Play and the App Store also let each language have its
+own title.
+
+**Google Play (2026-11-06):** the developer account (a personal account) has the three apps as
+drafts, with these titles, the package IDs above, free, and the default language en-US. The
+account accepted the terms of Play App Signing, so Google keeps the app signing key, and the
+keystore of the workflow is the upload key. A new personal account must run a closed test (about
+12 testers for 14 days) before it can publish to production.
 
 The rename, step by step:
 

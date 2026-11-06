@@ -3,6 +3,8 @@
 #   bundle exec fastlane screenshots                                   the phone set
 #   SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing       the images to Google Play
+#   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane deploy app:sternstunde aab:/abs/app.aab track:internal
+#                                                                      an app bundle to a track
 #
 # The capture needs one emulator with API 35 or later. ANDROID_SERIAL selects it if there are more
 # devices.
@@ -13,6 +15,16 @@ require "tmpdir"
 default_platform(:android)
 
 PACKAGE_NAME = "at.stefl.sonnseite".freeze
+
+# The package names of the apps on Google Play, for the lane deploy.
+PACKAGES = {
+  "sonnseite" => "at.stefl.sonnseite",
+  "sternstunde" => "at.stefl.sternstunde",
+  "alidade" => "at.stefl.alidade"
+}.freeze
+TRACKS = %w[internal alpha beta production].freeze
+# A draft app (never published) accepts only draft releases. After the first publish, use completed.
+RELEASE_STATUSES = %w[draft completed].freeze
 
 # Absolute paths, because a lane and an action can have different working directories.
 ANDROID = File.expand_path("..", __dir__).freeze
@@ -125,5 +137,35 @@ platform :android do
         sync_image_upload: true
       )
     end
+  end
+
+  desc "Upload the app bundle of an app to a track of Google Play (the bundle only, no listing)"
+  lane :deploy do |options|
+    UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
+
+    app = options[:app].to_s
+    package = PACKAGES[app] || UI.user_error!("app must be one of #{PACKAGES.keys.join(', ')}")
+    aab = File.expand_path(options[:aab].to_s, ANDROID)
+    UI.user_error!("aab is not a file: #{aab}") unless File.file?(aab)
+    track = (options[:track] || "internal").to_s
+    UI.user_error!("track must be one of #{TRACKS.join(', ')}") unless TRACKS.include?(track)
+    status = (options[:release_status] || "draft").to_s
+    UI.user_error!("release_status must be one of #{RELEASE_STATUSES.join(', ')}") unless RELEASE_STATUSES.include?(status)
+    # The R8 mapping lets Google Play show readable stack traces of crashes.
+    mapping = options[:mapping] && File.expand_path(options[:mapping].to_s, ANDROID)
+
+    upload_to_play_store(
+      package_name: package,
+      json_key_data: ENV["SUPPLY_JSON_KEY_DATA"],
+      aab: aab,
+      mapping: mapping && File.file?(mapping) ? mapping : nil,
+      track: track,
+      release_status: status,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
   end
 end

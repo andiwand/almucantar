@@ -34,3 +34,9 @@ __pycache__/
 /ios/fastlane/report.xml
 /android/fastlane/report.xml
 /.bundle/
+
+# The upload keystores of Google Play, their passwords, and the key of the service account.
+# They stay on this computer only.
+/*-upload.jks
+/upload-keys.txt
+/play-service-account.json
