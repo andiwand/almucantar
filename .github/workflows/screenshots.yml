@@ -117,7 +117,10 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: ${{ steps.avd.outputs.profile }}
-          ram-size: 4096M
+          # All 4 cores of the runner: the searches of Alidade use all threads, and with 2 cores
+          # the emulator stopped answering adb ("device offline").
+          cores: 4
+          ram-size: 6144M
           disable-animations: true
           emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           working-directory: android
@@ -134,6 +137,13 @@ jobs:
           name: screenshots-android-${{ matrix.device }}
           path: android/fastlane/screenshots${{ env.APP_DIR }}
           if-no-files-found: ignore
+
+      # If the emulator went away: did the host kill it, and how much memory was free?
+      - name: Show the state of the runner
+        if: failure()
+        run: |
+          free -m
+          sudo dmesg | tail -n 60
 
       # The report and the logcat of a failed test (AGP writes the logcat into the test results).
       - uses: actions/upload-artifact@v4
