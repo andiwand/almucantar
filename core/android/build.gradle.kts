@@ -125,6 +125,8 @@ android {
         // A newer dependency is not a defect of this code.
         disable += "GradleDependency"
         disable += "NewerVersionAvailable"
+        // A newer Gradle is not a defect of this code either.
+        disable += "AndroidGradlePluginVersion"
     }
 }
 
