@@ -122,9 +122,9 @@ jobs:
           cores: 4
           ram-size: 6144M
           disable-animations: true
-          # The speed of LTE: Alidade downloads the terrain tiles at the second screen, and at the
-          # full speed of the runner the emulator stopped answering adb ("device offline").
-          emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics -netspeed lte
+          # swangle_indirect (ANGLE on SwiftShader): with swiftshader_indirect, the emulator process
+          # ended while Alidade drew the photos of its second screen.
+          emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           working-directory: android
           # The memory and the kernel log of the emulator, every 2 seconds, into files outside the
           # emulator: if the emulator stops, they show its last state.
