@@ -117,8 +117,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: ${{ steps.avd.outputs.profile }}
-          # All 4 cores of the runner: the searches of Alidade use all threads, and with 2 cores
-          # the emulator stopped answering adb ("device offline").
+          # All 4 cores of the runner: the searches of Alidade use all threads.
           cores: 4
           ram-size: 6144M
           disable-animations: true
@@ -126,12 +125,7 @@ jobs:
           # ended while Alidade drew the photos of its second screen.
           emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           working-directory: android
-          # The memory and the kernel log of the emulator, every 2 seconds, into files outside the
-          # emulator: if the emulator stops, they show its last state.
-          script: |
-            nohup sh -c 'while true; do adb shell "date; head -4 /proc/meminfo; top -b -n 1 -m 6 -o PID,RES,%CPU,ARGS"; sleep 2; done' > emulator-monitor.txt 2>&1 &
-            nohup adb logcat -b kernel > emulator-kernel.txt 2>&1 &
-            bundle exec fastlane screenshots "app:${APP}"
+          script: bundle exec fastlane screenshots "app:${APP}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -160,7 +154,6 @@ jobs:
           path: |
             android/*/build/reports/androidTests
             android/*/build/outputs/androidTest-results
-            android/emulator-*.txt
           if-no-files-found: ignore
 
   ios:
