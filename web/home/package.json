@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "format": "prettier --write src *.json index.html",
-    "format:check": "prettier --check src *.json index.html"
+    "format": "prettier --write src *.json index.html privacy",
+    "format:check": "prettier --check src *.json index.html privacy"
   },
   "devDependencies": {
     "prettier": "^3.3.0",

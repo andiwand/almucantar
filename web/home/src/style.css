@@ -98,3 +98,23 @@ footer {
   color: var(--muted);
   font-size: 14px;
 }
+
+/* The text pages (privacy/). */
+.text {
+  max-width: 720px;
+}
+
+.text h2 {
+  font-size: 22px;
+  margin: 32px 0 8px;
+}
+
+.text code {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.text .date {
+  color: var(--muted);
+  margin-top: 40px;
+}
