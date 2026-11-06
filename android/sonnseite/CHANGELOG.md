@@ -6,6 +6,8 @@ Each release has the tag `sonnseite-android-vX.Y.Z`. The rules are the same as i
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-06
+
 - Sonnseite has the bright look of the day of the website. Without the camera, the sky has the
   colors of the height of the sun, with a glow around the sun and a light ground. The path of the
   sun has a dark edge, and by day the labels and the crosshair are dark, so they are easy to see.
