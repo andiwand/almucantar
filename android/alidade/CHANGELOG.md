@@ -5,6 +5,8 @@ The changes in the Android app Alidade that a user notices. Each release has the
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-06
+
 - The first version, the photo planner of the PWA as an app. Every way ends in the shot: the photo
   from the spot in first person, with the real terrain, the landmark, the subject and its path, the
   stars, a time slider, and the frame of a lens, in the look of the website.
