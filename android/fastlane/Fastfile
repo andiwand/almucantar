@@ -171,7 +171,10 @@ platform :android do
       skip_upload_images: false,
       # The screenshots come from the lane upload_listing, which checks the complete set.
       skip_upload_screenshots: true,
-      sync_image_upload: true
+      sync_image_upload: true,
+      # The changes wait in the Publishing overview of the Play Console until someone sends them
+      # for review there.
+      changes_not_sent_for_review: true
     )
   end
   desc "Upload the app bundle of an app to a track of Google Play (the bundle only, no listing)"

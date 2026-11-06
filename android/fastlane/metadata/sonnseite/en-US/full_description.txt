@@ -22,7 +22,7 @@ PRECISE WHERE IT MATTERS
 The position of the sun agrees with NASA's JPL Horizons to better than 0.02°. Sonnseite uses the lens calibration of the camera, the World Magnetic Model, and a filter that combines the gyroscope, the magnetometer, and your alignments.
 
 OFFLINE AND PRIVATE
-Sonnseite works without a network, with an offline map of the world to pick a place. There are no accounts, no ads, and no analytics, and the app has no server of its own. It downloads the map and terrain tiles of the area that you look at, and it asks the geocoder of your phone for the name of the place.
+Sonnseite works without a network, with an offline map of the world to pick a place. There are no accounts, no ads, and no analytics, and the app has no server of its own. It only downloads the map and terrain tiles of the area that you look at.
 
 Sonnseite is open source (MPL-2.0): https://github.com/andiwand/almucantar
 It uses Astronomy Engine (MIT), the World Magnetic Model (NOAA), the time zone database of IANA, Natural Earth, maps from OpenStreetMap contributors, and the terrain of Copernicus DEM GLO-90 (© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved).

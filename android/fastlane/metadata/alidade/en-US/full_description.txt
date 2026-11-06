@@ -21,7 +21,7 @@ PRECISE
 The moon, the sun, and the planets come from Astronomy Engine. The moon is near, so its direction changes with your place by up to 1°: Alidade calculates it for each point of the line. The heights come from elevation data, not from a flat horizon at 0°.
 
 PRIVATE
-There are no accounts, no ads, and no analytics, and the app has no server of its own. It downloads the map and terrain tiles of the area that you look at, and it asks the geocoder of your phone for the name of the place.
+There are no accounts, no ads, and no analytics, and the app has no server of its own. It only downloads the map and terrain tiles of the area that you look at.
 
 Alidade is open source (MPL-2.0): https://github.com/andiwand/almucantar
 It uses Astronomy Engine (MIT), the Yale Bright Star Catalogue (Hoffleit & Warren 1991, NASA ADC), Natural Earth, maps from OpenStreetMap contributors, and the terrain of Copernicus DEM GLO-90 (© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved).

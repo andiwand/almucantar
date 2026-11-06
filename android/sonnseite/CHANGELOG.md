@@ -6,6 +6,9 @@ Each release has the tag `sonnseite-android-vX.Y.Z`. The rules are the same as i
 
 ## Unreleased
 
+- The name of your location comes from the offline map of the app ("near" the nearest town), not
+  from the geocoder of the phone. So the app sends your location to no service.
+
 ## 0.3.0 - 2026-11-06
 
 - Sonnseite has the bright look of the day of the website. Without the camera, the sky has the

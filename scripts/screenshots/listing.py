@@ -27,7 +27,11 @@ METADATA = ROOT / "android" / "fastlane" / "metadata"
 # The colors are the gradient of the logo.
 APPS = {
     "sonnseite": ("Sonnseite", "See when the sun is where.", ("#16325a", "#0b1a30")),
-    "sternstunde": ("Sternstunde", "The night sky over the real horizon.", ("#0d1430", "#050916")),
+    "sternstunde": (
+        "Sternstunde",
+        "The night sky over the real horizon.",
+        ("#0d1430", "#050916"),
+    ),
     "alidade": ("Alidade", "Plan the shot.", ("#2a1f3d", "#8a4a55")),
 }
 
@@ -46,7 +50,16 @@ def render_logo(app, size, square):
         target = Path(tmp) / "logo.png"
         source.write_text(svg)
         subprocess.run(
-            ["rsvg-convert", "-w", str(size), "-h", str(size), "-o", str(target), str(source)],
+            [
+                "rsvg-convert",
+                "-w",
+                str(size),
+                "-h",
+                str(size),
+                "-o",
+                str(target),
+                str(source),
+            ],
             check=True,
         )
         return Image.open(target).convert("RGBA")
@@ -66,7 +79,10 @@ def gradient(size, top, bottom):
     b = tuple(int(bottom[i : i + 2], 16) for i in (1, 3, 5))
     for y in range(height):
         t = y / (height - 1)
-        draw.line([(0, y), (width, y)], fill=tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3)))
+        draw.line(
+            [(0, y), (width, y)],
+            fill=tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3)),
+        )
     return image
 
 
@@ -92,7 +108,9 @@ def feature_graphic(app):
     gap = 18
     block = name_size + gap + line_size
     y = (height - block) // 2
-    draw.text((text_left, y), name, font=font(name_size, "Bold"), fill="white", anchor="lt")
+    draw.text(
+        (text_left, y), name, font=font(name_size, "Bold"), fill="white", anchor="lt"
+    )
     draw.text(
         (text_left, y + name_size + gap),
         line,

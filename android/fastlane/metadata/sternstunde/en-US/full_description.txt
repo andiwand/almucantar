@@ -22,7 +22,7 @@ RED LIGHT
 The red light keeps your eyes adapted to the dark.
 
 OFFLINE AND PRIVATE
-Sternstunde works without a network. Keep the terrain of a place offline before you go. There are no accounts, no ads, and no analytics, and the app has no server of its own. It downloads the map and terrain tiles of the area that you look at, and it asks the geocoder of your phone for the name of the place.
+Sternstunde works without a network. Keep the terrain of a place offline before you go. There are no accounts, no ads, and no analytics, and the app has no server of its own. It only downloads the map and terrain tiles of the area that you look at.
 
 Sternstunde is open source (MPL-2.0): https://github.com/andiwand/almucantar
 It uses Astronomy Engine (MIT), the Yale Bright Star Catalogue (Hoffleit & Warren 1991, NASA ADC), the constellations and star names of d3-celestial (© 2015 Olaf Frohn, BSD-3), Natural Earth, maps from OpenStreetMap contributors, and the terrain of Copernicus DEM GLO-90 (© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved).

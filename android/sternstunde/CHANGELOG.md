@@ -5,6 +5,9 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+- The name of your location comes from the offline map of the app ("near" the nearest town), not
+  from the geocoder of the phone. So the app sends your location to no service.
+
 ## 0.1.0 - 2026-11-06
 
 - The first version: the stars to magnitude 6 (size from the brightness, color from the

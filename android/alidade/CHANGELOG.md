@@ -5,6 +5,9 @@ The changes in the Android app Alidade that a user notices. Each release has the
 
 ## Unreleased
 
+- The name of your location comes from the offline map of the app ("near" the nearest town), not
+  from the geocoder of the phone. So the app sends your location to no service.
+
 ## 0.1.0 - 2026-11-06
 
 - The first version, the photo planner of the PWA as an app. Every way ends in the shot: the photo

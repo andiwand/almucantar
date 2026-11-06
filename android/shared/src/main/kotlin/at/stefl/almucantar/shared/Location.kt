@@ -3,8 +3,6 @@ package at.stefl.almucantar.shared
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Address
-import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
@@ -22,13 +20,10 @@ import androidx.core.content.edit
 import androidx.core.location.LocationManagerCompat
 import androidx.core.util.Consumer
 import at.stefl.almucantar.core.Observer
-import java.io.IOException
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.coroutines.resume
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 
 /** Where the place comes from. */
 enum class PlaceSource {
@@ -145,8 +140,8 @@ class PlaceState(initial: Place) {
  * Gives the place of the user. The core needs the place only to about 1 km (PLAN.md, section 2), so
  * the coarse location is sufficient. The app starts with the last place. Without it, the place is
  * the city of the time zone. A device location replaces them, but not a place that the user
- * dropped. The name comes from the geocoder of the device, if it has one. If [persistent] is false
- * (the demo mode), the app does not read or write the last place.
+ * dropped. The name comes from the offline base map ("near" its nearest place). If [persistent] is
+ * false (the demo mode), the app does not read or write the last place.
  */
 @Composable
 fun rememberPlace(
@@ -250,44 +245,12 @@ private suspend fun currentLocation(context: Context): Location? {
     }
 }
 
-/** The nearest town from the geocoder of the device, or null. The geocoder can use the network. */
-private suspend fun townName(context: Context, observer: Observer): String? {
-    if (!Geocoder.isPresent()) return null
-    val geocoder = Geocoder(context)
-    val address: Address? =
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                suspendCancellableCoroutine { continuation ->
-                    geocoder.getFromLocation(
-                        observer.latitudeDeg,
-                        observer.longitudeDeg,
-                        1,
-                        object : Geocoder.GeocodeListener {
-                            override fun onGeocode(addresses: MutableList<Address>) {
-                                continuation.resume(addresses.firstOrNull())
-                            }
-
-                            override fun onError(errorMessage: String?) {
-                                continuation.resume(null)
-                            }
-                        },
-                    )
-                }
-            } else {
-                withContext(Dispatchers.IO) {
-                    @Suppress("DEPRECATION")
-                    geocoder
-                        .getFromLocation(observer.latitudeDeg, observer.longitudeDeg, 1)
-                        ?.firstOrNull()
-                }
-            }
-        } catch (_: IOException) {
-            null
-        } catch (_: IllegalArgumentException) {
-            null
-        }
-    return address?.run { locality ?: subAdminArea ?: adminArea ?: countryName }
-}
+/**
+ * The name of a device location: "near" the nearest place of the offline base map, or null. The app
+ * does not use the geocoder of the device, because the geocoder sends the location to its provider.
+ */
+private suspend fun townName(context: Context, observer: Observer): String? =
+    BaseMapStore.load(context)?.nearest(observer)?.let { "near ${it.name}" }
 
 private fun hasPermission(context: Context) =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==

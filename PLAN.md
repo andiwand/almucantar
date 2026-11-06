@@ -523,7 +523,8 @@ contain the same core.
   heading filter (5.4a). `TYPE_ROTATION_VECTOR` is the fallback.
 - Location: the coarse location (fused, network, or GPS provider). Without it, the main
   city of the device time zone (IANA `zone.tab`), and the app says so. The status shows
-  the nearest town (geocoder) and the error as a power of ten, with its error on the sky.
+  the nearest town of the offline base map ("near", no geocoder, so the location stays on the
+  phone) and the error as a power of ten, with its error on the sky.
   The user can also drop a place on the offline map, so they can plan a flat from home (13.3).
 - Screens:
   1. Sky view: camera or no camera, path, horizon, terrain, sun and moon, compass accuracy.
