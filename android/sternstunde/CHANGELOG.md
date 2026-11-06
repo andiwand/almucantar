@@ -5,6 +5,8 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-06
+
 - The first version: the stars to magnitude 6 (size from the brightness, color from the
   temperature), the 88 constellations with their lines and names, the planets, the moon with its
   phase, the sun, and the Milky Way, in the direction of the phone, also on the camera image. The
