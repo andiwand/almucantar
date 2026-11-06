@@ -1,9 +1,12 @@
 # The store screenshots (screenshots/README.md): one capture job for each device, a job that checks
 # the complete set of each platform, and an upload to the store if `upload` is set.
 #
+# The input `app` chooses the app (sonnseite, sternstunde, or alidade). iOS has screenshots of
+# Sonnseite only, so the iOS jobs run only for it.
+#
 # The upload needs credentials. Without them, the upload job writes a notice and stops:
-# - Google Play: the secret SUPPLY_JSON_KEY_DATA, the JSON key of a service account with access to
-#   the app at.stefl.sonnseite in the Play Console.
+# - Google Play: the secret SUPPLY_JSON_KEY_DATA or GOOGLE_PLAY_JSON_KEY, the JSON key of a service
+#   account with the permission "Manage store presence" in the Play Console.
 # - App Store Connect: the secrets ASC_KEY_ID, ASC_ISSUER_ID, and ASC_KEY_CONTENT (the .p8 key,
 #   base64-encoded) of an App Store Connect API key with the role App Manager.
 name: screenshots
@@ -11,6 +14,11 @@ name: screenshots
 on:
   workflow_dispatch:
     inputs:
+      app:
+        description: The app
+        type: choice
+        options: [sonnseite, sternstunde, alidade]
+        default: sonnseite
       platform:
         description: The platform
         type: choice
@@ -22,11 +30,15 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.app }}
   cancel-in-progress: true
 
 env:
   CONAN_VERSION: "2.26.1"
+  APP: ${{ inputs.app }}
+  # The folders of fastlane for the app: Sonnseite has the folders themselves, each other app a
+  # folder below them (store.fastlane_dir in scripts/screenshots/store.py).
+  APP_DIR: ${{ inputs.app != 'sonnseite' && format('/{0}', inputs.app) || '' }}
 
 jobs:
   native:
@@ -109,23 +121,23 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           working-directory: android
-          script: bundle exec fastlane screenshots
+          script: bundle exec fastlane screenshots "app:${APP}"
 
       - uses: actions/upload-artifact@v4
         with:
           name: framed-android-${{ matrix.device }}
-          path: android/fastlane/framed
+          path: android/fastlane/framed${{ env.APP_DIR }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots-android-${{ matrix.device }}
-          path: android/fastlane/screenshots
+          path: android/fastlane/screenshots${{ env.APP_DIR }}
           if-no-files-found: ignore
 
   ios:
     name: ios (${{ matrix.device }})
-    if: inputs.platform != 'android'
+    if: inputs.platform != 'android' && inputs.app == 'sonnseite'
     runs-on: macos-15
     timeout-minutes: 120
     strategy:
@@ -187,24 +199,24 @@ jobs:
         platform: [android, ios]
     steps:
       - uses: actions/checkout@v4
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && (matrix.platform == 'android' || inputs.app == 'sonnseite')
 
       - uses: actions/download-artifact@v4
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && (matrix.platform == 'android' || inputs.app == 'sonnseite')
         with:
           pattern: framed-${{ matrix.platform }}-*
           merge-multiple: true
-          path: ${{ matrix.platform }}/fastlane/framed
+          path: ${{ matrix.platform }}/fastlane/framed${{ env.APP_DIR }}
 
       - name: Check the set
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        run: python3 scripts/screenshots/store.py --platform ${{ matrix.platform }} --screenshots ${{ matrix.platform }}/fastlane/framed
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && (matrix.platform == 'android' || inputs.app == 'sonnseite')
+        run: python3 scripts/screenshots/store.py --platform ${{ matrix.platform }} --app "${APP}" --screenshots ${{ matrix.platform }}/fastlane/framed${{ env.APP_DIR }}
 
       - uses: actions/upload-artifact@v4
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && (matrix.platform == 'android' || inputs.app == 'sonnseite')
         with:
           name: framed-${{ matrix.platform }}
-          path: ${{ matrix.platform }}/fastlane/framed
+          path: ${{ matrix.platform }}/fastlane/framed${{ env.APP_DIR }}
 
   # A skipped job before `set` (the other platform) skips the jobs after it, unless the condition
   # checks the result of `set` itself.
@@ -214,7 +226,7 @@ jobs:
     if: ${{ !cancelled() && needs.set.result == 'success' && inputs.upload && inputs.platform != 'ios' }}
     runs-on: ubuntu-24.04
     env:
-      SUPPLY_JSON_KEY_DATA: ${{ secrets.SUPPLY_JSON_KEY_DATA }}
+      SUPPLY_JSON_KEY_DATA: ${{ secrets.SUPPLY_JSON_KEY_DATA || secrets.GOOGLE_PLAY_JSON_KEY }}
     steps:
       - name: Check the credentials
         id: credentials
@@ -233,7 +245,7 @@ jobs:
         if: steps.credentials.outputs.present == 'true'
         with:
           name: framed-android
-          path: android/fastlane/framed
+          path: android/fastlane/framed${{ env.APP_DIR }}
 
       - uses: ruby/setup-ruby@v1
         if: steps.credentials.outputs.present == 'true'
@@ -244,12 +256,12 @@ jobs:
       - name: Upload
         if: steps.credentials.outputs.present == 'true'
         working-directory: android
-        run: bundle exec fastlane upload_listing
+        run: bundle exec fastlane upload_listing "app:${APP}"
 
   upload-ios:
     name: upload (App Store)
     needs: set
-    if: ${{ !cancelled() && needs.set.result == 'success' && inputs.upload && inputs.platform != 'android' }}
+    if: ${{ !cancelled() && needs.set.result == 'success' && inputs.upload && inputs.platform != 'android' && inputs.app == 'sonnseite' }}
     runs-on: macos-15
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -284,4 +296,4 @@ jobs:
       - name: Upload
         if: steps.credentials.outputs.present == 'true'
         working-directory: ios
-        run: bundle exec fastlane upload_listing
+        run: bundle exec fastlane upload_listing "app:${APP}"

@@ -27,6 +27,8 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
+        // The demo mode of the store screenshots, only in a debug build.
+        val scene = ScreenshotMode.scene(intent)
         setContent {
             var granted by remember {
                 mutableStateOf(
@@ -41,9 +43,12 @@ class MainActivity : ComponentActivity() {
                     granted = it
                 }
             LaunchedEffect(Unit) {
-                if (!granted) launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                // The demo mode uses no location, so it asks for no permission.
+                if (!granted && scene == null) {
+                    launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
             }
-            AlidadeApp(locationGranted = granted)
+            AlidadeApp(locationGranted = granted, scene = scene)
         }
     }
 }

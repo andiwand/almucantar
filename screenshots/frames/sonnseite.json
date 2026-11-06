@@ -2,6 +2,7 @@
   "_comment": [
     "The store pictures: the background and the headline of each screen.",
     "scripts/screenshots/frame.py draws them; see that file for the geometry.",
+    "With \"arc\": true, the images get the dashed path of the sun across the gallery.",
     "",
     "One entry per screen, in the order of the store, with the names that the UI tests",
     "write. `headline` has two lines for each locale: the first line is light, the",
@@ -9,6 +10,7 @@
     "night, like the dashed path of the sun across the gallery."
   ],
   "font": "Nunito[wght].ttf",
+  "arc": true,
   "backgrounds": {
     "evening": ["#f2a65a", "#c9655b"],
     "winter": ["#8fb4de", "#5f86bd"],

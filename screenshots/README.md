@@ -1,7 +1,9 @@
 # Store screenshots
 
 The pipeline makes the screenshots for Google Play and the App Store. It is the same pipeline as
-in OpenDocument.droid and OpenDocument.ios:
+in OpenDocument.droid and OpenDocument.ios. It has the screenshots of Sonnseite (Android and iOS),
+Sternstunde (Android), and Alidade (Android). The scripts and the lanes take the app as an option
+(`--app` and `app:`), and Sonnseite is the default.
 
 1. A UI test starts the real app in a demo mode for each screen and saves a raw PNG.
 2. `scripts/screenshots/frame.py` draws the store image with Pillow: a gradient background, a
@@ -22,13 +24,15 @@ bundle install                                              # fastlane, from the
 ```sh
 cd android && bundle exec fastlane screenshots              # phone; one emulator with API 35 or later
 cd android && SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots
+cd android && bundle exec fastlane screenshots app:sternstunde   # the same for Sternstunde or Alidade
 cd ios && bundle exec fastlane screenshots                  # iPhone and iPad
 cd ios && SONNSEITE_SCREENSHOT_DEVICE=ipad bundle exec fastlane screenshots
 .venv/bin/python scripts/screenshots/frame.py --platform android   # frame again only
 ```
 
-The raw captures go to `<app>/fastlane/screenshots/en-US/`, and the framed images go to
-`<app>/fastlane/framed/en-US/`. Git ignores both directories.
+The raw captures of Sonnseite go to `<platform>/fastlane/screenshots/en-US/`, and the framed
+images go to `<platform>/fastlane/framed/en-US/`. Each other app has a folder below them, for
+example `android/fastlane/framed/sternstunde/en-US/`. Git ignores all these folders.
 
 ## The demo mode
 
@@ -95,10 +99,39 @@ has its own size. The App Store wants the size of the device, so the iOS store i
 
 | Path | What |
 |---|---|
-| `screenshots/frames/frames.json` | The design: the backgrounds and the headline of each screen. |
+| `screenshots/frames/<app>.json` | The design of an app: the backgrounds and the headline of each screen, and `arc` (the dashed path of the sun of Sonnseite). The screens of the design are the screens of the app. |
 | `screenshots/frames/Nunito[wght].ttf`, `OFL.txt` | The font of the headlines (SIL Open Font License). |
 | `scripts/screenshots/store.py` | The locales, the screens, the sizes; checks and stages a set. |
 | `scripts/screenshots/frame.py` | Draws the store images. |
 | `Gemfile` | fastlane. |
-| `android/fastlane/`, `ios/fastlane/` | The lanes `screenshots` and `upload_listing`. |
-| `.github/workflows/screenshots.yml` | Captures on CI, and uploads if the store credentials exist. |
+| `android/fastlane/`, `ios/fastlane/` | The lanes `screenshots` and `upload_listing` (Android: with `app:`). |
+| `.github/workflows/screenshots.yml` | Captures on CI for the input `app`, and uploads if the store credentials exist. iOS: Sonnseite only. |
+
+## Sternstunde
+
+The demo mode of Sternstunde is the intent extra `sternstunde.screenshot` (`ScreenshotMode` in
+`android/sternstunde/src/debug/`). It uses the place Vienna, no sensors, no camera, no terrain,
+and no network. The settings are fixed: the constellation lines on, the terrain off.
+
+| Screen | Local time (Europe/Vienna) | View azimuth, pitch | State |
+|---|---|---|---|
+| `01-night` | 2026-12-18 21:30 | 140°, 28° | Orion, Taurus, and Sirius in the southeast. |
+| `02-tap` | 2026-12-18 21:30 | 140°, 28° | The same sky, with Betelgeuse selected and its info card. |
+| `03-milkyway` | 2026-08-12 22:30 | 190°, 18° | The center of the Milky Way selected, at new moon. |
+| `04-red` | 2026-10-10 21:00 | 0°, 35° | The north sky with the red light. |
+
+## Alidade
+
+The demo mode of Alidade is the intent extra `alidade.screenshot` (`ScreenshotMode` in
+`android/alidade/src/debug/`). It is the example of the website: the full moon behind the
+Großglockner, seen from a ridge above Kals (`web/alidade/site/src/shot.json`). The time of the app
+is 2026-11-06 12:00 (Europe/Vienna). The scene sets the choices and the stack of screens, and the
+model does not read or write the stored choices. The terrain comes from the network, so each screen
+waits 40 s before the capture.
+
+| Screen | State |
+|---|---|
+| `01-home` | The start page. |
+| `02-dates` | "I know my spot": the contact sheet of the dates of the next 12 months. |
+| `03-shot` | The shot of 24 November 2026, 17:08: the center of the moon on the summit. |
+| `04-eclipses` | The next eclipses, seen from the spot. |

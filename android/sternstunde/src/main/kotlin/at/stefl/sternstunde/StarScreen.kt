@@ -78,6 +78,7 @@ import at.stefl.almucantar.core.projectLine
 import at.stefl.almucantar.core.projectPoints
 import at.stefl.almucantar.core.unproject
 import at.stefl.almucantar.shared.CameraPreview
+import at.stefl.almucantar.shared.FixedHeading
 import at.stefl.almucantar.shared.Glyph
 import at.stefl.almucantar.shared.GlyphKind
 import at.stefl.almucantar.shared.HeadingTracker
@@ -141,21 +142,31 @@ private class Hit(val target: Target, val at: Offset, val mag: Double)
  * Way in the direction of the phone, over the terrain of the place. With the camera, the same
  * overlay lies on the camera image. A tap on an object shows its name and its rise and set; Find
  * leads to an object; Align corrects the heading with a bright star.
+ *
+ * With a [scene] (the demo mode of the store screenshots), the view, the heading, the place, the
+ * time, the selection, and the settings are fixed, and the app uses no sensors and no network.
  */
 @Composable
-fun StarScreen(stars: StarData, locationGranted: Boolean) {
-    val settings = rememberSettings()
-    val tracker = rememberHeadingTracker()
+fun StarScreen(stars: StarData, locationGranted: Boolean, scene: ScreenshotScene? = null) {
+    val storedSettings = rememberSettings()
+    val settings = remember(scene) { scene?.let { demoSettings(it) } ?: storedSettings }
+    val tracker = rememberHeadingTracker(scene?.let { FixedHeading(it.deviceToEnu, it.estimate) })
     val deviceZone = rememberTimeZone()
     var message by remember { mutableStateOf<String?>(null) }
-    val placeState = rememberPlace(locationGranted, deviceZone, persistent = true) { message = it }
-    val place = placeState.place
-    val zone = place.zone ?: deviceZone
+    // The demo mode does not read or write the last place.
+    val placeState =
+        rememberPlace(locationGranted && scene == null, deviceZone, persistent = scene == null) {
+            message = it
+        }
+    val place = scene?.place ?: placeState.place
+    val zone = scene?.zone ?: place.zone ?: deviceZone
     SideEffect { tracker.observer = place.observer }
 
-    var now by remember { mutableDoubleStateOf(System.currentTimeMillis() / 1000.0) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    var now by remember {
+        mutableDoubleStateOf(scene?.unixUtc ?: (System.currentTimeMillis() / 1000.0))
+    }
+    LaunchedEffect(scene) {
+        while (scene == null) {
             delay(1000)
             now = System.currentTimeMillis() / 1000.0
         }
@@ -178,7 +189,12 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
             SkyAt.compute(stars, milkyWay, labels, time, place.observer)
         }
 
-    val terrain by rememberTerrain(place.observer.takeIf { place.isKnown }, settings.terrain.value)
+    // The demo mode downloads nothing and shows no terrain.
+    val terrain by
+        rememberTerrain(
+            place.observer.takeIf { place.isKnown && scene == null },
+            settings.terrain.value && scene == null,
+        )
     val profile = terrain.profile?.takeIf { settings.terrain.value }
     val terrainLines = remember(profile) { profile?.let { TerrainLines(it) } }
 
@@ -191,7 +207,7 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
     var showFind by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var aligning by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf<Target?>(null) }
+    var selected by remember { mutableStateOf(scene?.target(stars)) }
     // The zoom of the sky view: a pinch changes it, a double tap resets it. The camera view has the
     // field of view of the lens, so the zoom does not change it.
     var zoom by remember { mutableDoubleStateOf(1.0) }
@@ -272,7 +288,11 @@ fun StarScreen(stars: StarData, locationGranted: Boolean) {
             val fov = (base / zoom).coerceIn(MIN_FOV_DEG, MAX_FOV_DEG)
             View(
                 deviceToEnu = q,
-                screenRotation = ScreenRotation.entries[displayRotation],
+                // The scene of the demo mode is a device held upright in portrait, also on a tablet
+                // whose natural orientation is landscape.
+                screenRotation =
+                    if (scene != null) ScreenRotation.ROTATION_0
+                    else ScreenRotation.entries[displayRotation],
                 headingOffsetDeg = tracker.estimate.offsetDeg,
                 camera =
                     viewCamera?.camera?.takeIf { cameraOn }

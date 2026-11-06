@@ -1,8 +1,10 @@
 # The store screenshots of the Android app (see screenshots/README.md at the root).
 #
-#   bundle exec fastlane screenshots                                   the phone set
+#   bundle exec fastlane screenshots                                   the phone set of Sonnseite
+#   bundle exec fastlane screenshots app:sternstunde                   the phone set of another app
 #   SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
-#   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing       the images to Google Play
+#   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing app:alidade
+#                                                                      the images to Google Play
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane listing app:sternstunde the texts, the icon, and the
 #                                                                      feature graphic of metadata/<app>
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane deploy app:sternstunde aab:/abs/app.aab track:internal
@@ -15,8 +17,6 @@ require "fileutils"
 require "tmpdir"
 
 default_platform(:android)
-
-PACKAGE_NAME = "at.stefl.sonnseite".freeze
 
 # The package names of the apps on Google Play, for the lane deploy.
 PACKAGES = {
@@ -31,8 +31,6 @@ RELEASE_STATUSES = %w[draft completed].freeze
 # Absolute paths, because a lane and an action can have different working directories.
 ANDROID = File.expand_path("..", __dir__).freeze
 ROOT = File.expand_path("..", ANDROID).freeze
-SCREENSHOT_DIR = File.join(ANDROID, "fastlane", "screenshots").freeze
-FRAMED_DIR = File.join(ANDROID, "fastlane", "framed").freeze
 PYTHON = File.join(ROOT, ".venv", "bin", "python").freeze
 FRAME = File.join(ROOT, "scripts", "screenshots", "frame.py").freeze
 STORE = File.join(ROOT, "scripts", "screenshots", "store.py").freeze
@@ -42,12 +40,33 @@ SCREENSHOT_DEVICES = %w[phone tablet].freeze
 # The store listings: metadata/<app>/<locale>/ with the texts and images/ (scripts/screenshots/listing.py).
 METADATA_DIR = File.join(ANDROID, "fastlane", "metadata").freeze
 
+# The app of a lane: the option app (sonnseite, sternstunde, or alidade). Sonnseite is the default.
+def app_of(options)
+  app = (options[:app] || "sonnseite").to_s
+  UI.user_error!("app must be one of #{PACKAGES.keys.join(', ')}") unless PACKAGES.key?(app)
+  app
+end
+
+# The raw captures and the framed images. Sonnseite has the folders of fastlane itself, because it
+# was the first app; each other app has a folder below them (the same rule as store.fastlane_dir).
+def screenshot_dir(app)
+  folder = File.join(ANDROID, "fastlane", "screenshots")
+  app == "sonnseite" ? folder : File.join(folder, app)
+end
+
+def framed_dir(app)
+  folder = File.join(ANDROID, "fastlane", "framed")
+  app == "sonnseite" ? folder : File.join(folder, app)
+end
+
 # Gradle copies the additionalTestOutputDir of the test to here before it uninstalls the app. The
 # directory between is the name of the emulator, so the lane globs it.
-ADDITIONAL_OUTPUT = File.join(
-  ANDROID, "sonnseite", "build", "outputs", "connected_android_test_additional_output",
-  "debugAndroidTest", "connected"
-).freeze
+def additional_output(app)
+  File.join(
+    ANDROID, app, "build", "outputs", "connected_android_test_additional_output",
+    "debugAndroidTest", "connected"
+  )
+end
 
 # The Python of the venv of the repository, or python3 if there is no venv (CI installs Pillow).
 def python
@@ -62,11 +81,11 @@ def screenshot_device
   given
 end
 
-def screenshot_languages
+def screenshot_languages(app)
   given = ENV["SONNSEITE_SCREENSHOT_LANGUAGES"].to_s.split(",").map(&:strip).reject(&:empty?)
   return given unless given.empty?
 
-  sh(python, STORE, "--platform", "android", "--languages", log: false).strip.split(",")
+  sh(python, STORE, "--platform", "android", "--app", app, "--languages", log: false).strip.split(",")
 end
 
 # A run for some locales only cannot give a complete set, so the lane does not check it.
@@ -75,61 +94,66 @@ def screenshots_narrowed?
 end
 
 platform :android do
-  desc "Capture the store screenshots on the emulator and frame them"
-  lane :screenshots do
+  desc "Capture the store screenshots of an app on the emulator and frame them"
+  lane :screenshots do |options|
+    app = app_of(options)
     device = screenshot_device
-    languages = screenshot_languages
-    FileUtils.rm_rf(ADDITIONAL_OUTPUT)
+    languages = screenshot_languages(app)
+    captured_dir = screenshot_dir(app)
+    framed = framed_dir(app)
+    output = additional_output(app)
+    FileUtils.rm_rf(output)
 
     gradle(
       project_dir: ANDROID,
-      task: ":sonnseite:connectedDebugAndroidTest",
+      task: ":#{app}:connectedDebugAndroidTest",
       properties: {
-        "android.testInstrumentationRunnerArguments.class" => "at.stefl.sonnseite.ScreenshotTests",
+        "android.testInstrumentationRunnerArguments.class" => "at.stefl.#{app}.ScreenshotTests",
         "android.testInstrumentationRunnerArguments.device" => device,
         # A plus, not a comma: AGP cuts an instrumentation argument at the first comma.
         "android.testInstrumentationRunnerArguments.locales" => languages.join("+")
       }
     )
 
-    taken = Dir.glob(File.join(ADDITIONAL_OUTPUT, "*", "screenshots", "*", "*.png"))
-    UI.user_error!("the test wrote no screenshots to #{ADDITIONAL_OUTPUT}") if taken.empty?
+    taken = Dir.glob(File.join(output, "*", "screenshots", "*", "*.png"))
+    UI.user_error!("the test wrote no screenshots to #{output}") if taken.empty?
 
     # The pictures of this device go into the folder of each locale, and the pictures of the other
     # device stay, so the two runs of the phone and the tablet give one set.
     languages.each do |locale|
-      Dir.glob(File.join(SCREENSHOT_DIR, locale, "#{device}-*.png")).each { |old| FileUtils.rm_f(old) }
+      Dir.glob(File.join(captured_dir, locale, "#{device}-*.png")).each { |old| FileUtils.rm_f(old) }
     end
     taken.each do |path|
       locale = File.basename(File.dirname(path))
-      target = File.join(SCREENSHOT_DIR, locale)
+      target = File.join(captured_dir, locale)
       FileUtils.mkdir_p(target)
       FileUtils.cp(path, File.join(target, File.basename(path)))
     end
     missing = languages.reject { |locale| taken.any? { |path| File.basename(File.dirname(path)) == locale } }
     UI.user_error!("no screenshots for #{missing.join(', ')}") unless missing.empty?
-    UI.success("captured #{taken.length} #{device} screenshots in #{SCREENSHOT_DIR}")
+    UI.success("captured #{taken.length} #{device} screenshots in #{captured_dir}")
 
-    sh(python, FRAME, "--platform", "android", "--captured", SCREENSHOT_DIR, "--framed", FRAMED_DIR)
+    sh(python, FRAME, "--platform", "android", "--app", app, "--captured", captured_dir, "--framed", framed)
     # The set is complete only with the pictures of both devices, which are two runs (CI gives each
     # device its own runner). So the lane checks the set when both devices have pictures.
     if screenshots_narrowed?
       UI.message("some locales only: the lane does not check the set")
-    elsif SCREENSHOT_DEVICES.all? { |kind| Dir.glob(File.join(FRAMED_DIR, "*", "#{kind}-*.png")).any? }
-      sh(python, STORE, "--platform", "android", "--screenshots", FRAMED_DIR)
+    elsif SCREENSHOT_DEVICES.all? { |kind| Dir.glob(File.join(framed, "*", "#{kind}-*.png")).any? }
+      sh(python, STORE, "--platform", "android", "--app", app, "--screenshots", framed)
     else
       UI.message("the set is complete only with #{SCREENSHOT_DEVICES.join(' and ')}: run the other device too")
     end
   end
 
-  desc "Upload the framed screenshots to Google Play (images only, no app and no text)"
-  lane :upload_listing do
+  desc "Upload the framed screenshots of an app to Google Play (images only, no app and no text)"
+  lane :upload_listing do |options|
     UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
 
-    Dir.mktmpdir("sonnseite-listing") do |staged|
-      sh(python, STORE, "--platform", "android", "--screenshots", FRAMED_DIR, "--stage", staged)
+    app = app_of(options)
+    Dir.mktmpdir("#{app}-listing") do |staged|
+      sh(python, STORE, "--platform", "android", "--app", app, "--screenshots", framed_dir(app), "--stage", staged)
       upload_to_play_store(
-        package_name: PACKAGE_NAME,
+        package_name: PACKAGES[app],
         json_key_data: ENV["SUPPLY_JSON_KEY_DATA"],
         metadata_path: staged,
         skip_upload_apk: true,
@@ -143,7 +167,6 @@ platform :android do
       )
     end
   end
-
 
   # The service account needs the permission "Manage store presence" in the Play Console.
   desc "Upload the store listing of an app to Google Play (the texts, the icon, the feature graphic)"

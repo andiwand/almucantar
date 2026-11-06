@@ -2,14 +2,18 @@
 """The locales, the screens, and the sizes of the store screenshots; checks and stages a set.
 
 Usage:
-  store.py --platform android|ios --languages
-  store.py --platform android|ios --screenshots DIR                 check a framed set
-  store.py --platform android|ios --screenshots DIR --stage OUT     check, then stage for fastlane
+  store.py --platform android|ios [--app APP] --languages
+  store.py --platform android|ios [--app APP] --screenshots DIR              check a framed set
+  store.py --platform android|ios [--app APP] --screenshots DIR --stage OUT  check, then stage
+
+APP is sonnseite (the default), sternstunde, or alidade. The screens of an app are the screens of
+its design, screenshots/frames/<app>.json.
 
 See screenshots/README.md.
 """
 
 import argparse
+import json
 import shutil
 import struct
 import sys
@@ -20,8 +24,33 @@ ROOT = Path(__file__).resolve().parents[2]
 # The app is in English only, so the stores get English pictures only.
 LOCALES = ("en-US",)
 
-# What one device shows, in the order of the store. The UI tests write the same names.
-SCREENS = ("01-path", "02-date", "03-align", "04-moon")
+# The apps with store screenshots. Each app has a design in screenshots/frames/<app>.json.
+APPS = ("sonnseite", "sternstunde", "alidade")
+FRAMES = ROOT / "screenshots" / "frames"
+
+# The app of this run (use() sets it), and what one device shows, in the order of the store. The
+# UI tests write the same names.
+APP = "sonnseite"
+SCREENS = ()
+
+
+def design_of(app):
+    """The design of an app: its screens, backgrounds, and font."""
+    text = json.loads((FRAMES / f"{app}.json").read_text())
+    text.pop("_comment", None)
+    return text
+
+
+def use(app):
+    """Makes [app] the app of this run: its screens become SCREENS."""
+    global APP, SCREENS
+    if app not in APPS:
+        sys.exit(f"no app {app}: one of {', '.join(APPS)}")
+    APP = app
+    SCREENS = tuple(sorted(screen["name"] for screen in design_of(app)["screens"]))
+
+
+use(APP)
 
 # The store image of each device. Android has its own canvas, because Google Play refuses a side
 # that is more than two times the other side. iOS keeps the size of the capture, because the App
@@ -49,6 +78,16 @@ LIMITS = {"android": (2, 8), "ios": (1, 10)}
 
 def app_dir(platform):
     return ROOT / platform
+
+
+def fastlane_dir(platform, kind):
+    """The folder of the raw captures (kind "screenshots") or of the framed images ("framed").
+
+    Sonnseite has the folders of fastlane itself, because it was the first app. Each other app has
+    a folder of its own below them.
+    """
+    folder = app_dir(platform) / "fastlane" / kind
+    return folder if APP == "sonnseite" else folder / APP
 
 
 def png_size(path):
@@ -156,6 +195,7 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--platform", choices=sorted(DEVICES), required=True)
+    parser.add_argument("--app", choices=APPS, default="sonnseite")
     parser.add_argument(
         "--languages",
         action="store_true",
@@ -172,6 +212,7 @@ def main(argv=None):
         help="copy the checked set here, in the layout of fastlane",
     )
     args = parser.parse_args(argv)
+    use(args.app)
 
     if args.languages:
         print(",".join(LOCALES))
@@ -187,7 +228,7 @@ def main(argv=None):
     count = sum(
         len(screens) for devices in found.values() for screens in devices.values()
     )
-    print(f"{count} {args.platform} screenshots are complete")
+    print(f"{count} {args.platform} screenshots of {APP} are complete")
     if args.stage:
         stage(args.platform, found, args.stage)
 

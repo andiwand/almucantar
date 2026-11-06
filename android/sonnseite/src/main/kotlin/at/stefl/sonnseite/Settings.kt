@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import at.stefl.almucantar.shared.PrivacyLink
 import at.stefl.almucantar.shared.TERRAIN_SOURCE
 
 private const val PREFERENCES = "settings"
@@ -79,6 +80,7 @@ fun SettingsDialog(terrain: BooleanSetting, onDismiss: () -> Unit) {
                 Text("Landmark map: © OpenStreetMap contributors", fontSize = 12.sp)
                 Text("Place map: Natural Earth (public domain)", fontSize = 12.sp)
                 Text(TERRAIN_SOURCE.attribution, fontSize = 12.sp)
+                PrivacyLink()
             }
         },
     )

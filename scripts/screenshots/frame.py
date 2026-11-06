@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Draws the store images from the raw captures.
 
-Each image has a gradient background, the capture in a drawn device body, a headline of two
-lines, and a dashed path of the sun. The path goes across the whole gallery: each image shows the
-part of one large arc, so the gallery reads as one day from sunrise to the moon at night. The
-device geometry comes from OpenDocument.droid and OpenDocument.ios.
+Each image has a gradient background, the capture in a drawn device body, and a headline of two
+lines. If the design of the app has "arc": true (Sonnseite), the images also have a dashed path of
+the sun. The path goes across the whole gallery: each image shows the part of one large arc, so the
+gallery reads as one day from sunrise to the moon at night. The device geometry comes from
+OpenDocument.droid and OpenDocument.ios.
 
 Usage:
-  frame.py --platform android|ios [--captured DIR] [--framed DIR] [--locale en-US]
+  frame.py --platform android|ios [--app APP] [--captured DIR] [--framed DIR] [--locale en-US]
 
 See screenshots/README.md.
 """
@@ -28,7 +29,7 @@ try:
 except ImportError:
     sys.exit("this needs Pillow: .venv/bin/pip install -r scripts/requirements-dev.txt")
 
-FRAMES = store.ROOT / "screenshots" / "frames"
+FRAMES = store.FRAMES
 
 # All values are fractions: a position down the image is a fraction of the height, and a size or
 # a position across is a fraction of the width. So one design fits all canvas sizes. The device is
@@ -144,9 +145,8 @@ MOON = (232, 238, 250)
 
 @functools.lru_cache(maxsize=None)
 def design():
-    text = json.loads((FRAMES / "frames.json").read_text())
-    text.pop("_comment", None)
-    return text
+    """The design of the app of this run (store.use)."""
+    return store.design_of(store.APP)
 
 
 @functools.lru_cache(maxsize=None)
@@ -477,24 +477,29 @@ def frame(shot, device, screen, locale, order, count):
     spec = design()
     canvas = gradient(size, *spec["backgrounds"][screen["background"]])
 
-    stroke = layout["dash_stroke"] * width
-    on, off = layout["dash_on"] * width, layout["dash_off"] * width
-    before = sum(arc_length(arc(layout, size, index, count)) for index in range(order))
-    points = arc(layout, size, order, count)
-    dashed(canvas, points, stroke, on, off, phase=before)
-
-    # The sun rises in the first image, and the moon is up in the last one.
-    radius = layout["body_radius"] * width
-    if order == 0:
-        body(canvas, points[len(points) * 8 // 100], radius, SUN, (255, 200, 80, 150))
-    if order == count - 1:
-        body(
-            canvas,
-            points[len(points) * 92 // 100],
-            radius * 0.8,
-            MOON,
-            (210, 225, 255, 110),
+    if spec.get("arc", False):
+        stroke = layout["dash_stroke"] * width
+        on, off = layout["dash_on"] * width, layout["dash_off"] * width
+        before = sum(
+            arc_length(arc(layout, size, index, count)) for index in range(order)
         )
+        points = arc(layout, size, order, count)
+        dashed(canvas, points, stroke, on, off, phase=before)
+
+        # The sun rises in the first image, and the moon is up in the last one.
+        radius = layout["body_radius"] * width
+        if order == 0:
+            body(
+                canvas, points[len(points) * 8 // 100], radius, SUN, (255, 200, 80, 150)
+            )
+        if order == count - 1:
+            body(
+                canvas,
+                points[len(points) * 92 // 100],
+                radius * 0.8,
+                MOON,
+                (210, 225, 255, 110),
+            )
 
     device_body(canvas, shot, layout)
     headline(canvas, screen["headline"][locale], layout)
@@ -506,28 +511,30 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--platform", choices=sorted(store.DEVICES), required=True)
+    parser.add_argument("--app", choices=store.APPS, default="sonnseite")
     parser.add_argument(
         "--captured",
         type=Path,
-        help="the raw captures (default: <app>/fastlane/screenshots)",
+        help="the raw captures (default: store.fastlane_dir(platform, 'screenshots'))",
     )
     parser.add_argument(
-        "--framed", type=Path, help="the output (default: <app>/fastlane/framed)"
+        "--framed",
+        type=Path,
+        help="the output (default: store.fastlane_dir(platform, 'framed'))",
     )
     parser.add_argument(
         "--locale", action="append", help="frame only this locale (repeatable)"
     )
     args = parser.parse_args(argv)
+    store.use(args.app)
 
-    captured = (
-        args.captured or store.app_dir(args.platform) / "fastlane" / "screenshots"
-    )
-    framed = args.framed or store.app_dir(args.platform) / "fastlane" / "framed"
+    captured = args.captured or store.fastlane_dir(args.platform, "screenshots")
+    framed = args.framed or store.fastlane_dir(args.platform, "framed")
     screens = {screen["name"]: screen for screen in design()["screens"]}
     order = [name for name in store.SCREENS if name in screens]
     missing = [name for name in store.SCREENS if name not in screens]
     if missing:
-        sys.exit(f"frames.json has no design for {', '.join(missing)}")
+        sys.exit(f"{store.APP}.json has no design for {', '.join(missing)}")
 
     made = 0
     for locale in args.locale or store.LOCALES:
@@ -552,7 +559,7 @@ def main(argv=None):
             made += 1
     if not made:
         sys.exit(f"found no captures in {captured}")
-    print(f"framed {made} {args.platform} screenshots in {framed}")
+    print(f"framed {made} {args.platform} screenshots of {store.APP} in {framed}")
 
 
 def device_from_capture(platform, path, shot):

@@ -41,6 +41,7 @@ import at.stefl.almucantar.core.Site
 import at.stefl.almucantar.shared.BaseMap
 import at.stefl.almucantar.shared.BaseMapStore
 import at.stefl.almucantar.shared.MilkyWay
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
@@ -154,8 +155,12 @@ private fun stepOf(flow: Flow, screen: Screen): Int =
             }
     }
 
-/** The state of the app: the choices of the user (kept on the disk), and the loaded data. */
-class Model(context: Context) {
+/**
+ * The state of the app: the choices of the user (kept on the disk), and the loaded data. If
+ * [persistent] is false (the demo mode of the store screenshots), the model does not read or write
+ * the choices.
+ */
+class Model(context: Context, private val persistent: Boolean = true) {
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences("alidade", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -174,6 +179,16 @@ class Model(context: Context) {
 
     val stack = mutableStateListOf<Screen>(Screen.Home)
     var flow by mutableStateOf(Flow.LANDMARK)
+
+    /** The time of the demo mode, or null for the clock of the device. */
+    var clockUtc by mutableStateOf<Double?>(null)
+
+    /** Now, in seconds since 1970. All screens take the time from here. */
+    fun now(): Double = clockUtc ?: (System.currentTimeMillis() / 1000.0)
+
+    /** The day of [now] in [zone]. */
+    fun today(zone: ZoneId): LocalDate =
+        Instant.ofEpochSecond(now().toLong()).atZone(zone).toLocalDate()
 
     /** The progress of the horizons that are in work: the bands that are ready, by key. */
     val progress = mutableStateMapOf<String, Int>()
@@ -268,6 +283,7 @@ class Model(context: Context) {
     }
 
     fun save() {
+        if (!persistent) return
         val json =
             JSONObject().apply {
                 put("subject", subject.name)
@@ -284,6 +300,7 @@ class Model(context: Context) {
     }
 
     private fun load() {
+        if (!persistent) return
         val text = prefs.getString(STATE_KEY, null) ?: return
         try {
             val json = JSONObject(text)
@@ -324,9 +341,10 @@ class Model(context: Context) {
 }
 
 @Composable
-fun AlidadeApp(locationGranted: Boolean) {
+fun AlidadeApp(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     val context = LocalContext.current
-    val model = remember { Model(context) }
+    // The demo mode of the store screenshots: a fixed time and a fixed stack of screens.
+    val model = remember { Model(context, persistent = scene == null).also { scene?.apply(it) } }
     LaunchedEffect(Unit) { model.loadData() }
     val screen = model.stack.last()
     BackHandler(enabled = model.stack.size > 1) { model.back() }

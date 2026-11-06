@@ -47,6 +47,8 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../PlaceTime.kt` | The local time of a place: `wallClockTime`, `localDate`, and `dayBounds`. |
 | `.../TimePanel.kt` | The date and time sliders of the apps. |
 | `.../DeviceState.kt` | The rotation of the display and the time zone of the device, as Compose state. |
+| `.../Upright.kt` | `upright`: the view of a device held upright, as a quaternion, for the demo modes of the store screenshots. |
+| `.../Privacy.kt` | `PrivacyLink` and `PRIVACY_POLICY_URL`: the link to the privacy policy that each app shows (Google Play asks for it). |
 | `.../UserAgent.kt` | The User-Agent of the HTTP requests. Each app calls `UserAgent.init()` at the start, because the tile policy of OpenStreetMap asks that it names the app. |
 | `shared/src/main/AndroidManifest.xml` | The permissions of the shared code (location, network, camera). The manifest merger gives them to each app. |
 | `shared/src/main/assets/tzdata/` | The IANA `zone.tab`. |
@@ -62,7 +64,10 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../StarScreen.kt` | The sky view: the Milky Way, the constellation lines, the stars (size from the magnitude, color from B−V, down to the limit of the twilight), the names, the planets, the moon, the sun, the horizon, the terrain, and the selection or the arrow to it. The tap with the info card (rise and set over the terrain, in the background), Find, Align (a tap on an object to magnitude 2.5), the time panel, the place panel, and the red light. |
 | `.../Sky.kt` | `SkyAt`: the sky at one time (`starPositions` for the stars, the names of the constellations, and the Milky Way, once per second), and the targets (`Target`) with their name, direction, and rise and set (samples every 10 minutes). |
 | `.../StarData.kt` | The decoder of `stars.json`, the planets with their colors, and `StarLook` (size, color, limiting magnitude, twilight), the same rules as `web/shared/src/stars.ts`. Tested in `sternstunde/src/test/`. |
-| `.../Settings.kt` | The settings (constellation lines, terrain, red light) and the credits of the data. |
+| `.../Settings.kt` | The settings (constellation lines, terrain, red light), the credits of the data, and the privacy link. `demoSettings` gives the fixed settings of the demo mode. |
+| `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, selection, red light). |
+| `sternstunde/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sternstunde.screenshot`. The release build has a no-op version in `sternstunde/src/release/`. |
+| `sternstunde/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
 
 ### `alidade/`
 
@@ -72,7 +77,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | Path | What |
 |---|---|
 | `.../MainActivity.kt` | The activity: the User-Agent, the light system bars, and the location permission. |
-| `.../App.kt` | `Model` (the choices of the user in the shared preferences, the base map, the stars, the horizons once per place, and the stack of the screens with the back gesture), the bar with the strip of film, and the screen of each step. |
+| `.../App.kt` | `Model` (the time of the app, `now()`, which the demo mode fixes; the choices of the user in the shared preferences, the base map, the stars, the horizons once per place, and the stack of the screens with the back gesture), the bar with the strip of film, and the screen of each step. |
 | `.../Search.kt` | The subjects and the searches: `datesFor` ("I know my spot"), `momentsFor` ("Find me a spot"), `peakTargets`, `shotsFromPlace`, and `skyFromPlace` ("From where I am"), `noMatchReason`, the eclipses (`upcomingEclipses`, `localEclipse`, `lunarUmbra`, `discCoverage`). The core finds the alignments and the eclipses; this file chooses and sorts. Tested in `alidade/src/test/`. |
 | `.../Horizon.kt` | The horizon of a spot in four bands of distance (250 m to 90 km, at 0.2°): the full grids of GLO-90 for the near bands, the coarse grids for the far bands, from the shared `TerrainStore`. The skyline, `findPeaks`, the ground and the summit near a tap, the grids along a line, and the margin of the target for `lineOfSight`. Tested in `alidade/src/test/`. |
 | `.../Photo.kt` | `PhotoPainter`: the photo of `web/shared/src/photo.ts` on the Android canvas, with the same colors: the sky, the stars and the Milky Way, the path, the sun, the moon, the eclipses, the terrain in layers, the label of the landmark, the frame of the lens, and the viewfinder. |
@@ -82,6 +87,9 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../Screens.kt` | The pages: the start, the subject, the choices, the dates, the moments, the days, the shots of a place, the contact sheet, and the eclipses. |
 | `.../MapScreens.kt` | The screens on the map: the landmark, the spot, the line of the spots, the map of a shot, and the path of an eclipse on the map of the Earth. |
 | `.../ShotScreen.kt` | The shot: the photo with the pan and the zoom, the time slider, the lenses, the data, and the way to the spot. |
+| `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots: the time (`Model.clockUtc`), the choices, and the stack of screens of the example of the website. |
+| `alidade/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `alidade.screenshot`. The release build has a no-op version in `alidade/src/release/`. |
+| `alidade/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
 
 ### `sonnseite/`
 
@@ -92,7 +100,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../MainActivity.kt` | The activity and the location permission. |
 | `.../SkyScreen.kt` | The sky view (Compose): horizon, terrain line, cardinal points, path, hour marks, sun, crosshair with the auto-mode time, and the status text. |
 | `.../SkyDay.kt` | The data of one local day, calculated once per day and place. |
-| `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences) and the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`). |
+| `.../Settings.kt` | The settings dialog (the switch "Terrain horizon", stored in the shared preferences), the credits of the data (OpenStreetMap, Natural Earth, and the attribution of `TERRAIN_SOURCE`), and the privacy link. |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, heading). |
 | `.../TerrainDay.kt` | The sun path behind the terrain on one day, and the visible sunrise and sunset. |
 | `.../SkyView.kt` | The sky view without the camera, as `drawSkyView` of the web app: the sky in the colors of the sun altitude (`skyColors`, the table of `web/shared/src/panorama.ts`), the glow around the sun, and the ground. `DemoSky` uses the same table. |
@@ -101,7 +109,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `sonnseite/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sonnseite.screenshot`. The release build has a no-op version in `sonnseite/src/release/`. |
 | `sonnseite/src/test/` | JVM unit tests. |
 | `sonnseite/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
-| `fastlane/` | The lanes `screenshots` and `upload_listing` (of sonnseite only), `listing` (the texts, the icon, and the feature graphic of `fastlane/metadata/<app>/` for any app; the service account needs "Manage store presence"), and `deploy` (the app bundle of any app to a track of Google Play, for `android-release.yml`). `scripts/screenshots/listing.py` makes the icon and the feature graphic from the logo. |
+| `fastlane/` | The lanes `screenshots` and `upload_listing` (of any app, with `app:`; Sonnseite is the default), `listing` (the texts, the icon, and the feature graphic of `fastlane/metadata/<app>/` for any app; the service account needs "Manage store presence"), and `deploy` (the app bundle of any app to a track of Google Play, for `android-release.yml`). `scripts/screenshots/listing.py` makes the icon and the feature graphic from the logo. |
 
 ## The place
 

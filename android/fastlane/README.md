@@ -21,7 +21,7 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android screenshots
 ```
 
-Capture the store screenshots on the emulator and frame them
+Capture the store screenshots of an app on the emulator and frame them
 
 ### android upload_listing
 
@@ -29,7 +29,7 @@ Capture the store screenshots on the emulator and frame them
 [bundle exec] fastlane android upload_listing
 ```
 
-Upload the framed screenshots to Google Play (images only, no app and no text)
+Upload the framed screenshots of an app to Google Play (images only, no app and no text)
 
 ### android listing
 

@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "The store pictures of Alidade: the background and the headline of each screen.",
+    "scripts/screenshots/frame.py draws them; see that file for the geometry.",
+    "",
+    "One entry per screen, in the order of the store, with the names that the UI tests",
+    "write. `headline` has two lines for each locale: the first line is light, the",
+    "second line is bold. The backgrounds are the colors of the logo: the dusk over the",
+    "mountains, from the evening to the night."
+  ],
+  "font": "Nunito[wght].ttf",
+  "arc": false,
+  "backgrounds": {
+    "glow": ["#e8955e", "#8a4a55"],
+    "dusk": ["#b46a5e", "#4a2f4f"],
+    "evening": ["#8a4a55", "#2a1f3d"],
+    "night": ["#3a2c55", "#14101f"]
+  },
+  "screens": [
+    {
+      "name": "01-home",
+      "background": "glow",
+      "headline": { "en-US": ["Plan the shot", "over the real terrain."] }
+    },
+    {
+      "name": "02-dates",
+      "background": "dusk",
+      "headline": { "en-US": ["I stand here.", "When is the moon there?"] }
+    },
+    {
+      "name": "03-shot",
+      "background": "evening",
+      "headline": { "en-US": ["See the photo", "before you go."] }
+    },
+    {
+      "name": "04-eclipses",
+      "background": "night",
+      "headline": { "en-US": ["The next eclipses,", "from your spot."] }
+    }
+  ]
+}

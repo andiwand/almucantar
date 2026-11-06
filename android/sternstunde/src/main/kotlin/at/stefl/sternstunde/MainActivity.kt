@@ -33,6 +33,8 @@ class MainActivity : ComponentActivity() {
         // The star data is a few hundred kilobytes; the app reads it once.
         val stars =
             StarData.decode(assets.open("stars.json").bufferedReader().use { it.readText() })
+        // The demo mode of the store screenshots, only in a debug build.
+        val scene = ScreenshotMode.scene(intent)
 
         setContent {
             var granted by remember {
@@ -48,9 +50,12 @@ class MainActivity : ComponentActivity() {
                     granted = it
                 }
             LaunchedEffect(Unit) {
-                if (!granted) launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                // The demo mode uses no location, so it asks for no permission.
+                if (!granted && scene == null) {
+                    launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
             }
-            StarScreen(stars, locationGranted = granted)
+            StarScreen(stars, locationGranted = granted, scene = scene)
         }
     }
 }

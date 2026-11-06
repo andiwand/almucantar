@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "The store pictures of Sternstunde: the background and the headline of each screen.",
+    "scripts/screenshots/frame.py draws them; see that file for the geometry.",
+    "",
+    "One entry per screen, in the order of the store, with the names that the UI tests",
+    "write. `headline` has two lines for each locale: the first line is light, the",
+    "second line is bold. The backgrounds are the colors of the night, and the last one",
+    "is red, as the red light of the app."
+  ],
+  "font": "Nunito[wght].ttf",
+  "arc": false,
+  "backgrounds": {
+    "dusk": ["#34508c", "#0d1430"],
+    "night": ["#1d2a5a", "#050916"],
+    "galaxy": ["#4a3a78", "#0d1430"],
+    "red": ["#7a2020", "#1a0505"]
+  },
+  "screens": [
+    {
+      "name": "01-night",
+      "background": "dusk",
+      "headline": { "en-US": ["The night sky", "over the real horizon."] }
+    },
+    {
+      "name": "02-tap",
+      "background": "night",
+      "headline": { "en-US": ["Tap a star", "for its name."] }
+    },
+    {
+      "name": "03-milkyway",
+      "background": "galaxy",
+      "headline": { "en-US": ["See when the Milky Way", "is at its best."] }
+    },
+    {
+      "name": "04-red",
+      "background": "red",
+      "headline": { "en-US": ["A red light", "for dark-adapted eyes."] }
+    }
+  ]
+}

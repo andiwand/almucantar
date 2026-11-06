@@ -5,6 +5,7 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+- The settings have a link to the privacy policy.
 - The name of your location comes from the offline map of the app ("near" the nearest town), not
   from the geocoder of the phone. So the app sends your location to no service.
 

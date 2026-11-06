@@ -47,6 +47,7 @@ import at.stefl.almucantar.core.bodyPosition
 import at.stefl.almucantar.core.lineOfSight
 import at.stefl.almucantar.core.moonIlluminatedFraction
 import at.stefl.almucantar.core.sight
+import at.stefl.almucantar.shared.PrivacyLink
 import at.stefl.almucantar.shared.wallClockTime
 import java.time.LocalDate
 import java.time.ZoneId
@@ -218,6 +219,7 @@ fun HomeScreen(model: Model) {
             model.flow = Flow.ECLIPSE
             model.go(Screen.Eclipses)
         }
+        PrivacyLink(color = Shade.inkSoft)
     }
 }
 
@@ -345,7 +347,7 @@ fun DatesScreen(model: Model) {
     val zone = model.zoneAt(spot.observer)
     val view = remember(eye, top) { sight(eye, top) }
     val name = if (landmark.name.isNotEmpty()) "Landmark near ${landmark.name}" else "Your landmark"
-    val now = remember { System.currentTimeMillis() / 1000.0 }
+    val now = remember { model.now() }
     val shots by
         produceState<List<Shot>?>(null, eye, top, model.subject) {
             value =
@@ -417,7 +419,7 @@ fun MomentsScreen(model: Model) {
     val at = landmark.observer
     val zone = model.zoneAt(at)
     val s = subjectOf(model.subject)
-    val now = remember { System.currentTimeMillis() / 1000.0 }
+    val now = remember { model.now() }
     val moments by
         produceState<List<Moment>?>(null, model.subject) {
             value = withContext(Dispatchers.Default) { momentsFor(model.subject, at, now) }
@@ -464,14 +466,14 @@ fun MomentsScreen(model: Model) {
                     }
                 }
             }
-        CustomMoment(zone) { model.go(Screen.Spots(it)) }
+        CustomMoment(zone, model.today(zone)) { model.go(Screen.Spots(it)) }
     }
 }
 
-/** Another time for the line of spots: a day and a time of the place. */
+/** Another time for the line of spots: a day and a time of the place, from [today]. */
 @Composable
-private fun CustomMoment(zone: ZoneId, onPick: (Double) -> Unit) {
-    var day by remember { mutableStateOf(LocalDate.now(zone)) }
+private fun CustomMoment(zone: ZoneId, today: LocalDate, onPick: (Double) -> Unit) {
+    var day by remember { mutableStateOf(today) }
     var minutes by remember { mutableStateOf(20 * 60) }
     Print(Modifier.fillMaxWidth(), padding = 14.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -515,7 +517,7 @@ private fun CustomMoment(zone: ZoneId, onPick: (Double) -> Unit) {
 fun WhenScreen(model: Model) {
     val spot = model.spot ?: return
     val zone = model.zoneAt(spot.observer)
-    var from by remember { mutableStateOf(model.fromDay ?: LocalDate.now(zone)) }
+    var from by remember { mutableStateOf(model.fromDay ?: model.today(zone)) }
     var days by remember { mutableStateOf(if (model.fromDay == null) 3 else model.days) }
     Page {
         Step("02", "The days")
@@ -580,8 +582,7 @@ fun PlaceScreen(model: Model) {
     val start =
         remember(model.fromDay, zone) {
             // From noon of the first day, so its night counts.
-            model.fromDay?.let { wallClockTime(it, 12 * 60, zone) }
-                ?: (System.currentTimeMillis() / 1000.0)
+            model.fromDay?.let { wallClockTime(it, 12 * 60, zone) } ?: model.now()
         }
     val end = start + model.days * 86_400.0
     val horizon = rememberHorizon(model, at)
@@ -781,7 +782,7 @@ fun EclipsesScreen(model: Model) {
     val spot = model.spot
     val at = spot?.observer
     val zone = model.zoneAt(at)
-    val now = remember { System.currentTimeMillis() / 1000.0 }
+    val now = remember { model.now() }
     val events by
         produceState<List<Eclipse>?>(null) {
             value = withContext(Dispatchers.Default) { upcomingEclipses(now) }

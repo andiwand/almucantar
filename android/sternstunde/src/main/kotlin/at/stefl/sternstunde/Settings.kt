@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import at.stefl.almucantar.shared.PrivacyLink
 import at.stefl.almucantar.shared.TERRAIN_SOURCE
 
 private const val PREFERENCES = "settings"
@@ -59,6 +60,15 @@ fun rememberSettings(): Settings {
     }
 }
 
+/**
+ * The settings of the demo mode of the store screenshots: the constellation lines, no terrain (the
+ * demo mode downloads nothing), and the red light of [scene]. A change is never stored.
+ */
+fun demoSettings(scene: ScreenshotScene): Settings {
+    fun fixed(value: Boolean) = BooleanSetting(mutableStateOf(value)) {}
+    return Settings(fixed(true), fixed(false), fixed(scene.red))
+}
+
 /** The settings and the credits of the data. */
 @Composable
 fun SettingsDialog(settings: Settings, stars: String, onDismiss: () -> Unit) {
@@ -76,6 +86,7 @@ fun SettingsDialog(settings: Settings, stars: String, onDismiss: () -> Unit) {
                         "© OpenStreetMap contributors.",
                     fontSize = 12.sp,
                 )
+                PrivacyLink()
             }
         },
     )
