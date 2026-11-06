@@ -126,7 +126,12 @@ jobs:
           # full speed of the runner the emulator stopped answering adb ("device offline").
           emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics -netspeed lte
           working-directory: android
-          script: bundle exec fastlane screenshots "app:${APP}"
+          # The memory and the kernel log of the emulator, every 2 seconds, into files outside the
+          # emulator: if the emulator stops, they show its last state.
+          script: |
+            nohup sh -c 'while true; do adb shell "date; head -4 /proc/meminfo; top -b -n 1 -m 6 -o PID,RES,%CPU,ARGS"; sleep 2; done' > emulator-monitor.txt 2>&1 &
+            nohup adb logcat -b kernel > emulator-kernel.txt 2>&1 &
+            bundle exec fastlane screenshots "app:${APP}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -155,6 +160,7 @@ jobs:
           path: |
             android/*/build/reports/androidTests
             android/*/build/outputs/androidTest-results
+            android/emulator-*.txt
           if-no-files-found: ignore
 
   ios:
