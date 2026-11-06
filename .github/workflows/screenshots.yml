@@ -135,6 +135,16 @@ jobs:
           path: android/fastlane/screenshots${{ env.APP_DIR }}
           if-no-files-found: ignore
 
+      # The report and the logcat of a failed test (AGP writes the logcat into the test results).
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-android-${{ matrix.device }}
+          path: |
+            android/*/build/reports/androidTests
+            android/*/build/outputs/androidTest-results
+          if-no-files-found: ignore
+
   ios:
     name: ios (${{ matrix.device }})
     if: inputs.platform != 'android' && inputs.app == 'sonnseite'
