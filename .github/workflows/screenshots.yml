@@ -122,7 +122,9 @@ jobs:
           cores: 4
           ram-size: 6144M
           disable-animations: true
-          emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          # The speed of LTE: Alidade downloads the terrain tiles at the second screen, and at the
+          # full speed of the runner the emulator stopped answering adb ("device offline").
+          emulator-options: -no-snapshot-save -no-snapshot-load -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics -netspeed lte
           working-directory: android
           script: bundle exec fastlane screenshots "app:${APP}"
 
