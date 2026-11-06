@@ -1,0 +1,27 @@
+The full moon behind a summit, the Milky Way over a ridge, the moon in front of the sun. Start from where you stand, from a landmark, or from the next eclipse. Alidade tells you where to stand and when – over the real terrain.
+
+FROM WHERE I AM
+What can I shoot from here? Alidade reads the real skyline of your spot and marks its peaks. It shows the moon, the Milky Way, the sun, and the planets while they are over the horizon, and the peaks that they pass.
+
+I HAVE A LANDMARK
+Pick the subject: the moon, the Milky Way, the sun, or a bright planet. Tap a summit, a tower, or a church on the map. Then choose:
+• I know my spot: Alidade searches the next 12 months for each moment when the subject is behind the landmark, and shows the dates as a contact sheet of photos.
+• Find me a spot: for a moment, Alidade draws the line of places from which the subject is behind the landmark. Where the ground has the right height, there is your spot.
+
+THE CHECK
+A ridge in front can hide the summit. Alidade follows the line of sight over the terrain, and it checks the light: the sun, the twilight, and the moon.
+
+THE SHOT
+Every way ends in the shot: the photo from the spot, with the real terrain, the landmark, the subject and its path, a time slider, and the frame of your lens.
+
+THE ECLIPSES
+Alidade lists the next solar and lunar eclipses. It draws the shadow on the map of the Earth, and it shows how much of the sun your spot sees.
+
+PRECISE
+The moon, the sun, and the planets come from Astronomy Engine. The moon is near, so its direction changes with your place by up to 1°: Alidade calculates it for each point of the line. The heights come from elevation data, not from a flat horizon at 0°.
+
+PRIVATE
+There are no accounts, no ads, and no analytics, and the app has no server of its own. It downloads the map and terrain tiles of the area that you look at, and it asks the geocoder of your phone for the name of the place.
+
+Alidade is open source (MPL-2.0): https://github.com/andiwand/almucantar
+It uses Astronomy Engine (MIT), the Yale Bright Star Catalogue (Hoffleit & Warren 1991, NASA ADC), Natural Earth, maps from OpenStreetMap contributors, and the terrain of Copernicus DEM GLO-90 (© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved).

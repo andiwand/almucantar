@@ -101,7 +101,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `sonnseite/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sonnseite.screenshot`. The release build has a no-op version in `sonnseite/src/release/`. |
 | `sonnseite/src/test/` | JVM unit tests. |
 | `sonnseite/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |
-| `fastlane/` | The lanes `screenshots` and `upload_listing` (of sonnseite only), and `deploy` (the app bundle of any app to a track of Google Play, for `android-release.yml`). |
+| `fastlane/` | The lanes `screenshots` and `upload_listing` (of sonnseite only), `listing` (the texts, the icon, and the feature graphic of `fastlane/metadata/<app>/` for any app; the service account needs "Manage store presence"), and `deploy` (the app bundle of any app to a track of Google Play, for `android-release.yml`). `scripts/screenshots/listing.py` makes the icon and the feature graphic from the logo. |
 
 ## The place
 

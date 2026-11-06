@@ -11,12 +11,11 @@
 #
 # The upload to Google Play needs the secret GOOGLE_PLAY_JSON_KEY: the JSON key of a service
 # account with the permission "Release apps to testing tracks" (and "Release to production" for
-# the track production). Without it, the workflow skips the upload with a notice.
+# the track production). The app must exist in the Play Console; the workflow uploads also its
+# first bundle. Without it, the workflow skips the upload with a notice.
 # A published release goes to the track internal. A manual run uploads only if it names a track.
 # The repository variable PLAY_RELEASE_STATUS sets the status of the release on Google Play:
 # draft (the default, because a draft app accepts only draft releases) or completed.
-# Google Play takes the first app bundle of an app only in the Play Console: upload the bundle of
-# the artifact by hand once.
 name: android-release
 
 on:

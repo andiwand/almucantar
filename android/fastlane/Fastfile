@@ -3,6 +3,8 @@
 #   bundle exec fastlane screenshots                                   the phone set
 #   SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshots the tablet set
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane upload_listing       the images to Google Play
+#   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane listing app:sternstunde the texts, the icon, and the
+#                                                                      feature graphic of metadata/<app>
 #   SUPPLY_JSON_KEY_DATA=... bundle exec fastlane deploy app:sternstunde aab:/abs/app.aab track:internal
 #                                                                      an app bundle to a track
 #
@@ -36,6 +38,9 @@ FRAME = File.join(ROOT, "scripts", "screenshots", "frame.py").freeze
 STORE = File.join(ROOT, "scripts", "screenshots", "store.py").freeze
 
 SCREENSHOT_DEVICES = %w[phone tablet].freeze
+
+# The store listings: metadata/<app>/<locale>/ with the texts and images/ (scripts/screenshots/listing.py).
+METADATA_DIR = File.join(ANDROID, "fastlane", "metadata").freeze
 
 # Gradle copies the additionalTestOutputDir of the test to here before it uninstalls the app. The
 # directory between is the name of the emulator, so the lane globs it.
@@ -139,6 +144,36 @@ platform :android do
     end
   end
 
+
+  # The service account needs the permission "Manage store presence" in the Play Console.
+  desc "Upload the store listing of an app to Google Play (the texts, the icon, the feature graphic)"
+  lane :listing do |options|
+    UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
+
+    app = options[:app].to_s
+    package = PACKAGES[app] || UI.user_error!("app must be one of #{PACKAGES.keys.join(', ')}")
+    # supply needs a release on a track for an upload of the listing, also without release notes.
+    track = (options[:track] || "internal").to_s
+    codes = google_play_track_version_codes(
+      package_name: package, json_key_data: ENV["SUPPLY_JSON_KEY_DATA"], track: track
+    )
+    UI.user_error!("the track #{track} of #{package} has no release; upload a bundle first") if codes.empty?
+    upload_to_play_store(
+      package_name: package,
+      json_key_data: ENV["SUPPLY_JSON_KEY_DATA"],
+      metadata_path: File.join(METADATA_DIR, app),
+      track: track,
+      version_code: codes.max,
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_changelogs: true,
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      # The screenshots come from the lane upload_listing, which checks the complete set.
+      skip_upload_screenshots: true,
+      sync_image_upload: true
+    )
+  end
   desc "Upload the app bundle of an app to a track of Google Play (the bundle only, no listing)"
   lane :deploy do |options|
     UI.user_error!("SUPPLY_JSON_KEY_DATA is not set") if ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?

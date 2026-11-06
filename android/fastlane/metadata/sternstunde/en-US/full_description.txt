@@ -1,0 +1,28 @@
+Hold up your phone, and Sternstunde shows the stars, the constellations, the planets, and the Milky Way in that direction – over the mountains as they really are, and without a network.
+
+DUSK
+After sunset the sky gets dark slowly. First the planets and the brightest stars appear, then more and more. Sternstunde shows the sky as your eyes see it at that moment.
+
+CONSTELLATIONS
+All 88 constellations, with their lines and names, and 5000 stars down to the faintest that the eye sees under a dark sky. Tap a star, a planet, the moon, or a constellation for its name, its brightness, its height, and its rise and set.
+
+THE REAL HORIZON
+Most sky apps use a flat horizon at 0°. In the mountains, a star rises much later. Sternstunde knows the terrain around you, so its times of rise and set are the ones you see.
+
+PLANETS AND THE MOON
+The planets move against the stars, week by week. The moon shows its phase. "Find" searches the stars, the planets, and the constellations, and an arrow leads you to the object.
+
+THE MILKY WAY
+The Milky Way needs a dark sky: no sun, no moon, and its bright center high above the horizon. Sternstunde shows all three.
+
+ALIGN WITH A STAR
+The compass of a phone is often wrong by 10° or more. Tap one bright star or a planet, and Sternstunde puts the whole sky where it really is. It also shows how far it can trust the heading.
+
+RED LIGHT
+The red light keeps your eyes adapted to the dark.
+
+OFFLINE AND PRIVATE
+Sternstunde works without a network. Keep the terrain of a place offline before you go. There are no accounts, no ads, and no analytics, and the app has no server of its own. It downloads the map and terrain tiles of the area that you look at, and it asks the geocoder of your phone for the name of the place.
+
+Sternstunde is open source (MPL-2.0): https://github.com/andiwand/almucantar
+It uses Astronomy Engine (MIT), the Yale Bright Star Catalogue (Hoffleit & Warren 1991, NASA ADC), the constellations and star names of d3-celestial (© 2015 Olaf Frohn, BSD-3), Natural Earth, maps from OpenStreetMap contributors, and the terrain of Copernicus DEM GLO-90 (© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved).

@@ -580,9 +580,11 @@ only attached to the GitHub release. iOS has no release yet.
    publish workflow. The Play Store account and its three apps are done (14.4). The secrets of
    `android-release.yml` are on GitHub (2026-11-06): the upload keystores of the three apps and
    the JSON key of the service account `play-release` (Cloud project `almucantar-513919`).
-2. The first upload to the Play Store, with the new names of the apps (14.4). Before it,
-   search the names in TMview. Google Play takes the first app bundle of an app only in the Play
-   Console, so upload it by hand. `android-release.yml` uploads the later versions.
+2. The Play Store (14.4): the first bundles are on the track internal (2026-11-06: Sonnseite
+   0.3.0, Sternstunde 0.1.0, Alidade 0.1.0), as drafts. Open: the store listings (the texts and
+   the images are in `android/fastlane/metadata/`, the lane `listing` uploads them), the
+   screenshots of all three apps, the declarations of "App content", and the closed test. Before
+   the publish, search the names in TMview.
 3. shotradar (now Alidade), the photo planner (14.1): the field test of the PWA and the Android
    app.
 

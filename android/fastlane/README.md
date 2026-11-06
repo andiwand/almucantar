@@ -31,6 +31,14 @@ Capture the store screenshots on the emulator and frame them
 
 Upload the framed screenshots to Google Play (images only, no app and no text)
 
+### android listing
+
+```sh
+[bundle exec] fastlane android listing
+```
+
+Upload the store listing of an app to Google Play (the texts, the icon, the feature graphic)
+
 ### android deploy
 
 ```sh
