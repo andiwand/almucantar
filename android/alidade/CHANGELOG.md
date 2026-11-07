@@ -5,6 +5,8 @@ The changes in the Android app Alidade that a user notices. Each release has the
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-07
+
 - "Back" from a shot shows the dates, the moments, or the shots of a place at once, at the same
   scroll position. The app keeps the results of the searches and the small photos in memory.
 - Keep a shot or a place with its star. The start page shows your shots and your places, and the
