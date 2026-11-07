@@ -5,6 +5,9 @@ The changes in the iOS app Sonnseite that a user notices. Each release has the t
 
 ## Unreleased
 
+- Without a location and without a last place, the app uses the most probable place: the main
+  city of the time zone of the phone, else of the country of its region. Vienna is no longer the
+  fixed default place.
 - The app has the bright look of the day of the website and the web app. Without the camera, the
   sky has the colors of the height of the sun, with a glow around the sun and a light ground below
   the horizon. The path of the sun has a dark edge. On a bright sky, the labels and the crosshair

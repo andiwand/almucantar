@@ -93,8 +93,9 @@ move with a drag. Set the location with `xcrun simctl location booted set <lat>,
   terrain.
 - The place (`PLAN.md` 13.3) is the device location, a manual place, or the last place, in
   `LocationProvider`. A device location does not replace a manual place; "Use my location" ends it.
-  The app stores the last place and starts with it. The default place (Vienna) gets no terrain;
-  every other place does. The PWA (`web/shared/src/basemap.ts`) has the same behavior.
+  The app stores the last place and starts with it. Without it, the place is the most probable
+  place (`ProbablePlace`: the main city of the time zone, else of the country of the locale, from
+  `assets/tzdata/zone.tab`). The most probable place gets no terrain; every other place does. The PWA (`web/shared/src/basemap.ts`) has the same behavior.
 - All days and times use the time zone of the place, not of the device: use the `calendar` of
   `SkyScreen` and the functions of `PlaceTime`, never `Calendar.current` or `Date.formatted()`
   without a time zone.

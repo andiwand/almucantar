@@ -166,7 +166,7 @@ struct StarScreen: SwiftUI.View {
         }
     }
 
-    /// The default place (Vienna) gets no terrain, so the app waits for a place before it downloads
+    /// The most probable place (no location) gets no terrain, so the app waits for a place before it downloads
     /// tiles: the device location, a manual place, or the last place.
     private func updateTerrain() {
         if terrainOn && !location.hasPlace { return }

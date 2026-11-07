@@ -61,6 +61,7 @@ PROJECTS = {
             "ios/project.yml",
             "ios/fastlane/**",
             "assets/basemap/**",
+            "assets/tzdata/**",
         ],
         "changelog": "ios/Sonnseite/CHANGELOG.md",
         "stamps": [
@@ -111,6 +112,7 @@ PROJECTS = {
             "ios/SharedTests/**",
             "ios/project.yml",
             "assets/basemap/**",
+            "assets/tzdata/**",
             "assets/stars/**",
         ],
         "changelog": "ios/Sternstunde/CHANGELOG.md",

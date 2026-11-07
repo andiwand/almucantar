@@ -5,9 +5,9 @@ name: apple
 on:
   push:
     branches: [main]
-    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
+    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "assets/tzdata/**", "Package.swift", ".github/workflows/apple.yml"]
   pull_request:
-    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "Package.swift", ".github/workflows/apple.yml"]
+    paths: ["core/**", "ios/**", "assets/basemap/**", "assets/stars/**", "assets/tzdata/**", "Package.swift", ".github/workflows/apple.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

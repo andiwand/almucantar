@@ -38,6 +38,10 @@ targets:
       # BaseMapTests read the base map from the test bundle.
       - path: ../assets/basemap/basemap.json
         buildPhase: resources
+      # The main cities of the time zones (IANA), for the place without a location; see
+      # assets/tzdata/README.md.
+      - path: ../assets/tzdata/zone.tab
+        buildPhase: resources
     dependencies:
       - target: AlmucantarShared
     settings:
@@ -54,6 +58,10 @@ targets:
         excludes: [CHANGELOG.md]
       # The offline base map (Natural Earth). The app reads it from the bundle; see assets/basemap/README.md.
       - path: ../assets/basemap/basemap.json
+        buildPhase: resources
+      # The main cities of the time zones (IANA), for the place without a location; see
+      # assets/tzdata/README.md.
+      - path: ../assets/tzdata/zone.tab
         buildPhase: resources
     dependencies:
       - package: Almucantar
@@ -92,6 +100,10 @@ targets:
       - path: Sternstunde
         excludes: [CHANGELOG.md]
       - path: ../assets/basemap/basemap.json
+        buildPhase: resources
+      # The main cities of the time zones (IANA), for the place without a location; see
+      # assets/tzdata/README.md.
+      - path: ../assets/tzdata/zone.tab
         buildPhase: resources
       # The star data (PLAN.md 14.2), the same file as in the Android app and the web app.
       - path: ../assets/stars/stars.json

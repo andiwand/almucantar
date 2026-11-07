@@ -31,23 +31,24 @@ struct StoredPlace: Codable, Equatable {
 
 /// The place of the app: the device location (an accuracy of a kilometer is sufficient), a place
 /// that the user dropped on the map (manual), or the last place. Without any of them, the place is
-/// Vienna. A manual place stays until the user chooses the device location again. The times use
+/// the most probable place (`ProbablePlace`: the main city of the time zone or of the country of the
+/// device). A manual place stays until the user chooses the device location again. The times use
 /// the time zone of the place.
 @MainActor
 final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
-    static let defaultObserver = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
-    static let defaultTimeZone = TimeZone(identifier: "Europe/Vienna")!
+    /// Vienna, for the demo mode of the store screenshots. It is not a fallback.
+    static let demoObserver = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
 
-    @Published private(set) var observer = defaultObserver
-    @Published private(set) var text = "Vienna · no location"
-    @Published private(set) var timeZone = defaultTimeZone
+    @Published private(set) var observer: Observer
+    @Published private(set) var text: String
+    @Published private(set) var timeZone = TimeZone.current
     /// The user dropped the place on the map.
     @Published private(set) var manual = false
-    /// The place is not the default place: it is a device location, a manual place, or the last
-    /// place. The terrain and the landmark alignment need it.
+    /// The place is not the most probable place: it is a device location, a manual place, or the
+    /// last place. The terrain and the landmark alignment need it.
     @Published private(set) var hasPlace = false
     /// The horizontal accuracy of the device location in metres, or nil for a manual place and the
-    /// default place.
+    /// most probable place.
     @Published private(set) var accuracyM: Double?
     /// A message for the user, for example when the device location fails.
     @Published var notice: String?
@@ -63,6 +64,9 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     /// stored place.
     init(defaults: UserDefaults = .standard, loadsStoredPlace: Bool = true) {
         self.defaults = defaults
+        let probable = ProbablePlace.find(lines: ProbablePlace.bundledLines())
+        observer = probable.observer
+        text = probable.city.map { "\($0) · no location" } ?? "No location"
         super.init()
         if loadsStoredPlace, let place = StoredPlace.load(from: defaults) { apply(place) }
     }
@@ -71,7 +75,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     /// for the location and without the stored place.
     func startDemo(timeZone: TimeZone) {
         stores = false
-        observer = Self.defaultObserver
+        observer = Self.demoObserver
         text = "Vienna"
         self.timeZone = timeZone
         manual = false

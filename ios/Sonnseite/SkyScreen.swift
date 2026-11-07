@@ -264,7 +264,7 @@ struct SkyScreen: SwiftUI.View {
         }
     }
 
-    /// The demo mode shows no terrain. The default place (Vienna) gets no terrain, so the app waits
+    /// The demo mode shows no terrain. The most probable place (no location) gets no terrain, so the app waits
     /// for a place before it downloads tiles: the device location, a manual place, or the last place.
     private func updateTerrain() {
         if terrainOn && ScreenshotMode.scene == nil && !location.hasPlace { return }

@@ -130,3 +130,36 @@ final class PlaceTimeTests: XCTestCase {
         defaults.removePersistentDomain(forName: "PlaceTimeTests")
     }
 }
+
+final class ProbablePlaceTests: XCTestCase {
+    private let lines = ProbablePlace.bundledLines(in: Bundle(for: ProbablePlaceTests.self))
+    private let now = Date(timeIntervalSince1970: 1_794_052_800)  // 2026-11-07 12:00 UTC
+
+    func testParsesIso6709() throws {
+        let vienna = try XCTUnwrap(ProbablePlace.parseIso6709("+4813+01620"))
+        XCTAssertEqual(vienna.latitudeDeg, 48 + 13 / 60.0, accuracy: 1e-12)
+        let ny = try XCTUnwrap(ProbablePlace.parseIso6709("+404251-0740023"))
+        XCTAssertEqual(ny.longitudeDeg, -(74 + 23 / 3600.0), accuracy: 1e-12)
+        XCTAssertNil(ProbablePlace.parseIso6709("+48+016"))
+    }
+
+    func testTheTimeZoneGivesItsMainCity() {
+        XCTAssertGreaterThan(lines.count, 400)
+        let place = ProbablePlace.find(lines: lines, timeZone: TimeZone(identifier: "America/New_York")!, country: "AT", now: now)
+        XCTAssertEqual(place.city, "New York")
+    }
+
+    func testWithoutACityOfTheTimeZoneTheCountryGivesIt() {
+        let utc = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(ProbablePlace.find(lines: lines, timeZone: utc, country: "AT", now: now).city, "Vienna")
+        let pacific = TimeZone(secondsFromGMT: -8 * 3600)!
+        XCTAssertEqual(ProbablePlace.find(lines: lines, timeZone: pacific, country: "US", now: now).city, "Los Angeles")
+    }
+
+    func testWithoutBothTheMeridianOfTheOffset() {
+        let place = ProbablePlace.find(lines: lines, timeZone: TimeZone(secondsFromGMT: 3 * 3600)!, country: nil, now: now)
+        XCTAssertNil(place.city)
+        XCTAssertEqual(place.observer.longitudeDeg, 45, accuracy: 1e-9)
+        XCTAssertEqual(place.observer.latitudeDeg, 0, accuracy: 1e-9)
+    }
+}
