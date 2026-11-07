@@ -5,6 +5,8 @@ The changes in the PWA of sternstunde that a user notices. Each release has the 
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-07
+
 - Without a location and without a last place, the app uses the most probable place: the main
   city of the time zone of the browser, else of the country of its language. Vienna is no longer the fixed
   default place.
