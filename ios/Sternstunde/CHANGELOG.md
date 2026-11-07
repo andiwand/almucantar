@@ -6,8 +6,7 @@ the tag `sternstunde-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.m
 ## Unreleased
 
 - Without a location and without a last place, the app uses the most probable place: the main
-  city of the time zone of the phone, else of the country of its region. Vienna is no longer the
-  fixed default place.
+  city of the time zone of the phone, else of the country of its region.
 - The first version, with the features of the Android app: the stars to magnitude 6 (size from
   the brightness, color from the temperature), the 88 constellations with their lines and names,
   the planets, the moon with its phase, the sun, and the Milky Way, in the direction of the phone,
