@@ -5,6 +5,8 @@ The changes in the PWA alidade that a user notices. Each release has the tag
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-07
+
 - The map starts at the most probable place: the main city of the time zone of the browser, else
   of the country of its language. It does not start at Innsbruck.
 
