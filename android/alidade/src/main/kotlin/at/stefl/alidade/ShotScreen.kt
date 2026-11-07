@@ -6,7 +6,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -23,6 +22,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,33 +41,42 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 // The shot: the photo from the spot in first person, with a time slider, the lenses, the data of
 // the shot, and the way to the spot. A drag turns the view, a pinch zooms it, and a double tap aims
 // it again.
+
+/** The title of a shot: what is where. */
+fun shotTitle(shot: Shot): String {
+    val s = subjectOf(shot.subject)
+    return when {
+        shot.eclipse != null -> eclipseName(shot.eclipse.first, shot.eclipse.second.kind)
+        shot.target != null ->
+            "${s.name} behind ${if (shot.target.name.startsWith("Peak")) shot.target.name else "the landmark"}"
+        else -> "${s.name} over the horizon"
+    }
+}
 
 @Composable
 fun ShotScreen(model: Model, shot: Shot) {
     val context = LocalContext.current
     val zone = model.zoneAt(shot.spot)
     val s = subjectOf(shot.subject)
-    var focal by remember {
+    // The lens and the time are saved with the screen, so they stay after the live view.
+    var focal by rememberSaveable {
         mutableIntStateOf(if (shot.eclipse != null) 600 else if (shot.target != null) 300 else 24)
     }
     val minutes = ((shot.pathEndUtc - shot.pathStartUtc) / 60).roundToInt().coerceAtLeast(1)
-    var offset by remember {
+    var offset by rememberSaveable {
         mutableFloatStateOf(((shot.unixUtc - shot.pathStartUtc) / 60).toFloat())
     }
     val t = shot.pathStartUtc + offset.roundToInt() * 60.0
     var pan by remember { mutableStateOf(Pan()) }
     val horizon = rememberHorizon(model, shot.spot)
-    val title =
-        when {
-            shot.eclipse != null -> eclipseName(shot.eclipse.first, shot.eclipse.second.kind)
-            shot.target != null ->
-                "${s.name} behind ${if (shot.target.name.startsWith("Peak")) shot.target.name else "the landmark"}"
-            else -> "${s.name} over the horizon"
-        }
+    val title = shotTitle(shot)
+    val scope = rememberCoroutineScope()
+    var sharing by remember { mutableStateOf(false) }
     Page {
         Box(Modifier.fillMaxWidth().aspectRatio(0.9f).background(Shade.night)) {
             if (horizon == null) {
@@ -87,7 +97,36 @@ fun ShotScreen(model: Model, shot: Shot) {
             if (shot.eclipse != null) "The eclipse"
             else if (shot.target != null) "The shot" else "The sky",
         )
-        Title(title)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Title(title, Modifier.weight(1f))
+            FavoriteButton(model.isFavorite(shot), "shot") { model.toggleFavorite(shot) }
+        }
+        ButtonRow {
+            ShotButton(
+                "Live view",
+                Modifier.weight(1f),
+                primary = true,
+                icon = R.drawable.ic_camera,
+            ) {
+                model.go(Screen.Live(shot, t))
+            }
+            ShotButton(
+                if (sharing) "Sharing…" else "Share",
+                Modifier.weight(1f),
+                enabled = horizon != null && !sharing,
+                icon = R.drawable.ic_share,
+            ) {
+                val h = horizon ?: return@ShotButton
+                sharing = true
+                scope.launch {
+                    try {
+                        shareShot(context, ShareCard(shot, h, t, focal, pan, zone, model.sky))
+                    } finally {
+                        sharing = false
+                    }
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("TIME", fontFamily = Mono, fontSize = 11.sp, color = Shade.muted)
             Slider(
@@ -105,56 +144,21 @@ fun ShotScreen(model: Model, shot: Shot) {
                 color = Shade.ink,
             )
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (l in LENSES) Chip("$l mm", l == focal, Modifier.weight(1f)) {
+        ChipRow {
+            for (l in LENSES) Chip("$l mm", l == focal) {
                 // A new lens aims the view again: the pan of another lens can turn the subject
                 // out of a narrow view.
                 focal = l
                 pan = Pan()
             }
         }
-        val body = bodyPosition(s.body, t, shot.spot)
-        val fraction = moonIlluminatedFraction(t)
-        val rows = buildList {
-            add("When" to dateTime(t, zone))
-            add(
-                "Light" to
-                    if (totality(shot, t)) "Totality: the sky is dark"
-                    else light(t, shot.spot).label
-            )
-            add(
-                s.name to
-                    "${deg(body.azimuthDeg)} · ${deg(body.altitudeDeg)} up" +
-                        if (s.id == SubjectId.MOON) " · ${percent(fraction)} lit" else ""
-            )
-            add(
-                "From" to
-                    "%.5f°, %.5f°"
-                        .format(Locale.ROOT, shot.spot.latitudeDeg, shot.spot.longitudeDeg) +
-                        (horizon?.let { " · ${it.groundM.roundToInt()} m" } ?: "")
-            )
-            shot.target?.let {
-                add(
-                    "Landmark" to
-                        "${km(it.distanceM)} · ${deg(it.direction.azimuthDeg)} · ${deg(it.direction.altitudeDeg, 2)} up"
-                )
-            }
-            shot.eclipse?.let { (e, local) ->
-                add(
-                    (if (e.solar) "Covered now" else "In the umbra now") to
-                        percent(coveredNow(shot, t))
-                )
-                for (p in local.phases) add(
-                    p.label to "${clock(p.unixUtc, zone)} · ${deg(p.altitudeDeg)} up"
-                )
-            }
-            shot.riseUtc?.let { add("Rises" to "${clock(it, zone)} over the terrain") }
-            shot.setUtc?.let { add("Sets" to "${clock(it, zone)} behind the terrain") }
-            add("Lens" to "$focal mm · ${deg(lensSpanDeg(focal))} wide")
-        }
-        Exif(rows)
+        Exif(shotRows(shot, t, focal, zone, horizon))
         ButtonRow {
-            ShotButton("Navigate", Modifier.weight(1f), primary = true) {
+            ShotButton(
+                "Navigate",
+                Modifier.weight(1f),
+                icon = R.drawable.ic_directions,
+            ) {
                 val lat = "%.5f".format(Locale.ROOT, shot.spot.latitudeDeg)
                 val lon = "%.5f".format(Locale.ROOT, shot.spot.longitudeDeg)
                 // A geo URI opens the map app of the phone; it has the place, not more.
@@ -171,8 +175,57 @@ fun ShotScreen(model: Model, shot: Shot) {
                     )
                 }
             }
-            ShotButton("On the map", Modifier.weight(1f)) { model.go(Screen.ShotMapView(shot)) }
+            ShotButton("On the map", Modifier.weight(1f), icon = R.drawable.ic_map) {
+                model.go(Screen.ShotMapView(shot))
+            }
         }
+    }
+}
+
+/** The rows of data of a shot at the time [t]: on the screen of the shot and on its card. */
+fun shotRows(
+    shot: Shot,
+    t: Double,
+    focal: Int,
+    zone: java.time.ZoneId,
+    horizon: Horizon?,
+): List<Pair<String, String>> {
+    val s = subjectOf(shot.subject)
+    val body = bodyPosition(s.body, t, shot.spot)
+    val fraction = moonIlluminatedFraction(t)
+    return buildList {
+        add("When" to dateTime(t, zone))
+        add(
+            "Light" to
+                if (totality(shot, t)) "Totality: the sky is dark" else light(t, shot.spot).label
+        )
+        add(
+            s.name to
+                "${deg(body.azimuthDeg)} · ${deg(body.altitudeDeg)} up" +
+                    if (s.id == SubjectId.MOON) " · ${percent(fraction)} lit" else ""
+        )
+        add(
+            "From" to
+                "%.5f°, %.5f°".format(Locale.ROOT, shot.spot.latitudeDeg, shot.spot.longitudeDeg) +
+                    (horizon?.let { " · ${it.groundM.roundToInt()} m" } ?: "")
+        )
+        shot.target?.let {
+            add(
+                "Landmark" to
+                    "${km(it.distanceM)} · ${deg(it.direction.azimuthDeg)} · ${deg(it.direction.altitudeDeg, 2)} up"
+            )
+        }
+        shot.eclipse?.let { (e, local) ->
+            add(
+                (if (e.solar) "Covered now" else "In the umbra now") to percent(coveredNow(shot, t))
+            )
+            for (p in local.phases) add(
+                p.label to "${clock(p.unixUtc, zone)} · ${deg(p.altitudeDeg)} up"
+            )
+        }
+        shot.riseUtc?.let { add("Rises" to "${clock(it, zone)} over the terrain") }
+        shot.setUtc?.let { add("Sets" to "${clock(it, zone)} behind the terrain") }
+        add("Lens" to "$focal mm · ${deg(lensSpanDeg(focal))} wide")
     }
 }
 

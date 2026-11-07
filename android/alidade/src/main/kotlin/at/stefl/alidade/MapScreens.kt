@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -114,9 +115,9 @@ private fun PlaceSearch(model: Model) {
     Column(Modifier.fillMaxWidth()) {
         Box(
             Modifier.fillMaxWidth()
-                .background(Shade.print, RoundedCornerShape(2.dp))
-                .border(1.dp, Shade.line, RoundedCornerShape(2.dp))
-                .padding(horizontal = 12.dp, vertical = 11.dp)
+                .background(Shade.print, RoundedCornerShape(28.dp))
+                .border(1.dp, Shade.line, RoundedCornerShape(28.dp))
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             if (text.isEmpty()) Text("Search a place", color = Shade.muted, fontSize = 15.sp)
             BasicTextField(
@@ -127,19 +128,27 @@ private fun PlaceSearch(model: Model) {
                 textStyle = TextStyle(color = Shade.ink, fontSize = 15.sp),
             )
         }
-        for (p in found) {
-            Text(
-                "${p.name}  ${p.country}",
-                Modifier.fillMaxWidth()
+        if (found.isNotEmpty()) {
+            Column(
+                Modifier.padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Shade.print)
-                    .clickable {
-                        model.map.center(p.observer, 11.0)
-                        text = ""
-                    }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                color = Shade.ink,
-                fontSize = 15.sp,
-            )
+            ) {
+                for (p in found) {
+                    Text(
+                        "${p.name}  ${p.country}",
+                        Modifier.fillMaxWidth()
+                            .clickable {
+                                model.map.center(p.observer, 11.0)
+                                text = ""
+                            }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        color = Shade.ink,
+                        fontSize = 15.sp,
+                    )
+                }
+            }
         }
     }
 }
@@ -184,12 +193,12 @@ fun LandmarkScreen(model: Model) {
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Muted("A building on it", Modifier.weight(1f))
-                Chip("−", false) {
+                StepButton("−", "10 m lower") {
                     model.extraM = max(0, model.extraM - 10)
                     model.save()
                 }
                 Text("  ${model.extraM} m  ", fontFamily = Mono, color = Shade.ink)
-                Chip("+", false) {
+                StepButton("+", "10 m higher") {
                     model.extraM = min(900, model.extraM + 10)
                     model.save()
                 }
@@ -234,14 +243,31 @@ fun SpotScreen(model: Model, purpose: Screen.Purpose, locationGranted: Boolean) 
     ) {
         val dates = purpose == Screen.Purpose.DATES
         Step(if (dates) "03" else "01", if (dates) "Your spot" else "The place")
-        Title(
-            when {
-                s != null -> if (s.name.isNotEmpty()) "Near ${s.name}" else "Your spot"
-                dates -> "Where do you stand?"
-                else -> "Where are you, or where will you be?"
-            },
-            size = 22,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Title(
+                when {
+                    s != null -> if (s.name.isNotEmpty()) "Near ${s.name}" else "Your spot"
+                    dates -> "Where do you stand?"
+                    else -> "Where are you, or where will you be?"
+                },
+                Modifier.weight(1f),
+                size = 22,
+            )
+            if (s != null) FavoriteButton(model.isFavorite(s), "place") { model.toggleFavorite(s) }
+        }
+        // The favorite places: a tap makes one the spot.
+        if (model.favoritePlaces.isNotEmpty()) {
+            ChipRow {
+                for (p in model.favoritePlaces) {
+                    Chip(p.name.ifEmpty { "A place" }, s != null && placeKey(p) == placeKey(s)) {
+                        model.spot = p
+                        model.save()
+                        model.map.center(p.observer, max(model.map.zoom, 12.0))
+                        if (p.groundM == null) setSpot(p.observer, p.name)
+                    }
+                }
+            }
+        }
         if (s == null) Muted(hint)
         else
             Exif(
@@ -251,7 +277,7 @@ fun SpotScreen(model: Model, purpose: Screen.Purpose, locationGranted: Boolean) 
                 )
             )
         ButtonRow {
-            ShotButton("My location", Modifier.weight(1f)) {
+            ShotButton("My location", Modifier.weight(1f), icon = R.drawable.ic_my_location) {
                 if (!locationGranted) {
                     hint = "No location access. Tap the map."
                 } else {

@@ -19,12 +19,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -219,7 +223,97 @@ fun HomeScreen(model: Model) {
             model.flow = Flow.ECLIPSE
             model.go(Screen.Eclipses)
         }
+        Favorites(model)
         PrivacyLink(color = Shade.inkSoft)
+    }
+}
+
+/** The favorite shots and places of the start page. A tap opens one, the cross removes it. */
+@Composable
+private fun Favorites(model: Model) {
+    if (model.favoriteShots.isEmpty() && model.favoritePlaces.isEmpty()) {
+        Muted(
+            "Tap the star of a shot or of a place to keep it here.",
+            small = true,
+        )
+        return
+    }
+    if (model.favoriteShots.isNotEmpty()) {
+        Text("Your shots", style = Section)
+        for (shot in model.favoriteShots.toList()) {
+            val zone = model.zoneAt(shot.spot)
+            FavoriteRow(
+                art = {
+                    SubjectArt(
+                        if (shot.eclipse != null && shot.subject == SubjectId.SUN) null
+                        else shot.subject,
+                        side = 40.dp,
+                    )
+                },
+                title = shotTitle(shot),
+                detail = "${date(shot.unixUtc, zone)} · ${clock(shot.unixUtc, zone)}",
+                what = "shot",
+                onOpen = { model.openShot(shot) },
+                onRemove = { model.toggleFavorite(shot) },
+            )
+        }
+    }
+    if (model.favoritePlaces.isNotEmpty()) {
+        Text("Your places", style = Section)
+        for (place in model.favoritePlaces.toList()) {
+            FavoriteRow(
+                art = { SubjectArt(SubjectId.MILKY_WAY, side = 40.dp) },
+                title = if (place.name.isNotEmpty()) "Near ${place.name}" else "A place",
+                detail =
+                    "%.4f°, %.4f°".format(Locale.ROOT, place.latitudeDeg, place.longitudeDeg) +
+                        (place.groundM?.let { " · ${it.toInt()} m" } ?: ""),
+                what = "place",
+                onOpen = { model.openPlace(place) },
+                onRemove = { model.toggleFavorite(place) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoriteRow(
+    art: @Composable () -> Unit,
+    title: String,
+    detail: String,
+    what: String,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Print(Modifier.fillMaxWidth(), onClick = onOpen, padding = 10.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            art()
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontFamily = Serif,
+                    fontSize = 17.sp,
+                    color = Shade.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    detail,
+                    fontFamily = Mono,
+                    fontSize = 12.sp,
+                    color = Shade.inkSoft,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            IconButton(onRemove) {
+                Icon(
+                    painterResource(R.drawable.ic_close),
+                    contentDescription = "Remove the $what from the favorites",
+                    tint = Shade.muted,
+                )
+            }
+        }
     }
 }
 
@@ -320,21 +414,21 @@ fun HorizonStatus(model: Model, at: Observer, what: String) {
 /** The horizon of a place, or null while it is in work or if it failed. */
 @Composable
 fun rememberHorizon(model: Model, at: Observer?): Horizon? {
-    val horizon by
-        produceState<Horizon?>(null, at) {
-            // A new place must not show the horizon of the last place.
-            value = null
-            if (at == null) return@produceState
-            value =
-                try {
-                    model.horizon(at)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    null
-                }
-        }
-    return horizon
+    // A calculated horizon is there in the first frame, so a list that needs it keeps its scroll
+    // position on "back". A new place must not show the horizon of the last place.
+    val state = remember(at) { mutableStateOf(at?.let(model::horizonIfReady)) }
+    LaunchedEffect(at) {
+        if (at == null || state.value != null) return@LaunchedEffect
+        state.value =
+            try {
+                model.horizon(at)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+    }
+    return state.value
 }
 
 @Composable
@@ -347,34 +441,30 @@ fun DatesScreen(model: Model) {
     val zone = model.zoneAt(spot.observer)
     val view = remember(eye, top) { sight(eye, top) }
     val name = if (landmark.name.isNotEmpty()) "Landmark near ${landmark.name}" else "Your landmark"
-    val now = remember { model.now() }
-    val shots by
-        produceState<List<Shot>?>(null, eye, top, model.subject) {
-            value =
-                withContext(Dispatchers.Default) { datesFor(model.subject, eye, top, name, now) }
+    val shots =
+        rememberCached(model.results, listOf("dates", model.subject, eye, top, name)) {
+            datesFor(model.subject, eye, top, name, model.now())
         }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val clear by
-        produceState<String>("checking…", eye, top) {
-            value =
-                if (view.distanceM > 40_000) "too far to check"
-                else
-                    withContext(Dispatchers.IO) {
-                        val grids = gridsAlong(context, spot.observer, landmark.observer)
-                        if (grids.isEmpty()) "no terrain data"
-                        else {
-                            val v =
-                                lineOfSight(
-                                    eye,
-                                    top,
-                                    grids,
-                                    SightOptions(targetMarginM = targetMarginM(view.distanceM)),
-                                )
-                            if (v.visible) "clear"
-                            else "blocked ${km(v.blockingDistanceM)} from you"
-                        }
+    val clear =
+        rememberCached(model.results, listOf("clear", eye, top)) {
+            if (view.distanceM > 40_000) "too far to check"
+            else
+                withContext(Dispatchers.IO) {
+                    val grids = gridsAlong(context, spot.observer, landmark.observer)
+                    if (grids.isEmpty()) "no terrain data"
+                    else {
+                        val v =
+                            lineOfSight(
+                                eye,
+                                top,
+                                grids,
+                                SightOptions(targetMarginM = targetMarginM(view.distanceM)),
+                            )
+                        if (v.visible) "clear" else "blocked ${km(v.blockingDistanceM)} from you"
                     }
-        }
+                }
+        } ?: "checking…"
     val horizon = rememberHorizon(model, spot.observer)
     Page {
         Step("04", "The dates")
@@ -394,14 +484,14 @@ fun DatesScreen(model: Model) {
             horizon == null ->
                 HorizonStatus(model, spot.observer, "Reading the horizon of your spot…")
             list.isEmpty() -> {
-                val reason by
-                    produceState("…", list) {
-                        value =
-                            withContext(Dispatchers.Default) {
-                                noMatchReason(model.subject, view.direction, spot.observer, now)
-                            }
+                val reason =
+                    rememberCached(
+                        model.results,
+                        listOf("reason", model.subject, view.direction, spot.observer),
+                    ) {
+                        noMatchReason(model.subject, view.direction, spot.observer, model.now())
                     }
-                Muted(reason)
+                Muted(reason ?: "…")
             }
             else -> {
                 Muted(
@@ -419,10 +509,9 @@ fun MomentsScreen(model: Model) {
     val at = landmark.observer
     val zone = model.zoneAt(at)
     val s = subjectOf(model.subject)
-    val now = remember { model.now() }
-    val moments by
-        produceState<List<Moment>?>(null, model.subject) {
-            value = withContext(Dispatchers.Default) { momentsFor(model.subject, at, now) }
+    val moments =
+        rememberCached(model.results, listOf("moments", model.subject, at)) {
+            momentsFor(model.subject, at, model.now())
         }
     val note =
         when {
@@ -482,7 +571,7 @@ private fun CustomMoment(zone: ZoneId, today: LocalDate, onPick: (Double) -> Uni
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Chip("−", false) { day = day.minusDays(1) }
+                StepButton("−", "The day before") { day = day.minusDays(1) }
                 Text(
                     day.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy")),
                     Modifier.weight(1f),
@@ -490,13 +579,13 @@ private fun CustomMoment(zone: ZoneId, today: LocalDate, onPick: (Double) -> Uni
                     fontSize = 14.sp,
                     color = Shade.ink,
                 )
-                Chip("+", false) { day = day.plusDays(1) }
+                StepButton("+", "The next day") { day = day.plusDays(1) }
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Chip("−", false) { minutes = (minutes - 15 + 1440) % 1440 }
+                StepButton("−", "15 minutes earlier") { minutes = (minutes - 15 + 1440) % 1440 }
                 Text(
                     "%02d:%02d".format(Locale.ROOT, minutes / 60, minutes % 60),
                     Modifier.weight(1f),
@@ -504,7 +593,7 @@ private fun CustomMoment(zone: ZoneId, today: LocalDate, onPick: (Double) -> Uni
                     fontSize = 14.sp,
                     color = Shade.ink,
                 )
-                Chip("+", false) { minutes = (minutes + 15) % 1440 }
+                StepButton("+", "15 minutes later") { minutes = (minutes + 15) % 1440 }
             }
             ShotButton("Show the spots", Modifier.fillMaxWidth()) {
                 onPick(wallClockTime(day, minutes, zone))
@@ -536,7 +625,7 @@ fun WhenScreen(model: Model) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Chip("−", false) { from = from.minusDays(1) }
+                    StepButton("−", "The day before") { from = from.minusDays(1) }
                     Text(
                         from.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy")),
                         Modifier.weight(1f),
@@ -544,20 +633,11 @@ fun WhenScreen(model: Model) {
                         fontSize = 14.sp,
                         color = Shade.ink,
                     )
-                    Chip("+", false) { from = from.plusDays(1) }
+                    StepButton("+", "The next day") { from = from.plusDays(1) }
                 }
-                // Two rows of three, so each label fits.
-                for (row in listOf(listOf(1, 2, 3), listOf(7, 14, 30))) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (d in row) {
-                            Chip(
-                                if (d == 1) "1 night" else "$d days",
-                                d == days,
-                                Modifier.weight(1f),
-                            ) {
-                                days = d
-                            }
-                        }
+                ChipRow {
+                    for (d in listOf(1, 2, 3, 7, 14, 30)) {
+                        Chip(if (d == 1) "1 night" else "$d days", d == days) { days = d }
                     }
                 }
                 ShotButton("Find the shots", Modifier.fillMaxWidth(), primary = true) {
@@ -572,37 +652,51 @@ fun WhenScreen(model: Model) {
 }
 
 /** The shots of "From where I am": the sky of the place, and the shots behind its peaks. */
-private class PlaceShots(val sky: List<Shot>, val behind: List<Shot>, val peaks: Int)
+private class PlaceShots(
+    val start: Double,
+    val sky: List<Shot>,
+    val behind: List<Shot>,
+    val peaks: Int,
+)
 
 @Composable
 fun PlaceScreen(model: Model) {
     val spot = model.spot ?: return
     val at = spot.observer
     val zone = model.zoneAt(at)
-    val start =
-        remember(model.fromDay, zone) {
-            // From noon of the first day, so its night counts.
-            model.fromDay?.let { wallClockTime(it, 12 * 60, zone) } ?: model.now()
-        }
-    val end = start + model.days * 86_400.0
     val horizon = rememberHorizon(model, at)
-    val shots by
-        produceState<PlaceShots?>(null, horizon, start, end) {
-            val h = horizon ?: return@produceState
-            value =
-                withContext(Dispatchers.Default) {
-                    val targets = peakTargets(h)
-                    PlaceShots(
-                        skyFromPlace(h, start, end),
-                        shotsFromPlace(h, targets, start, end),
-                        targets.size,
-                    )
-                }
+    // From noon of the first day, so its night counts. "Now" is the time of the search, so the
+    // cached result keeps its own start.
+    val firstDay = model.fromDay
+    val shots =
+        rememberCached(
+            model.results,
+            listOf("place", at, firstDay, model.days),
+            ready = horizon != null,
+        ) {
+            val h = horizon!!
+            val start = firstDay?.let { wallClockTime(it, 12 * 60, zone) } ?: model.now()
+            val end = start + model.days * 86_400.0
+            val targets = peakTargets(h)
+            PlaceShots(
+                start,
+                skyFromPlace(h, start, end),
+                shotsFromPlace(h, targets, start, end),
+                targets.size,
+            )
         }
-    var filter by remember { mutableStateOf<SubjectId?>(null) }
+    val start = shots?.start ?: firstDay?.let { wallClockTime(it, 12 * 60, zone) } ?: model.now()
+    // Saved with the screen, so "back" from a shot keeps the filter.
+    var filter by rememberSaveable { mutableStateOf<SubjectId?>(null) }
     Page {
         Step("03", "The shots")
-        Title("From ${if (spot.name.isNotEmpty()) "near ${spot.name}" else "your place"}")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Title(
+                "From ${if (spot.name.isNotEmpty()) "near ${spot.name}" else "your place"}",
+                Modifier.weight(1f),
+            )
+            FavoriteButton(model.isFavorite(spot), "place") { model.toggleFavorite(spot) }
+        }
         Exif(
             listOf(
                 "Days" to "${date(start, zone)} + ${model.days}",
@@ -611,19 +705,9 @@ fun PlaceScreen(model: Model) {
             )
         )
         // The filter: all subjects, or one.
-        val chips = listOf<SubjectId?>(null) + SUBJECTS.map { it.id }
-        for (row in chips.chunked(4)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (id in row) {
-                    Chip(
-                        id?.let { subjectOf(it).name } ?: "All",
-                        filter == id,
-                        Modifier.weight(1f),
-                    ) {
-                        filter = id
-                    }
-                }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+        ChipRow {
+            for (id in listOf<SubjectId?>(null) + SUBJECTS.map { it.id }) {
+                Chip(id?.let { subjectOf(it).name } ?: "All", filter == id) { filter = id }
             }
         }
         val list = shots
@@ -689,7 +773,7 @@ fun ContactSheet(
                         padding = 6.dp,
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Thumbnail(shot, horizon, zone, model.sky)
+                            Thumbnail(model, shot, horizon, zone, model.sky)
                             Caption(shot, zone)
                         }
                     }
@@ -704,24 +788,22 @@ fun ContactSheet(
 }
 
 @Composable
-private fun Thumbnail(shot: Shot, horizon: Horizon, zone: ZoneId, sky: Sky?) {
+private fun Thumbnail(model: Model, shot: Shot, horizon: Horizon, zone: ZoneId, sky: Sky?) {
     val density = LocalDensity.current.density
     val painter = remember { PhotoPainter(density) }
-    // A sheet has many photos, so their frames are calculated in the background.
-    val frame by
-        produceState<PhotoFrame?>(null, shot, horizon, zone, sky) {
-            value =
-                withContext(Dispatchers.Default) {
-                    frameOf(
-                        shot,
-                        horizon,
-                        shot.unixUtc,
-                        if (shot.target != null) 200 else 35,
-                        true,
-                        zone,
-                        sky,
-                    )
-                }
+    // A sheet has many photos, so their frames are calculated in the background, and kept for
+    // "back" from a shot.
+    val frame =
+        rememberCached(model.frames, listOf(shot, horizon.observer, zone, sky != null)) {
+            frameOf(
+                shot,
+                horizon,
+                shot.unixUtc,
+                if (shot.target != null) 200 else 35,
+                true,
+                zone,
+                sky,
+            )
         }
     Canvas(Modifier.fillMaxWidth().aspectRatio(1.5f).background(Shade.night)) {
         val f = frame ?: return@Canvas
@@ -782,20 +864,11 @@ fun EclipsesScreen(model: Model) {
     val spot = model.spot
     val at = spot?.observer
     val zone = model.zoneAt(at)
-    val now = remember { model.now() }
-    val events by
-        produceState<List<Eclipse>?>(null) {
-            value = withContext(Dispatchers.Default) { upcomingEclipses(now) }
-        }
-    val locals by
-        produceState<Map<Eclipse, LocalEclipse?>>(emptyMap(), events, at) {
-            val list = events ?: return@produceState
-            value = emptyMap()
-            value =
-                if (at == null) emptyMap()
-                else
-                    withContext(Dispatchers.Default) { list.associateWith { localEclipse(it, at) } }
-        }
+    val events = rememberCached(model.results, listOf("eclipses")) { upcomingEclipses(model.now()) }
+    val locals =
+        rememberCached(model.results, listOf("eclipses at", events, at), ready = events != null) {
+            if (at == null) emptyMap() else events!!.associateWith { localEclipse(it, at) }
+        } ?: emptyMap()
     Page {
         Step("01", "The eclipses")
         Title("The next eclipses")

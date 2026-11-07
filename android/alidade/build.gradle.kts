@@ -105,6 +105,8 @@ dependencies {
     implementation(libs.androidx.core)
 
     testImplementation(libs.junit)
+    // org.json for the JVM tests of the favorites: android.jar has only stubs of it.
+    testImplementation(libs.json)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.core)

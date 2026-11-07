@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The permissions (location, network) come from the manifest of :shared. The camera of the
-         shared manifest is not used, so it is not required. -->
+    <!-- The permissions (location, network, camera) come from the manifest of :shared. The live
+         view of a shot uses the camera if the phone has one, so it is not required. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -19,6 +19,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Gives the card of a shot to the app that the user shares it with. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
     </application>
 
 </manifest>

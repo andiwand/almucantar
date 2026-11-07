@@ -12,11 +12,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +31,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,6 +115,9 @@ sealed interface Screen {
 
     data class ShotMapView(val shot: Shot) : Screen
 
+    /** The shot in first person through the camera, at the time [unixUtc]. */
+    data class Live(val shot: Shot, val unixUtc: Double) : Screen
+
     data object Eclipses : Screen
 
     data class EclipseMap(val event: Eclipse) : Screen
@@ -118,13 +127,16 @@ enum class Flow(val steps: List<String>) {
     LANDMARK(listOf("Subject", "Landmark", "From where", "Shots")),
     PLACE(listOf("Place", "Days", "Shots")),
     ECLIPSE(listOf("Eclipses", "The map", "Shot")),
+    /** A favorite of the start page. */
+    SAVED(listOf("Saved", "Shot")),
 }
 
 /** The step of the strip of film for a screen, or -1. */
 private fun stepOf(flow: Flow, screen: Screen): Int =
     when (screen) {
         is Screen.ShotView,
-        is Screen.ShotMapView -> flow.steps.size - 1
+        is Screen.ShotMapView,
+        is Screen.Live -> flow.steps.size - 1
         else ->
             when (flow) {
                 Flow.LANDMARK ->
@@ -152,6 +164,7 @@ private fun stepOf(flow: Flow, screen: Screen): Int =
                         is Screen.EclipseMap -> 1
                         else -> -1
                     }
+                Flow.SAVED -> if (screen == Screen.Home) 0 else -1
             }
     }
 
@@ -190,6 +203,24 @@ class Model(context: Context, private val persistent: Boolean = true) {
     fun today(zone: ZoneId): LocalDate =
         Instant.ofEpochSecond(now().toLong()).atZone(zone).toLocalDate()
 
+    /**
+     * The results of the searches (the dates, the moments, the shots of a place, the eclipses), so
+     * "back" from a shot shows them at once. A result that uses the time "now" is kept one hour.
+     */
+    val results = ResultCache(48, 3600.0, ::now)
+
+    /** The frames of the small photos of the contact sheets, for the same reason. */
+    val frames = ResultCache(240, 3600.0, ::now)
+
+    /** The favorite places, the newest first. */
+    val favoritePlaces = mutableStateListOf<Point>()
+
+    /** The favorite shots, the newest first. */
+    val favoriteShots = mutableStateListOf<Shot>()
+
+    /** False until [loadData] has read the favorites, so a change cannot overwrite them. */
+    private var favoritesLoaded = false
+
     /** The progress of the horizons that are in work: the bands that are ready, by key. */
     val progress = mutableStateMapOf<String, Int>()
     private val horizons = mutableMapOf<String, Deferred<Horizon>>()
@@ -209,6 +240,47 @@ class Model(context: Context, private val persistent: Boolean = true) {
     fun home() {
         stack.clear()
         stack += Screen.Home
+    }
+
+    /** Opens a favorite place: the days of "From where I am" at this place. */
+    fun openPlace(p: Point) {
+        spot = p
+        save()
+        flow = Flow.PLACE
+        home()
+        stack += Screen.Spot(Screen.Purpose.PLACE)
+        stack += Screen.When
+    }
+
+    /** Opens a favorite shot. */
+    fun openShot(s: Shot) {
+        flow = Flow.SAVED
+        home()
+        stack += Screen.ShotView(s)
+    }
+
+    fun isFavorite(p: Point) = favoritePlaces.any { placeKey(it) == placeKey(p) }
+
+    fun isFavorite(s: Shot) = favoriteShots.any { shotKey(it) == shotKey(s) }
+
+    fun toggleFavorite(p: Point) {
+        if (!favoritesLoaded) return
+        val key = placeKey(p)
+        if (!favoritePlaces.removeAll { placeKey(it) == key }) favoritePlaces.add(0, p)
+        saveFavorites()
+    }
+
+    fun toggleFavorite(s: Shot) {
+        if (!favoritesLoaded) return
+        val key = shotKey(s)
+        if (!favoriteShots.removeAll { shotKey(it) == key }) favoriteShots.add(0, s)
+        saveFavorites()
+    }
+
+    private fun saveFavorites() {
+        if (!persistent) return
+        val text = favoritesJson(favoritePlaces, favoriteShots)
+        prefs.edit { putString(FAVORITES_KEY, text) }
     }
 
     /** Goes back to the last screen of a done step of the strip. */
@@ -249,6 +321,17 @@ class Model(context: Context, private val persistent: Boolean = true) {
 
     fun progressOf(at: Observer): Int = progress[key(at)] ?: 0
 
+    /** The horizon of a place if it is already calculated, else null. It does not wait. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun horizonIfReady(at: Observer): Horizon? {
+        val job = synchronized(horizons) { horizons[key(at)] } ?: return null
+        return if (
+            job.isCompleted && !job.isCancelled && job.getCompletionExceptionOrNull() == null
+        )
+            job.getCompleted()
+        else null
+    }
+
     /** The ground at a point, from the terrain tiles; null offline. */
     suspend fun ground(at: Observer): Double? = withContext(Dispatchers.IO) { groundAt(app, at) }
 
@@ -267,9 +350,17 @@ class Model(context: Context, private val persistent: Boolean = true) {
                 }
             val milkyWay = MilkyWay.create()
             val map = BaseMapStore.load(app)
+            // An eclipse in a favorite shot needs the core, so the favorites load here.
+            val favorites =
+                if (persistent) prefs.getString(FAVORITES_KEY, null)?.let(::favoritesOf) else null
             withContext(Dispatchers.Main) {
                 sky = Sky(stars, milkyWay)
                 baseMap = map
+                favorites?.let {
+                    favoritePlaces.addAll(it.places)
+                    favoriteShots.addAll(it.shots)
+                }
+                favoritesLoaded = true
             }
         }
         // The heights of the saved points come back once their tiles are on the disk.
@@ -319,24 +410,9 @@ class Model(context: Context, private val persistent: Boolean = true) {
         }
     }
 
-    private fun pointJson(p: Point) =
-        JSONObject().apply {
-            put("lat", p.latitudeDeg)
-            put("lon", p.longitudeDeg)
-            put("name", p.name)
-            p.groundM?.let { put("ground", it) }
-        }
-
-    private fun pointOf(j: JSONObject) =
-        Point(
-            j.getDouble("lat"),
-            j.getDouble("lon"),
-            j.optString("name"),
-            if (j.has("ground")) j.getDouble("ground") else null,
-        )
-
     private companion object {
         const val STATE_KEY = "state-v1"
+        const val FAVORITES_KEY = "favorites-v1"
     }
 }
 
@@ -348,59 +424,76 @@ fun AlidadeApp(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     LaunchedEffect(Unit) { model.loadData() }
     val screen = model.stack.last()
     BackHandler(enabled = model.stack.size > 1) { model.back() }
+    // Each screen of the stack keeps its saved state (for example the scroll position of a list)
+    // while a screen on top of it is open. The state goes with the screen.
+    val states = rememberSaveableStateHolder()
+    val keys = model.stack.mapIndexed { i, s -> stateKey(i, s) }
+    val known = remember { mutableSetOf<String>() }
+    LaunchedEffect(keys) {
+        for (k in known - keys.toSet()) states.removeState(k)
+        known.clear()
+        known += keys
+    }
     ShotTheme {
         Box(Modifier.fillMaxSize().background(Shade.paper)) {
-            ScreenOf(model, screen, locationGranted)
+            states.SaveableStateProvider(keys.last()) { ScreenOf(model, screen, locationGranted) }
             Bar(model, screen, Modifier.align(Alignment.TopStart))
         }
     }
 }
 
-/** The bar: back, the brand, and the strip of film with the steps of the way. */
+/** The key of the saved state of the screen at [index] of the stack. */
+private fun stateKey(index: Int, screen: Screen) = "$index:${screen.hashCode()}"
+
+/** The top bar: back, the logo, and the strip of film with the steps of the way. */
 @Composable
 private fun Bar(model: Model, screen: Screen, modifier: Modifier) {
-    val onMap = isMapScreen(screen)
+    val overlay = isMapScreen(screen)
     Row(
         modifier
             .fillMaxWidth()
-            .let { if (onMap) it else it.background(Shade.paper) }
+            .let { if (overlay) it else it.background(Shade.paper) }
             .safeDrawingPadding()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .heightIn(min = 64.dp)
+            .padding(start = 4.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (model.stack.size > 1) {
-            Box(
-                Modifier.size(36.dp)
-                    .background(Shade.print, RoundedCornerShape(2.dp))
-                    .border(1.dp, Shade.line, RoundedCornerShape(2.dp))
-                    .clickable { model.back() },
-                contentAlignment = Alignment.Center,
+            // On the map and on the camera image, the button has a background, so it shows on
+            // any picture.
+            IconButton(
+                onClick = model::back,
+                colors =
+                    if (overlay)
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Shade.print,
+                            contentColor = Shade.ink,
+                        )
+                    else IconButtonDefaults.iconButtonColors(contentColor = Shade.ink),
             ) {
-                Text("←", color = Shade.ink, fontSize = 18.sp)
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
             }
+        } else {
+            Spacer(Modifier.width(8.dp))
         }
-        Row(Modifier.clickable { model.home() }, verticalAlignment = Alignment.CenterVertically) {
-            // The adaptive icon is not a painter: its vector foreground on its background color.
+        Row(
+            Modifier.clip(RoundedCornerShape(12.dp))
+                .clickable(onClickLabel = "Start page") { model.home() }
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Image(
-                painterResource(R.drawable.ic_launcher_foreground),
+                painterResource(R.drawable.logo),
                 contentDescription = "Alidade",
-                Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Shade.ink),
+                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)),
             )
-            if (!onMap && screen == Screen.Home) {
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "ALIDADE",
-                    color = Shade.ink,
-                    fontFamily = Mono,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 3.sp,
-                )
+            if (screen == Screen.Home) {
+                Spacer(Modifier.width(12.dp))
+                Text("Alidade", color = Shade.ink, style = MaterialTheme.typography.titleLarge)
             }
         }
         Spacer(Modifier.weight(1f))
-        if (screen != Screen.Home) {
+        if (screen != Screen.Home && screen !is Screen.Live) {
             Trail(model.flow, stepOf(model.flow, screen), model::backToStep)
         }
     }
@@ -410,16 +503,21 @@ private fun Bar(model: Model, screen: Screen, modifier: Modifier) {
 @Composable
 private fun Trail(flow: Flow, at: Int, onStep: (Int) -> Unit) {
     Row(
-        Modifier.background(Shade.night, RoundedCornerShape(3.dp)).padding(4.dp),
+        Modifier.background(Shade.night, RoundedCornerShape(8.dp)).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         flow.steps.forEachIndexed { i, step ->
             val active = i == at
             val done = i < at
             Row(
-                Modifier.let { if (done) it.clickable { onStep(i) } else it }
-                    .border(1.dp, Shade.cream.copy(alpha = if (active) 0.6f else 0.14f))
-                    .background(if (active) Shade.rose else Shade.night)
+                Modifier.clip(RoundedCornerShape(5.dp))
+                    .let { if (done) it.clickable { onStep(i) } else it }
+                    .border(
+                        1.dp,
+                        Shade.cream.copy(alpha = if (active) 0.6f else 0.14f),
+                        RoundedCornerShape(5.dp),
+                    )
+                    .background(if (active) Shade.rose else Shade.night, RoundedCornerShape(5.dp))
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -451,7 +549,8 @@ fun isMapScreen(screen: Screen) =
         screen is Screen.Spot ||
         screen is Screen.Spots ||
         screen is Screen.ShotMapView ||
-        screen is Screen.EclipseMap
+        screen is Screen.EclipseMap ||
+        screen is Screen.Live
 
 @Composable
 private fun ScreenOf(model: Model, screen: Screen, locationGranted: Boolean) {
@@ -468,6 +567,7 @@ private fun ScreenOf(model: Model, screen: Screen, locationGranted: Boolean) {
         Screen.Place -> PlaceScreen(model)
         is Screen.ShotView -> ShotScreen(model, screen.shot)
         is Screen.ShotMapView -> ShotMapScreen(model, screen.shot)
+        is Screen.Live -> LiveScreen(model, screen.shot, screen.unixUtc, locationGranted)
         Screen.Eclipses -> EclipsesScreen(model)
         is Screen.EclipseMap -> EclipseScreen(model, screen.event)
     }

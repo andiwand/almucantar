@@ -1,9 +1,11 @@
 package at.stefl.alidade
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,21 +14,36 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +81,12 @@ fun ShotTheme(content: @Composable () -> Unit) {
                 primary = Shade.ink,
                 onPrimary = Shade.cream,
                 secondary = Shade.rose,
+                secondaryContainer = Shade.cream,
+                onSecondaryContainer = Shade.ink,
+                surfaceVariant = Shade.cream,
+                onSurfaceVariant = Shade.inkSoft,
+                outline = Shade.ink.copy(alpha = 0.35f),
+                outlineVariant = Shade.line,
                 background = Shade.paper,
                 surface = Shade.print,
                 onSurface = Shade.ink,
@@ -144,6 +167,9 @@ fun Modifier.finderCorners(
     }
 }
 
+/** The shape of the cards. */
+val CardShape = RoundedCornerShape(12.dp)
+
 /** A card like a print: the light paper, a thin edge, and the corners of a viewfinder. */
 @Composable
 fun Print(
@@ -155,9 +181,10 @@ fun Print(
 ) {
     Box(
         modifier
-            .background(Shade.print, RoundedCornerShape(2.dp))
-            .border(BorderStroke(1.dp, Shade.line), RoundedCornerShape(2.dp))
-            .finderCorners()
+            .clip(CardShape)
+            .background(Shade.print, CardShape)
+            .border(BorderStroke(1.dp, Shade.line), CardShape)
+            .finderCorners(inset = 8.dp)
             .let { if (onClick != null) it.clickable(enabled = enabled, onClick = onClick) else it }
             .alpha(if (enabled) 1f else 0.5f)
             .padding(padding)
@@ -166,60 +193,110 @@ fun Print(
     }
 }
 
-/** A button of the app: the dark ink for the main action, else the paper. */
+/**
+ * A button of the app, a Material button: filled in the ink for the main action, else outlined.
+ * [icon] is a drawable resource in front of the text.
+ */
 @Composable
 fun ShotButton(
     text: String,
     modifier: Modifier = Modifier,
     primary: Boolean = false,
     enabled: Boolean = true,
+    @DrawableRes icon: Int? = null,
     onClick: () -> Unit,
 ) {
-    val background = if (primary) Shade.ink else Shade.print
-    val color = if (primary) Shade.cream else Shade.ink
-    Box(
-        modifier
-            .alpha(if (enabled) 1f else 0.4f)
-            .background(background, RoundedCornerShape(2.dp))
-            .border(
-                1.dp,
-                if (primary) Shade.ink else Shade.ink.copy(alpha = 0.25f),
-                RoundedCornerShape(2.dp),
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text.uppercase(),
-            color = color,
-            fontFamily = Mono,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp,
-            maxLines = 1,
+    val content: @Composable RowScope.() -> Unit = {
+        if (icon != null) {
+            Icon(painterResource(icon), contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    val padding =
+        if (icon != null) ButtonDefaults.ButtonWithIconContentPadding
+        else ButtonDefaults.ContentPadding
+    if (primary) {
+        Button(
+            onClick,
+            modifier.heightIn(min = 48.dp),
+            enabled = enabled,
+            contentPadding = padding,
+            content = content,
+        )
+    } else {
+        OutlinedButton(
+            onClick,
+            modifier.heightIn(min = 48.dp),
+            enabled = enabled,
+            contentPadding = padding,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Shade.ink),
+            content = content,
         )
     }
 }
 
-/** A chip of a choice: a lens, a subject in a filter. */
+/** A chip of a choice: a lens, a subject in a filter, a number of days. */
 @Composable
 fun Chip(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier
-            .background(if (active) Shade.ink else Shade.print, RoundedCornerShape(2.dp))
-            .border(1.dp, if (active) Shade.ink else Shade.line, RoundedCornerShape(2.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 9.dp),
-        contentAlignment = Alignment.Center,
+    FilterChip(
+        selected = active,
+        onClick = onClick,
+        label = { Text(text, maxLines = 1, softWrap = false) },
+        modifier = modifier,
+        colors =
+            FilterChipDefaults.filterChipColors(
+                containerColor = Shade.print,
+                labelColor = Shade.ink,
+                selectedContainerColor = Shade.ink,
+                selectedLabelColor = Shade.cream,
+            ),
+    )
+}
+
+/** The chips of a choice in a row that scrolls sideways, as the chips of Android. */
+@Composable
+fun ChipRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** A small round button with a sign, for a step down or up ("−", "+"). */
+@Composable
+fun StepButton(sign: String, description: String, onClick: () -> Unit) {
+    OutlinedIconButton(
+        onClick,
+        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = Shade.ink),
     ) {
         Text(
-            text,
-            color = if (active) Shade.cream else Shade.ink,
-            fontFamily = Mono,
-            fontSize = 12.sp,
-            maxLines = 1,
-            softWrap = false,
+            sign,
+            fontSize = 20.sp,
+            modifier = Modifier.semantics { contentDescription = description },
+        )
+    }
+}
+
+/** The star that keeps a place or a shot in the favorites of the start page. */
+@Composable
+fun FavoriteButton(active: Boolean, what: String, onClick: () -> Unit) {
+    IconToggleButton(
+        active,
+        { onClick() },
+        colors =
+            IconButtonDefaults.iconToggleButtonColors(
+                contentColor = Shade.ink,
+                checkedContentColor = Shade.apricot,
+            ),
+    ) {
+        Icon(
+            painterResource(if (active) R.drawable.ic_star else R.drawable.ic_star_border),
+            contentDescription =
+                if (active) "Remove the $what from the favorites"
+                else "Keep the $what in the favorites",
         )
     }
 }

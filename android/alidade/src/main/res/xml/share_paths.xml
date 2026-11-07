@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The card of a shot that the app shares: one file in the cache of the app. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>
