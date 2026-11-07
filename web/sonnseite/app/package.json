@@ -1,7 +1,7 @@
 {
   "name": "sonnseite-pwa",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Sonnseite as a progressive web app",
   "license": "MPL-2.0",

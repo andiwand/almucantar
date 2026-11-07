@@ -6,6 +6,8 @@ same as in `core/CHANGELOG.md`.
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-07
+
 - The app has a bright look of the day, like the website: in the sky view the sky has the colors
   of the height of the sun, with a glow around the sun and a light ground. The panels are warm
   white with dark text, and the main button is sun yellow.
