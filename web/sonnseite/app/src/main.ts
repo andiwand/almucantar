@@ -20,7 +20,7 @@ import {
   withCompass,
 } from "@almucantar/web-shared/orientation";
 import { css, mix, skyColors } from "@almucantar/web-shared/panorama";
-import { DEFAULT_PLACE, gpsPlace, loadPlace } from "@almucantar/web-shared/place";
+import { gpsPlace, loadPlace } from "@almucantar/web-shared/place";
 import type { StoredPlace } from "@almucantar/web-shared/place";
 import { setupPlacePanel } from "@almucantar/web-shared/placePanel";
 import {
@@ -33,15 +33,16 @@ import {
 import type { TerrainState } from "@almucantar/web-shared/terrain";
 import { fromWallTime, startOfDay, wallTime } from "@almucantar/web-shared/zone";
 import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
+import zoneTab from "../../../../assets/tzdata/zone.tab?raw";
 
 const almucantar = await load();
 
 // --- State --------------------------------------------------------------------------------------
 
-// The place: the location of the device, a place that the user dropped on the map, or Vienna
-// (@almucantar/web-shared/place).
+// The place: the location of the device, a place that the user dropped on the map, or the most
+// probable place from the time zone and the locale (@almucantar/web-shared/place).
 const PLACE_KEY = "sonnseite-place";
-let place = loadPlace(PLACE_KEY);
+let place = loadPlace(PLACE_KEY, zoneTab);
 let observer = place.observer;
 let placeText = place.name;
 let zone = place.timeZone;
@@ -826,7 +827,7 @@ const placePanel = setupPlacePanel({
 });
 
 // The last place starts the terrain also before the location arrives.
-if (place !== DEFAULT_PLACE) {
+if (!place.probable) {
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
 }

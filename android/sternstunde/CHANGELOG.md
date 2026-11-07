@@ -5,6 +5,10 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+- Without a location and without a last place, the app uses the most probable place: the main
+  city of the time zone of the phone, else of the country of its language. Vienna is no longer the fixed
+  default place.
+
 ## 0.2.0 - 2026-11-06
 
 - The settings have a link to the privacy policy.

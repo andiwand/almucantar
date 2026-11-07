@@ -6,22 +6,53 @@ import at.stefl.almucantar.core.Observer
 /** The main city of a time zone, from `assets/tzdata/zone.tab` (IANA, public domain). */
 data class TimeZonePlace(val observer: Observer, val city: String)
 
+/** A line of zone.tab: the country code, the coordinates, and the time zone. */
+internal data class ZoneLine(val country: String, val coordinates: String, val zone: String)
+
 object TimeZonePlaces {
     /**
      * Returns the main city of the time zone [zoneId] (for example "Europe/Vienna"), or null if the
      * table does not have the zone (for example "Etc/UTC").
      */
-    fun find(context: Context, zoneId: String): TimeZonePlace? =
-        context.assets.open("tzdata/zone.tab").bufferedReader().useLines { lines ->
-            lines
-                .filterNot { it.startsWith("#") }
-                .map { it.split('\t') }
-                .firstOrNull { it.size >= 3 && it[2] == zoneId }
-                ?.let { columns ->
-                    parseIso6709(columns[1])?.let {
-                        TimeZonePlace(it, zoneId.substringAfterLast('/').replace('_', ' '))
-                    }
-                }
+    fun find(context: Context, zoneId: String): TimeZonePlace? = byZone(lines(context), zoneId)
+
+    /**
+     * Returns the main city of the country [countryCode] (ISO 3166, for example "AT"), or null if
+     * the table does not have the country. A country with more than one zone gives the first zone
+     * with the offset [offsetSeconds] of the device, else its first zone.
+     */
+    fun findCountry(context: Context, countryCode: String, offsetSeconds: Int): TimeZonePlace? =
+        byCountry(lines(context), countryCode, offsetSeconds)
+
+    private fun lines(context: Context): List<ZoneLine> =
+        context.assets.open("zone.tab").bufferedReader().useLines { parse(it).toList() }
+
+    internal fun parse(lines: Sequence<String>): Sequence<ZoneLine> =
+        lines
+            .filterNot { it.startsWith("#") }
+            .map { it.split('\t') }
+            .filter { it.size >= 3 }
+            .map { ZoneLine(it[0], it[1], it[2]) }
+
+    internal fun byZone(lines: List<ZoneLine>, zoneId: String): TimeZonePlace? =
+        lines.firstOrNull { it.zone == zoneId }?.let(::placeOf)
+
+    internal fun byCountry(
+        lines: List<ZoneLine>,
+        countryCode: String,
+        offsetSeconds: Int,
+    ): TimeZonePlace? {
+        val country = lines.filter { it.country.equals(countryCode, ignoreCase = true) }
+        val now = java.time.Instant.now()
+        val sameOffset = country.firstOrNull {
+            zoneOrNull(it.zone)?.rules?.getOffset(now)?.totalSeconds == offsetSeconds
+        }
+        return (sameOffset ?: country.firstOrNull())?.let(::placeOf)
+    }
+
+    private fun placeOf(line: ZoneLine): TimeZonePlace? =
+        parseIso6709(line.coordinates)?.let {
+            TimeZonePlace(it, line.zone.substringAfterLast('/').replace('_', ' '))
         }
 
     /** Parses "+4813+01620" or "+404251-0740023" (ISO 6709, degrees, minutes, seconds). */

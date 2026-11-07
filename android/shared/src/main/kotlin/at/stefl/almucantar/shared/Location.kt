@@ -38,7 +38,10 @@ enum class PlaceSource {
     LAST,
     /** The main city of the device time zone. The error can be hundreds of kilometres. */
     TIME_ZONE,
-    /** Nothing is known. The app uses Vienna. */
+    /**
+     * Nothing is known: the time zone and the country of the device are not in the table. The app
+     * uses the meridian of the offset of the time zone, at the equator.
+     */
     DEFAULT,
 }
 
@@ -67,13 +70,39 @@ data class Place(
                 source == PlaceSource.LAST
 }
 
+/** Vienna, for the scenes of the demo modes. It is not a fallback. */
 val VIENNA = Place(Observer(48.2082, 16.3738), PlaceSource.DEFAULT, name = "Vienna")
 
-/** The place without a location: the city of the time zone, or Vienna. */
-fun fallbackPlace(context: Context, zone: ZoneId = ZoneId.systemDefault()): Place =
+/**
+ * The most probable place without a location: the main city of the time zone of the device, else
+ * the main city of the country of the locale, else the meridian of the offset of the time zone. The
+ * time zone comes first, because it tells where the device is, and the locale tells only the
+ * language and the region that the user chose.
+ */
+fun fallbackPlace(context: Context, zone: ZoneId = ZoneId.systemDefault()): Place {
     TimeZonePlaces.find(context, zone.id)?.let {
-        Place(it.observer, PlaceSource.TIME_ZONE, name = it.city)
-    } ?: VIENNA
+        return Place(it.observer, PlaceSource.TIME_ZONE, name = it.city)
+    }
+    val offset = zone.rules.getOffset(java.time.Instant.now()).totalSeconds
+    val country = localeCountry()
+    if (country.isNotEmpty()) {
+        TimeZonePlaces.findCountry(context, country, offset)?.let {
+            return Place(it.observer, PlaceSource.TIME_ZONE, name = it.city)
+        }
+    }
+    return Place(Observer(0.0, (offset / 240.0).coerceIn(-180.0, 180.0)), PlaceSource.DEFAULT)
+}
+
+/** The country of the locale, also the likely one of a locale without a country ("de" is DE). */
+private fun localeCountry(): String =
+    try {
+        android.icu.util.ULocale.addLikelySubtags(
+                android.icu.util.ULocale.forLocale(java.util.Locale.getDefault())
+            )
+            .country
+    } catch (_: RuntimeException) {
+        java.util.Locale.getDefault().country
+    }
 
 /**
  * The last place in the shared preferences, so the app starts at that place also offline and

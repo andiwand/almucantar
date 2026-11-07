@@ -4,3 +4,9 @@ declare module "*?url" {
   const url: string;
   export default url;
 }
+
+// Vite gives the text of a file that is imported with "?raw", in the bundle.
+declare module "*?raw" {
+  const text: string;
+  export default text;
+}

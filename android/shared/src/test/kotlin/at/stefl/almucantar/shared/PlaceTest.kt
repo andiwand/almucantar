@@ -23,6 +23,28 @@ class PlaceTest {
         assertEquals(-(33 + 52 / 60.0), south.latitudeDeg, 1e-12)
     }
 
+    /** The zone.tab of the app, from the root of the repository. */
+    private val zones =
+        TimeZonePlaces.parse(java.io.File("../../assets/tzdata/zone.tab").readLines().asSequence())
+            .toList()
+
+    @Test
+    fun aTimeZoneGivesItsMainCity() {
+        assertEquals("Vienna", TimeZonePlaces.byZone(zones, "Europe/Vienna")?.city)
+        assertEquals("New York", TimeZonePlaces.byZone(zones, "America/New_York")?.city)
+        assertNull(TimeZonePlaces.byZone(zones, "Etc/UTC"))
+    }
+
+    @Test
+    fun aCountryGivesTheCityWithTheOffsetOfTheDevice() {
+        assertEquals("Vienna", TimeZonePlaces.byCountry(zones, "at", 0)?.city)
+        // The United States have many zones: the offset of the device chooses one.
+        val now = java.time.Instant.now()
+        val pacific = java.time.ZoneId.of("America/Los_Angeles").rules.getOffset(now).totalSeconds
+        assertEquals("Los Angeles", TimeZonePlaces.byCountry(zones, "US", pacific)?.city)
+        assertNull(TimeZonePlaces.byCountry(zones, "XX", 0))
+    }
+
     @Test
     fun rejectsInvalidIso6709() {
         assertNull(TimeZonePlaces.parseIso6709("+48"))

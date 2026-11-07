@@ -5,6 +5,9 @@ The changes in the PWA alidade that a user notices. Each release has the tag
 
 ## Unreleased
 
+- The map starts at the most probable place: the main city of the time zone of the browser, else
+  of the country of its language. It does not start at Innsbruck.
+
 ## 0.1.0 - 2026-11-05
 
 - The first version, a prototype of the photo planner. Every way ends in the shot: the photo from

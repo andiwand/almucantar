@@ -9,13 +9,16 @@ The changes in the Android app Alidade that a user notices. Each release has the
   scroll position. The app keeps the results of the searches and the small photos in memory.
 - Keep a shot or a place with its star. The start page shows your shots and your places, and the
   map of the spot shows your places as chips.
-- "Live view" shows the shot in first person through the camera, as Sonnseite and Sternstunde do:
-  the terrain of the spot, the path of the subject with the hours, the landmark, and an arrow to
-  the subject. Without the camera, the app draws the sky.
+- "Live view" shows the shot in first person, as Sonnseite and Sternstunde do: the terrain of the
+  spot, the path of the subject with the hours, the landmark, and an arrow to the subject, on a
+  drawn sky. The chip "Camera" puts it on the camera image.
 - "Share" sends a card of the shot: the photo with the frame of the lens, and the time, the place,
   the elevation, and the direction of the subject.
 - The buttons, the chips, and the back arrow are the ones of Android, and the logo in the bar is
   larger.
+- The map starts at the location of the phone, else at the main city of its time zone or of the
+  country of its language. It does not start at Innsbruck.
+- The choices of the days are two rows that do not scroll.
 
 ## 0.2.0 - 2026-11-06
 

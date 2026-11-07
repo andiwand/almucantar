@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -37,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,7 +79,8 @@ import kotlin.math.sqrt
 // sternstunde. The phone shows the terrain of the spot, the path of the subject with the full
 // hours, the subject at the time of the slider, and the landmark, in the direction that the phone
 // points to. An arrow at the border leads to the subject. Without the camera, the same overlay lies
-// on a dark sky. The view is true at the spot; the panel shows how far away the phone is.
+// on a dark sky. The view starts without the camera; the button "Camera" switches it on. The view
+// is true at the spot; the panel shows how far away the phone is.
 
 /** The horizontal field of view without the camera, in portrait and landscape. */
 private const val FOV_PORTRAIT_DEG = 60.0
@@ -109,23 +114,23 @@ fun LiveScreen(model: Model, shot: Shot, startUtc: Double, locationGranted: Bool
     val t = shot.pathStartUtc + minute.roundToInt() * 60.0
     val body = remember(t) { bodyPosition(s.body, t, shot.spot) }
 
-    // The camera: the app asks for it when the live view opens. Without it, the view is a dark sky.
-    var cameraOn by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                PackageManager.PERMISSION_GRANTED
-        )
-    }
-    var asked by rememberSaveable { mutableStateOf(false) }
+    // The view starts with the drawn sky. The button "Camera" puts the overlay on the camera
+    // image, and the app asks for the permission at the first tap.
+    var cameraOn by rememberSaveable { mutableStateOf(false) }
+    var cameraDenied by remember { mutableStateOf(false) }
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraOn = it
+            cameraDenied = !it
         }
-    LaunchedEffect(Unit) {
-        if (!cameraOn && !asked) {
-            asked = true
-            cameraPermission.launch(Manifest.permission.CAMERA)
-        }
+    val toggleCamera = {
+        if (cameraOn) cameraOn = false
+        else if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+            cameraOn = true
+        else cameraPermission.launch(Manifest.permission.CAMERA)
     }
     var viewCamera by remember { mutableStateOf<ViewCamera?>(null) }
 
@@ -177,7 +182,27 @@ fun LiveScreen(model: Model, shot: Shot, startUtc: Double, locationGranted: Bool
         ) {
             Print(Modifier.fillMaxWidth(), padding = 14.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Title(shotTitle(shot), size = 20)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Title(shotTitle(shot), Modifier.weight(1f), size = 20)
+                        FilterChip(
+                            selected = cameraOn,
+                            onClick = toggleCamera,
+                            label = { Text("Camera") },
+                            leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.ic_camera),
+                                    contentDescription = null,
+                                    Modifier.size(FilterChipDefaults.IconSize),
+                                )
+                            },
+                            colors =
+                                FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Shade.ink,
+                                    selectedLabelColor = Shade.cream,
+                                    selectedLeadingIconColor = Shade.cream,
+                                ),
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             clock(t, zone),
@@ -202,7 +227,13 @@ fun LiveScreen(model: Model, shot: Shot, startUtc: Double, locationGranted: Bool
                         color = Shade.inkSoft,
                     )
                     Muted(
-                        status(tracker.frame, tracker.estimate.varianceDeg2, here, shot, cameraOn),
+                        status(
+                            tracker.frame,
+                            tracker.estimate.varianceDeg2,
+                            here,
+                            shot,
+                            cameraDenied,
+                        ),
                         small = true,
                     )
                 }
@@ -217,17 +248,22 @@ private fun status(
     varianceDeg2: Double,
     here: Observer?,
     shot: Shot,
-    cameraOn: Boolean,
+    cameraDenied: Boolean,
 ): String {
     val where =
         here?.let {
             val d = Geo.distanceM(it, shot.spot)
-            if (d < 300) "You are at the spot." else "You are ${km(d)} from the spot."
+            when {
+                d < 300 -> "You are at the spot."
+                // Far away, a decimal of a kilometre tells nothing.
+                d >= 100_000 -> "You are ${(d / 1000).roundToInt()} km from the spot."
+                else -> "You are ${km(d)} from the spot."
+            }
         } ?: "The view is true at the spot."
     val heading =
         if (frame == OrientationFrame.NONE) "No compass: north is not known."
         else "Heading ±${sqrt(varianceDeg2).roundToInt()}°."
-    val camera = if (cameraOn) "" else " No camera: the sky is drawn."
+    val camera = if (cameraDenied) " The camera is not allowed." else ""
     return "$where $heading$camera"
 }
 

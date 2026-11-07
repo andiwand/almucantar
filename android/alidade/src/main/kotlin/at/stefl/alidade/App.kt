@@ -47,6 +47,8 @@ import at.stefl.almucantar.core.Site
 import at.stefl.almucantar.shared.BaseMap
 import at.stefl.almucantar.shared.BaseMapStore
 import at.stefl.almucantar.shared.MilkyWay
+import at.stefl.almucantar.shared.deviceLocation
+import at.stefl.almucantar.shared.fallbackPlace
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -185,7 +187,11 @@ class Model(context: Context, private val persistent: Boolean = true) {
     /** The days of "From where I am": the first day, or null for now. */
     var fromDay by mutableStateOf<LocalDate?>(null)
     var days by mutableIntStateOf(14)
-    val map = MapState(47.27, 11.39, 10.0)
+    /** The map. Without a saved map, it shows the most probable place (see [load]). */
+    val map = MapState(0.0, 0.0, 2.0)
+
+    /** True while the map shows a guessed place and the user has chosen no place yet. */
+    private var mapGuessed = false
 
     var baseMap by mutableStateOf<BaseMap?>(null)
     var sky by mutableStateOf<Sky?>(null)
@@ -226,7 +232,26 @@ class Model(context: Context, private val persistent: Boolean = true) {
     private val horizons = mutableMapOf<String, Deferred<Horizon>>()
 
     init {
-        load()
+        if (!load() && persistent) {
+            // No saved map: the main city of the time zone or of the country of the device. The
+            // location of the phone replaces it (centerOnDevice).
+            map.center(fallbackPlace(app).observer, 9.0)
+            mapGuessed = true
+        }
+    }
+
+    /**
+     * Moves a guessed map to the location of the phone (the last known one first), if the user has
+     * chosen no place yet.
+     */
+    suspend fun centerOnDevice() {
+        if (!mapGuessed) return
+        val at = deviceLocation(app) ?: return
+        if (mapGuessed && spot == null && landmark == null) {
+            map.center(at, 11.0)
+            save()
+        }
+        mapGuessed = false
     }
 
     fun go(screen: Screen) {
@@ -390,10 +415,11 @@ class Model(context: Context, private val persistent: Boolean = true) {
         prefs.edit { putString(STATE_KEY, json.toString()) }
     }
 
-    private fun load() {
-        if (!persistent) return
-        val text = prefs.getString(STATE_KEY, null) ?: return
-        try {
+    /** Reads the saved choices. Returns false if there are none. */
+    private fun load(): Boolean {
+        if (!persistent) return false
+        val text = prefs.getString(STATE_KEY, null) ?: return false
+        return try {
             val json = JSONObject(text)
             subject = SubjectId.valueOf(json.optString("subject", "MOON"))
             landmark = json.optJSONObject("landmark")?.let(::pointOf)
@@ -405,8 +431,10 @@ class Model(context: Context, private val persistent: Boolean = true) {
             )
             fromDay = json.optString("fromDay").takeIf { it.isNotEmpty() }?.let(LocalDate::parse)
             days = json.optInt("days", 14)
+            true
         } catch (_: Exception) {
             // A damaged entry: start again.
+            false
         }
     }
 
@@ -422,6 +450,7 @@ fun AlidadeApp(locationGranted: Boolean, scene: ScreenshotScene? = null) {
     // The demo mode of the store screenshots: a fixed time and a fixed stack of screens.
     val model = remember { Model(context, persistent = scene == null).also { scene?.apply(it) } }
     LaunchedEffect(Unit) { model.loadData() }
+    LaunchedEffect(locationGranted) { if (locationGranted) model.centerOnDevice() }
     val screen = model.stack.last()
     BackHandler(enabled = model.stack.size > 1) { model.back() }
     // Each screen of the stack keeps its saved state (for example the scroll position of a list)

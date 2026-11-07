@@ -20,7 +20,7 @@ import {
   upright,
   withCompass,
 } from "@almucantar/web-shared/orientation";
-import { DEFAULT_PLACE, gpsPlace, loadPlace } from "@almucantar/web-shared/place";
+import { gpsPlace, loadPlace } from "@almucantar/web-shared/place";
 import type { StoredPlace } from "@almucantar/web-shared/place";
 import { setupPlacePanel } from "@almucantar/web-shared/placePanel";
 import {
@@ -42,6 +42,7 @@ import {
 import type { TerrainState } from "@almucantar/web-shared/terrain";
 import { fromWallTime, wallTime } from "@almucantar/web-shared/zone";
 import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
+import zoneTab from "../../../../assets/tzdata/zone.tab?raw";
 import starsUrl from "../../../../assets/stars/stars.json?url";
 
 const almucantar = await load();
@@ -86,7 +87,7 @@ const labelCatalog = {
 // --- State --------------------------------------------------------------------------------------
 
 const PLACE_KEY = "sternstunde-place";
-let place = loadPlace(PLACE_KEY);
+let place = loadPlace(PLACE_KEY, zoneTab);
 let observer = place.observer;
 let placeText = place.name;
 let zone = place.timeZone;
@@ -1185,7 +1186,7 @@ const placePanel = setupPlacePanel({
 });
 
 // The last place starts the terrain also before the location arrives.
-if (place !== DEFAULT_PLACE) {
+if (!place.probable) {
   hasLocation = true;
   if (terrainOn) terrain.update(observer);
 }

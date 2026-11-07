@@ -34,6 +34,13 @@ android {
     // The offline base map (PLAN.md 13.3) is shared with all apps, so the module takes it from the
     // root of the repository. The APK of an app compresses it.
     sourceSets["main"].assets.directories.add("../../assets/basemap")
+    // The main cities of the time zones (IANA zone.tab) give the place without a location. The web
+    // apps read the same file.
+    sourceSets["main"].assets.directories.add("../../assets/tzdata")
+    // Each data folder has a README.md for the repository, not for the app. The pattern is the
+    // default of AGP and the README files.
+    androidResources.ignoreAssetsPattern =
+        "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!README.md"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

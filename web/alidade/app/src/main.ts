@@ -24,6 +24,8 @@ import { decodeStars, limitingMagnitude } from "@almucantar/web-shared/stars";
 import type { Stars, StarsJson } from "@almucantar/web-shared/stars";
 import { browserTimeZone, fromWallTime, wallTime } from "@almucantar/web-shared/zone";
 import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
+import zoneTab from "../../../../assets/tzdata/zone.tab?raw";
+import { probablePlace } from "@almucantar/web-shared/place";
 import starsUrl from "../../../../assets/stars/stars.json?url";
 import { computeHorizon, profileAltitude } from "./horizon";
 import type { Horizon } from "./horizon";
@@ -91,7 +93,11 @@ function loadState(): Saved {
     landmark: null,
     extraM: 0,
     spot: null,
-    view: { lon: 11.39, lat: 47.27, zoom: 10 },
+    // Without a saved map: the main city of the time zone or of the country of the device.
+    view: (() => {
+      const { observer } = probablePlace(zoneTab);
+      return { lon: observer.longitudeDeg, lat: observer.latitudeDeg, zoom: 9 };
+    })(),
     fromDay: null,
     days: 14,
   };

@@ -9,6 +9,9 @@ same as in `core/CHANGELOG.md`.
 - The app has a bright look of the day, like the website: in the sky view the sky has the colors
   of the height of the sun, with a glow around the sun and a light ground. The panels are warm
   white with dark text, and the main button is sun yellow.
+- Without a location and without a last place, the app uses the most probable place: the main
+  city of the time zone of the browser, else of the country of its language. Vienna is no longer the fixed
+  default place.
 
 ## 0.2.0 - 2026-11-05
 

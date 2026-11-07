@@ -635,9 +635,19 @@ fun WhenScreen(model: Model) {
                     )
                     StepButton("+", "The next day") { from = from.plusDays(1) }
                 }
-                ChipRow {
-                    for (d in listOf(1, 2, 3, 7, 14, 30)) {
-                        Chip(if (d == 1) "1 night" else "$d days", d == days) { days = d }
+                // Two rows of three that fill the width, so all choices show at once.
+                for (row in listOf(listOf(1, 2, 3), listOf(7, 14, 30))) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (d in row) {
+                            Chip(
+                                if (d == 1) "1 night" else "$d days",
+                                d == days,
+                                Modifier.weight(1f),
+                                centered = true,
+                            ) {
+                                days = d
+                            }
+                        }
                     }
                 }
                 ShotButton("Find the shots", Modifier.fillMaxWidth(), primary = true) {

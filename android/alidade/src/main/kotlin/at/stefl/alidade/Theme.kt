@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -236,13 +237,30 @@ fun ShotButton(
     }
 }
 
-/** A chip of a choice: a lens, a subject in a filter, a number of days. */
+/**
+ * A chip of a choice: a lens, a subject in a filter, a number of days. [centered] puts the label in
+ * the middle of a chip that is wider than its label.
+ */
 @Composable
-fun Chip(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun Chip(
+    text: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    centered: Boolean = false,
+    onClick: () -> Unit,
+) {
     FilterChip(
         selected = active,
         onClick = onClick,
-        label = { Text(text, maxLines = 1, softWrap = false) },
+        label = {
+            Text(
+                text,
+                if (centered) Modifier.fillMaxWidth() else Modifier,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = if (centered) TextAlign.Center else null,
+            )
+        },
         modifier = modifier,
         colors =
             FilterChipDefaults.filterChipColors(

@@ -10,8 +10,10 @@ import {
   timeZoneAt,
   toWorld,
 } from "../src/basemap";
-import { DEFAULT_PLACE, loadPlace } from "../src/place";
+import { loadPlace, parseIso6709, probablePlace } from "../src/place";
 import { fromWallTime, offsetMs, startOfDay, wallTime } from "../src/zone";
+
+const zoneTab = readFileSync(new URL("../../../assets/tzdata/zone.tab", import.meta.url), "utf8");
 
 const map = decodeBaseMap(
   JSON.parse(
@@ -130,10 +132,10 @@ describe("stored place", () => {
       manual: true,
     };
     storeWith(JSON.stringify(place));
-    expect(loadPlace("key")).toEqual(place);
+    expect(loadPlace("key", zoneTab)).toEqual(place);
   });
 
-  test("a missing, damaged, or incomplete entry gives the default place", () => {
+  test("a missing, damaged, or incomplete entry gives the most probable place", () => {
     for (const value of [
       null,
       "{",
@@ -146,7 +148,44 @@ describe("stored place", () => {
       }),
     ]) {
       storeWith(value);
-      expect(loadPlace("key")).toBe(DEFAULT_PLACE);
+      expect(loadPlace("key", zoneTab)).toEqual(probablePlace(zoneTab));
     }
+  });
+});
+
+describe("probable place", () => {
+  const now = Date.UTC(2026, 10, 7, 12);
+
+  test("ISO 6709 coordinates parse, with and without seconds", () => {
+    expect(parseIso6709("+4813+01620")).toEqual({
+      latitudeDeg: 48 + 13 / 60,
+      longitudeDeg: 16 + 20 / 60,
+    });
+    const ny = parseIso6709("+404251-0740023")!;
+    expect(ny.longitudeDeg).toBeCloseTo(-(74 + 23 / 3600), 12);
+    expect(parseIso6709("+48+016")).toBeNull();
+  });
+
+  test("the time zone gives its main city", () => {
+    const p = probablePlace(zoneTab, "America/New_York", "de-AT", now);
+    expect(p.name).toBe("New York · no location");
+    expect(p.probable).toBe(true);
+    expect(p.timeZone).toBe("America/New_York");
+  });
+
+  test("without a city of the time zone, the country of the locale gives it", () => {
+    expect(probablePlace(zoneTab, "UTC", "de-AT", now).name).toBe("Vienna · no location");
+    // A language without a country gives its likely country.
+    expect(probablePlace(zoneTab, "UTC", "de", now).name).toBe("Berlin · no location");
+    // A country with many zones: the zone with the offset of the device.
+    expect(probablePlace(zoneTab, "Etc/GMT+8", "en-US", now).name).toBe(
+      "Los Angeles · no location",
+    );
+  });
+
+  test("without both, the meridian of the offset", () => {
+    const p = probablePlace(zoneTab, "Etc/GMT-3", "", now);
+    expect(p.observer).toEqual({ latitudeDeg: 0, longitudeDeg: 45 });
+    expect(p.name).toBe("No location");
   });
 });
