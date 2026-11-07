@@ -40,6 +40,15 @@ SCREENSHOT_DEVICES = %w[phone tablet].freeze
 # The store listings: metadata/<app>/<locale>/ with the texts and images/ (scripts/screenshots/listing.py).
 METADATA_DIR = File.join(ANDROID, "fastlane", "metadata").freeze
 
+# For a published app (release_status:completed), the changes wait in the Publishing overview of
+# the Play Console until someone sends them for review there. Google Play rejects this flag for a
+# draft app (never published): each commit of a draft app sends all its changes for review.
+def not_sent_for_review(options)
+  status = (options[:release_status] || "draft").to_s
+  UI.user_error!("release_status must be one of #{RELEASE_STATUSES.join(', ')}") unless RELEASE_STATUSES.include?(status)
+  status == "completed"
+end
+
 # The app of a lane: the option app (sonnseite, sternstunde, or alidade). Sonnseite is the default.
 def app_of(options)
   app = (options[:app] || "sonnseite").to_s
@@ -163,7 +172,8 @@ platform :android do
         skip_upload_images: false,
         skip_upload_screenshots: false,
         # Upload only the images that changed (supply compares the SHA-256 with Google Play).
-        sync_image_upload: true
+        sync_image_upload: true,
+        changes_not_sent_for_review: not_sent_for_review(options)
       )
     end
   end
@@ -195,9 +205,7 @@ platform :android do
       # The screenshots come from the lane upload_listing, which checks the complete set.
       skip_upload_screenshots: true,
       sync_image_upload: true,
-      # The changes wait in the Publishing overview of the Play Console until someone sends them
-      # for review there.
-      changes_not_sent_for_review: true
+      changes_not_sent_for_review: not_sent_for_review(options)
     )
   end
   desc "Upload the app bundle of an app to a track of Google Play (the bundle only, no listing)"
