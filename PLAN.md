@@ -521,8 +521,9 @@ contain the same core.
 - The overlay is a Compose `Canvas` on top of the preview.
 - Sensors: `TYPE_GAME_ROTATION_VECTOR` and `TYPE_MAGNETIC_FIELD_UNCALIBRATED` for the
   heading filter (5.4a). `TYPE_ROTATION_VECTOR` is the fallback.
-- Location: the coarse location (fused, network, or GPS provider). Without it, the main
-  city of the device time zone (IANA `zone.tab`), and the app says so. The status shows
+- Location: the coarse location (fused, network, or GPS provider). Without it, the last place,
+  else the main city of the device time zone (IANA `zone.tab`), else the main city of the country
+  of the locale, and the app says so. There is no fixed default place. The status shows
   the nearest town of the offline base map ("near", no geocoder, so the location stays on the
   phone) and the error as a power of ten, with its error on the sky.
   The user can also drop a place on the offline map, so they can plan a flat from home (13.3).
