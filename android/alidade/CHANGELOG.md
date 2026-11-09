@@ -5,6 +5,8 @@ The changes in the Android app Alidade that a user notices. Each release has the
 
 ## Unreleased
 
+## 0.3.1 - 2026-11-09
+
 - The live view no longer jumps once per second while the compass calibrates itself after the start.
   The heading now glides to each new estimate in less than a second. The view still follows a
   turn of the phone at once.
