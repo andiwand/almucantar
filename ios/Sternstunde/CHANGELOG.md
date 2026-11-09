@@ -5,6 +5,12 @@ the tag `sternstunde-ios-vX.Y.Z`. The rules are the same as in `core/CHANGELOG.m
 
 ## Unreleased
 
+- Tap the sun, the moon, or a planet, and choose "Show path (24 h)" to see its path from 12 hours
+  before to 12 hours after the selected time, with the full hours. The parts behind the terrain or
+  below the horizon are dashed. The settings have the same switch.
+- The sky no longer jumps once per second while the compass calibrates itself after the start.
+  The heading now glides to each new estimate in less than a second. The view still follows a
+  turn of the phone at once.
 - Without a location and without a last place, the app uses the most probable place: the main
   city of the time zone of the phone, else of the country of its region.
 - The first version, with the features of the Android app: the stars to magnitude 6 (size from

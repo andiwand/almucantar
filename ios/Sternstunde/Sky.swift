@@ -179,3 +179,92 @@ func horizonAt(_ profile: HorizonProfile?, azimuthDeg: Double) -> Double {
     let value = a[i] + t * (a[(i + 1) % a.count] - a[i])
     return value.isNaN ? 0 : value
 }
+
+extension Target {
+    /// True for the sun, the moon, and the planets: the objects with a path among the stars.
+    var hasPath: Bool {
+        switch self {
+        case .sun, .moon, .planet: true
+        case .star, .constellation, .galacticCenter: false
+        }
+    }
+
+    /// The samples of a path: every 10 minutes, from 12 hours before the time to 12 hours after it.
+    static let pathStepS = 600.0
+    static let pathHalfSpanS = 12 * 3600.0
+
+    /// The path of the target in the 24 hours around `unixUtc`: see `BodyPath`.
+    func path(_ data: StarData, unixUtc: Double, observer: Observer, profile: HorizonProfile?, timeZone: TimeZone) throws
+        -> BodyPath
+    {
+        let start = unixUtc - Self.pathHalfSpanS
+        let end = unixUtc + Self.pathHalfSpanS
+        let count = Int(2 * Self.pathHalfSpanS / Self.pathStepS)
+        let samples = try (0...count).map { try direction(data, unixUtc: start + Double($0) * Self.pathStepS, observer: observer) }
+        let (visible, hidden) = splitAtHorizon(samples, profile: profile)
+        // The full hours of the place. The calendar truncates to the hour of the place, so this also
+        // works in a time zone with an offset of 30 or 45 minutes.
+        let calendar = PlaceTime.calendar(timeZone)
+        let first = calendar.dateInterval(of: .hour, for: Date(timeIntervalSince1970: start))!.start
+        var hour = first.timeIntervalSince1970 + 3600
+        var hours: [PathHour] = []
+        while hour < end {
+            let d = try direction(data, unixUtc: hour, observer: observer)
+            let label = String(format: "%02d", calendar.component(.hour, from: Date(timeIntervalSince1970: hour)))
+            hours.append(
+                PathHour(direction: d, label: label, hidden: d.altitudeDeg < horizonAt(profile, azimuthDeg: d.azimuthDeg)))
+            hour += 3600
+        }
+        return BodyPath(target: self, visible: visible, hidden: hidden, hours: hours)
+    }
+}
+
+/// A full hour on a path: the direction, the hour ("21"), and true if the terrain hides it.
+struct PathHour: Sendable {
+    let direction: Horizontal
+    let label: String
+    let hidden: Bool
+}
+
+/// The path of a body in the 24 hours around a time: the parts over the horizon or the terrain
+/// (`visible`), the parts below it (`hidden`), and the full hours on the time of the place. The
+/// screen calculates it in the background and only projects it in a frame.
+struct BodyPath: Sendable {
+    let target: Target
+    let visible: [[Horizontal]]
+    let hidden: [[Horizontal]]
+    let hours: [PathHour]
+}
+
+/// Splits a line of directions into the parts over the visible horizon (`visible`) and the parts
+/// below it (`hidden`). The two parts meet at the crossing, which is interpolated between the
+/// samples, so the line has no gap.
+func splitAtHorizon(_ line: [Horizontal], profile: HorizonProfile?) -> (visible: [[Horizontal]], hidden: [[Horizontal]]) {
+    var visible: [[Horizontal]] = []
+    var hidden: [[Horizontal]] = []
+    var part: [Horizontal] = []
+    var up: Bool?
+    var previous: (direction: Horizontal, height: Double)?
+    for d in line {
+        let height = d.altitudeDeg - horizonAt(profile, azimuthDeg: d.azimuthDeg)
+        let isUp = height > 0
+        if let wasUp = up, isUp != wasUp, let (p, previousHeight) = previous {
+            let t = previousHeight / (previousHeight - height)
+            // The shortest turn of the azimuth, also over north.
+            let turn = (d.azimuthDeg - p.azimuthDeg + 540).truncatingRemainder(dividingBy: 360) - 180
+            var azimuth = (p.azimuthDeg + t * turn).truncatingRemainder(dividingBy: 360)
+            if azimuth < 0 { azimuth += 360 }
+            let crossing = Horizontal(azimuthDeg: azimuth, altitudeDeg: p.altitudeDeg + t * (d.altitudeDeg - p.altitudeDeg))
+            part.append(crossing)
+            if wasUp { visible.append(part) } else { hidden.append(part) }
+            part = [crossing]
+        }
+        part.append(d)
+        up = isUp
+        previous = (d, height)
+    }
+    if let up, part.count > 1 {
+        if up { visible.append(part) } else { hidden.append(part) }
+    }
+    return (visible, hidden)
+}

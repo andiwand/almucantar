@@ -23,8 +23,9 @@ final class HitList {
 /// The sky view of sternstunde: the stars, the constellations, the planets, the moon, and the Milky
 /// Way in the direction of the phone, over the terrain of the place. With the camera, the same
 /// overlay lies on the camera image. A tap on an object shows its name and its rise and set; Find
-/// leads to an object; Align corrects the heading with a bright star. Without motion sensors (the
-/// simulator), drag to look around.
+/// leads to an object; Align corrects the heading with a bright star. For a selected sun, moon, or
+/// planet, the user can show its path in the 24 hours around the selected time. Without motion
+/// sensors (the simulator), drag to look around.
 struct StarScreen: SwiftUI.View {
     let stars: StarData
 
@@ -36,6 +37,7 @@ struct StarScreen: SwiftUI.View {
     @AppStorage(Settings.terrainHorizon) private var terrainOn = true
     @AppStorage(StarSettings.lines) private var linesOn = true
     @AppStorage(StarSettings.red) private var red = false
+    @AppStorage(StarSettings.paths) private var pathsOn = false
     @State private var now = Date()
     @State private var dayOffset = 0.0
     @State private var minuteOfDay: Double?
@@ -48,6 +50,7 @@ struct StarScreen: SwiftUI.View {
     @State private var aligning = false
     @State private var selected: Target?
     @State private var riseSet: RiseSet?
+    @State private var path: BodyPath?
     @State private var message: String?
     // The zoom of the sky view: a pinch changes it, a double tap resets it. The camera view has the
     // field of view of the lens, so the zoom does not change it.
@@ -92,6 +95,7 @@ struct StarScreen: SwiftUI.View {
             let sky = skyCache.sky(data: stars, milkyWay: Self.milkyWay, unixUtc: time, observer: location.observer)
             let view = makeView(size: size)
             let profile = terrainOn ? terrain.profile : nil
+            let pathTarget = selected.flatMap { $0.hasPath && pathsOn ? $0 : nil }
 
             ZStack {
                 Color(red: 0.02, green: 0.035, blue: 0.086).ignoresSafeArea()
@@ -100,7 +104,9 @@ struct StarScreen: SwiftUI.View {
                 }
                 if let sky {
                     Canvas { context, _ in
-                        draw(&context, view: view, sky: sky, profile: profile, terrainLines: terrainOn ? terrain.lines : [])
+                        draw(
+                            &context, view: view, sky: sky, profile: profile, terrainLines: terrainOn ? terrain.lines : [],
+                            path: path.flatMap { pathTarget != nil && $0.target == pathTarget ? $0 : nil })
                     }
                     .ignoresSafeArea()
                     .gesture(dragGesture(view: view, size: size))
@@ -163,6 +169,15 @@ struct StarScreen: SwiftUI.View {
                     hour: Int(time / 3600), terrain: profile == nil ? -1 : terrain.revision)) {
                 await updateRiseSet(time: time, profile: profile)
             }
+            // The path of the selected body takes some milliseconds: calculate it in the background,
+            // again for a new target, a new place, a new terrain, a new time zone, or after 10 minutes
+            // of the selected time.
+            .task(id: PathKey(
+                    target: pathTarget, latitudeDeg: location.observer.latitudeDeg, longitudeDeg: location.observer.longitudeDeg,
+                    step: Int((time / Target.pathStepS).rounded(.down)), terrain: profile == nil ? -1 : terrain.revision,
+                    timeZone: location.timeZone.identifier)) {
+                await updatePath(target: pathTarget, time: time, profile: profile)
+            }
         }
     }
 
@@ -179,6 +194,27 @@ struct StarScreen: SwiftUI.View {
         let longitudeDeg: Double
         let hour: Int
         let terrain: Int
+    }
+
+    private struct PathKey: Hashable {
+        let target: Target?
+        let latitudeDeg: Double
+        let longitudeDeg: Double
+        let step: Int
+        let terrain: Int
+        let timeZone: String
+    }
+
+    /// Calculates the path of `target` for the 10-minute step of `time`. The screen keeps the old
+    /// path until the new one is ready, but it draws a path only for the current target.
+    private func updatePath(target: Target?, time: Double, profile: HorizonProfile?) async {
+        guard let target else { return }
+        let at = (time / Target.pathStepS).rounded(.down) * Target.pathStepS
+        let (data, observer, timeZone) = (stars, location.observer, location.timeZone)
+        let result = await Task.detached {
+            try? target.path(data, unixUtc: at, observer: observer, profile: profile, timeZone: timeZone)
+        }.value
+        if !Task.isCancelled, let result { path = result }
     }
 
     private func updateRiseSet(time: Double, profile: HorizonProfile?) async {
@@ -203,7 +239,7 @@ struct StarScreen: SwiftUI.View {
             (try? cameraFromFov(width: size.width, height: size.height, horizontalFovDeg: fov)) ?? Almucantar.Camera()
         if motion.available, let q = motion.deviceToFrame {
             return Almucantar.View(
-                deviceToEnu: q, screenRotation: SkyOrientation.screenRotation(), headingOffsetDeg: motion.estimate.offsetDeg,
+                deviceToEnu: q, screenRotation: SkyOrientation.screenRotation(), headingOffsetDeg: motion.shownOffsetDeg,
                 camera: cameraOn ? (camera ?? virtualCamera) : virtualCamera)
         }
         return Almucantar.View(
@@ -316,11 +352,13 @@ struct StarScreen: SwiftUI.View {
         SkyDrawing.label(&context, view, direction, Text(text).font(font).foregroundColor(color), gap: gap)
     }
 
-    /// Draws the sky: the Milky Way, the constellation lines, the stars, the names, the planets, the
-    /// moon, the sun, the horizon, the terrain, and the selection. Objects below the horizon or behind
-    /// the terrain are dim, so the user can still find them. Each drawn object goes into `hits`.
+    /// Draws the sky: the Milky Way, the constellation lines, the stars, the names, the path of the
+    /// selected body, the planets, the moon, the sun, the horizon, the terrain, and the selection.
+    /// Objects below the horizon or behind the terrain are dim, so the user can still find them. Each
+    /// drawn object goes into `hits`.
     private func draw(
-        _ context: inout GraphicsContext, view: Almucantar.View, sky: SkyAt, profile: HorizonProfile?, terrainLines: [[Horizontal]]
+        _ context: inout GraphicsContext, view: Almucantar.View, sky: SkyAt, profile: HorizonProfile?, terrainLines: [[Horizontal]],
+        path: BodyPath?
     ) {
         let bounds = CGRect(x: 0, y: 0, width: view.camera.width, height: view.camera.height)
         if !cameraOn { context.fill(Path(bounds), with: .color(Self.skyColor(sky.sun.altitudeDeg).color)) }
@@ -422,6 +460,9 @@ struct StarScreen: SwiftUI.View {
             found.append(Hit(target: .galacticCenter, at: at, mag: 6.5))
         }
 
+        // The path of the selected body, under the bodies.
+        if let path { drawBodyPath(&context, view, path, color: Self.pathColor(path.target, sky)) }
+
         // The planets that the eye sees now.
         for planet in sky.planets {
             if planet.mag > limit + 0.5 { continue }
@@ -482,6 +523,41 @@ struct StarScreen: SwiftUI.View {
         hits.hits = found
     }
 
+    /// The color of the path of a body: the color of the planet, of the moon, or of the sun.
+    private static func pathColor(_ target: Target, _ sky: SkyAt) -> Color {
+        switch target {
+        case .planet(let p): sky.planets.first { $0.planet == p }!.color.color
+        case .sun: Color(red: 1, green: 0.878, blue: 0.541)  // #FFE08A
+        default: Color(red: 0.878, green: 0.902, blue: 0.941)  // #E0E6F0
+        }
+    }
+
+    /// The path of a body: a line over the horizon or the terrain, a faint dashed line below it, and
+    /// a dot with the hour at each full hour. Only the hours over the horizon have a label.
+    private func drawBodyPath(_ context: inout GraphicsContext, _ view: Almucantar.View, _ path: BodyPath, color: Color) {
+        for line in path.hidden {
+            if let lines = try? projectLine(view, line) {
+                context.stroke(
+                    SkyDrawing.path(lines), with: .color(color.opacity(0.3)),
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4]))
+            }
+        }
+        for line in path.visible {
+            if let lines = try? projectLine(view, line) {
+                context.stroke(SkyDrawing.path(lines), with: .color(color.opacity(0.8)), lineWidth: 2)
+            }
+        }
+        for hour in path.hours {
+            guard let at = SkyDrawing.point(view, hour.direction) else { continue }
+            if hour.hidden {
+                context.fill(disc(at, 2), with: .color(color.opacity(0.3)))
+            } else {
+                context.fill(disc(at, 3), with: .color(color))
+                label(&context, view, hour.direction, hour.label, size: 11, color: color.opacity(0.9), gap: 7)
+            }
+        }
+    }
+
     // MARK: - Panels
 
     private func statusPanel(_ sky: SkyAt) -> some SwiftUI.View {
@@ -539,6 +615,11 @@ struct StarScreen: SwiftUI.View {
             Text(kind).foregroundColor(gray)
             Text(times)
             Text(String(format: "%.0f° high, azimuth %.0f°", d.altitudeDeg, d.azimuthDeg)).foregroundColor(gray)
+            if target.hasPath {
+                Button(pathsOn ? "Hide path" : "Show path (24 h)") { pathsOn.toggle() }
+                    .padding(.vertical, 4)
+                    .tint(Color(red: 0.81, green: 0.74, blue: 1))
+            }
         }
         .frame(maxWidth: 440, alignment: .leading)
         .skyPanel()

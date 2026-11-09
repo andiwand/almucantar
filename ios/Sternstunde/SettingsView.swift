@@ -6,6 +6,8 @@ enum StarSettings {
     static let lines = "constellationLines"
     /// The red light, so the eyes stay adapted to the dark. Off by default.
     static let red = "redLight"
+    /// The path of the selected sun, moon, or planet. Off by default.
+    static let paths = "bodyPaths"
 }
 
 /// The settings and the credits of the data.
@@ -14,6 +16,7 @@ struct SettingsView: SwiftUI.View {
     @AppStorage(StarSettings.lines) private var lines = true
     @AppStorage(Settings.terrainHorizon) private var terrainHorizon = true
     @AppStorage(StarSettings.red) private var red = false
+    @AppStorage(StarSettings.paths) private var paths = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some SwiftUI.View {
@@ -23,6 +26,7 @@ struct SettingsView: SwiftUI.View {
                     Toggle("Constellation lines", isOn: $lines)
                     Toggle("Terrain horizon", isOn: $terrainHorizon)
                     Toggle("Red light", isOn: $red)
+                    Toggle("Path of the sun, the moon, or a planet", isOn: $paths)
                 } footer: {
                     Text(
                         "The terrain horizon hides the stars behind the mountains. The app downloads the elevation data "
