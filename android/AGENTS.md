@@ -49,6 +49,7 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 | `.../TimePanel.kt` | The date and time sliders of the apps. |
 | `.../DeviceState.kt` | The rotation of the display and the time zone of the device, as Compose state. |
 | `.../Upright.kt` | `upright`: the view of a device held upright, as a quaternion, for the demo modes of the store screenshots. |
+| `.../SystemBars.kt` | `drawBehindSystemBars`: the app goes behind the system bars, with light or dark icons. It replaces `enableEdgeToEdge()` of androidx.activity, because that calls the window APIs that Android 15 deprecates (Google Play warns). The theme `AppTheme` of each app (`res/values/themes.xml`) makes the bars transparent and sets the cutout mode before Android 15. Do not call `enableEdgeToEdge()` or `Window.setStatusBarColor`. |
 | `.../Privacy.kt` | `PrivacyLink` and `PRIVACY_POLICY_URL`: the link to the privacy policy that each app shows (Google Play asks for it). |
 | `.../UserAgent.kt` | The User-Agent of the HTTP requests. Each app calls `UserAgent.init()` at the start, because the tile policy of OpenStreetMap asks that it names the app. |
 | `shared/src/main/AndroidManifest.xml` | The permissions of the shared code (location, network, camera). The manifest merger gives them to each app. |

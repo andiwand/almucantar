@@ -2,14 +2,11 @@ package at.stefl.sonnseite
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import at.stefl.almucantar.shared.UserAgent
+import at.stefl.almucantar.shared.drawBehindSystemBars
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,10 +23,7 @@ class MainActivity : ComponentActivity() {
         UserAgent.init(this)
         // The top of the screen is a dark sky, a blue sky, or the camera image, so the icons of the
         // system bars are always light, also when the system uses its light theme.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        drawBehindSystemBars(lightBars = false)
         // The user holds the phone up and watches the sky, so the screen stays on.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // The demo mode of the store screenshots, only in a debug build.

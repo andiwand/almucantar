@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- The system bars are transparent and the app uses the area of the display cutout, so the
+         app is edge to edge also before Android 15. The theme does this in place of the window
+         APIs that Android 15 deprecates (see drawBehindSystemBars in shared/). -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <!-- Without this, Android 10 to 14 puts a scrim behind the navigation buttons. -->
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <!-- The app is dark. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
