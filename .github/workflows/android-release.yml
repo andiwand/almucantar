@@ -180,3 +180,4 @@ jobs:
           "mapping:${PWD}/out/${APP}-${VERSION}-mapping.txt"
           "track:${TRACK}"
           "release_status:${RELEASE_STATUS}"
+          "version:${VERSION}"

@@ -222,6 +222,8 @@ platform :android do
     UI.user_error!("release_status must be one of #{RELEASE_STATUSES.join(', ')}") unless RELEASE_STATUSES.include?(status)
     # The R8 mapping lets Google Play show readable stack traces of crashes.
     mapping = options[:mapping] && File.expand_path(options[:mapping].to_s, ANDROID)
+    # The name of the release in Google Play. Without it, fastlane keeps the name of the old draft.
+    version = options[:version].to_s
 
     upload_to_play_store(
       package_name: package,
@@ -230,6 +232,7 @@ platform :android do
       mapping: mapping && File.file?(mapping) ? mapping : nil,
       track: track,
       release_status: status,
+      version_name: version.empty? ? nil : version,
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_changelogs: true,
