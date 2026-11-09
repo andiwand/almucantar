@@ -73,6 +73,12 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
 
+    constraints {
+        // camera-view brings appcompat 1.1.0, and with it fragment 1.1.0. Google Play reports
+        // that version as outdated, so the apps use a newer one.
+        implementation(libs.androidx.fragment) { because("fragment 1.1.0 is outdated") }
+    }
+
     testImplementation(libs.junit)
     testImplementation(libs.json)
 }
