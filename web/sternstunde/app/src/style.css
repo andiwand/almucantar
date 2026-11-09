@@ -190,6 +190,13 @@ button:disabled {
 #info .muted {
   color: #b4c0d2;
 }
+/* The button of the info card that shows or hides the path of a body: a text button. */
+#info .path-button {
+  margin-top: 4px;
+  padding: 4px 0;
+  background: none;
+  color: #cfbcff;
+}
 /* The red light: everything turns red, so the eyes stay adapted to the dark. */
 #night {
   position: fixed;

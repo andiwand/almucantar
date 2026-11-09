@@ -5,6 +5,11 @@ The changes in the PWA of sternstunde that a user notices. Each release has the 
 
 ## Unreleased
 
+- The path of the sun, the moon, or a planet: tap the body, then "Show path (24 h)" on its card.
+  The path shows the 24 hours around the selected time, with a dot and the hour at each full hour
+  of the place. The part below the horizon or behind the terrain is a faint dashed line. The
+  setting "Path of the sun, the moon, or a planet" in the time panel also shows or hides it.
+
 ## 0.2.0 - 2026-11-07
 
 - Without a location and without a last place, the app uses the most probable place: the main

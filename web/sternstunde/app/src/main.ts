@@ -41,6 +41,8 @@ import {
 } from "@almucantar/web-shared/terrain";
 import type { TerrainState } from "@almucantar/web-shared/terrain";
 import { fromWallTime, wallTime } from "@almucantar/web-shared/zone";
+import { PATH_STEP_S, bodyPath } from "./path";
+import type { BodyPath } from "./path";
 import baseMapUrl from "../../../../assets/basemap/basemap.json?url";
 import zoneTab from "../../../../assets/tzdata/zone.tab?raw";
 import starsUrl from "../../../../assets/stars/stars.json?url";
@@ -113,9 +115,11 @@ let fovDeg = 65;
 const LINES_SETTING = "sternstunde-lines-on";
 const TERRAIN_SETTING = "sternstunde-terrain-on";
 const NIGHT_SETTING = "sternstunde-night";
+const PATHS_SETTING = "sternstunde-paths-on";
 let linesOn = localStorage.getItem(LINES_SETTING) !== "false";
 let terrainOn = localStorage.getItem(TERRAIN_SETTING) !== "false";
 let nightOn = localStorage.getItem(NIGHT_SETTING) === "true";
+let pathsOn = localStorage.getItem(PATHS_SETTING) === "true";
 
 const tileCache = new TileCache({
   store: cacheStorageStore("sternstunde-terrain-v1"),
@@ -349,6 +353,38 @@ function riseAndSet(
   return { rise, set, always };
 }
 
+/** True for the sun, the moon, and the planets: the objects with a path among the stars. */
+const hasPath = (t: Target) => t.kind === "sun" || t.kind === "moon" || t.kind === "planet";
+
+// The path of the selected body takes some milliseconds, so a frame only projects it. The app
+// calculates it again for a new target, a new place, a new terrain, a new time zone, or a new
+// step of 10 minutes of the selected time.
+let pathCache: { key: string; profile: HorizonProfile | null; path: BodyPath } | null = null;
+
+function selectedPath(s: Sky): BodyPath | null {
+  if (!pathsOn || !selected || !hasPath(selected)) return null;
+  const target = selected;
+  const profile = terrainProfile();
+  const at = Math.floor(s.time / PATH_STEP_S) * PATH_STEP_S;
+  const key = `${JSON.stringify(target)}:${s.key}:${zone}:${at}`;
+  if (pathCache?.key !== key || pathCache.profile !== profile) {
+    const path = bodyPath(
+      at,
+      (time) => directionAt(target, time),
+      (azimuthDeg) => horizonAt(profile, azimuthDeg),
+      zone,
+    );
+    pathCache = { key, profile, path };
+  }
+  return pathCache.path;
+}
+
+/** The color of the path of a body ("r, g, b"): the color of the planet, the moon, or the sun. */
+function pathColor(t: Target): string {
+  if (t.kind === "planet") return PLANETS.find((p) => p.planet === t.planet)!.color;
+  return t.kind === "sun" ? "255, 224, 138" : "224, 230, 240";
+}
+
 let infoKey = "";
 
 function showInfo(s: Sky) {
@@ -404,7 +440,10 @@ function showInfo(s: Sky) {
     }
     info.dataset.static = `<div class="name">${targetName(selected)}</div><div class="muted">${kind}</div><div>${times}</div>`;
   }
-  setHtml(info, `${info.dataset.static}<div class="muted">${position}</div>`);
+  const pathButton = hasPath(selected)
+    ? `<button class="path-button" data-action="path">${pathsOn ? "Hide path" : "Show path (24 h)"}</button>`
+    : "";
+  setHtml(info, `${info.dataset.static}<div class="muted">${position}</div>${pathButton}`);
   info.classList.remove("hidden");
 }
 
@@ -671,6 +710,10 @@ function draw(view: View, s: Sky) {
     }
   }
 
+  // The path of the selected body, under the bodies.
+  const path = selected ? selectedPath(s) : null;
+  if (selected && path) drawBodyPath(view, path, pathColor(selected));
+
   // The planets that the eye sees now.
   ctx.font = "bold 13px system-ui";
   for (const planet of s.planets) {
@@ -736,6 +779,33 @@ function draw(view: View, s: Sky) {
 
   if (selected) drawSelection(view, targetDirection(selected, s), w, h);
   ctx.shadowBlur = 0;
+}
+
+/**
+ * The path of a body: a line over the horizon or the terrain, a faint dashed line below it, and a
+ * dot with the hour at each full hour. Only the hours over the horizon have a label.
+ */
+function drawBodyPath(view: View, path: BodyPath, color: string) {
+  ctx.save();
+  ctx.shadowBlur = 0;
+  ctx.lineCap = "round";
+  for (const line of path.hidden) strokeProjected(view, line, `rgba(${color}, 0.3)`, 1.5, [5, 4]);
+  for (const line of path.visible) strokeProjected(view, line, `rgba(${color}, 0.8)`, 2);
+  for (const hour of path.hours) {
+    const p = almucantar.project(view, hour.direction);
+    if (!p.valid) continue;
+    ctx.fillStyle = hour.hidden ? `rgba(${color}, 0.3)` : `rgb(${color})`;
+    ctx.beginPath();
+    ctx.arc(p.point.x, p.point.y, hour.hidden ? 2 : 3, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 3;
+  ctx.font = "11px system-ui";
+  ctx.fillStyle = `rgba(${color}, 0.9)`;
+  for (const hour of path.hours) {
+    if (!hour.hidden) uprightLabel(view, hour.direction, hour.label, 7);
+  }
+  ctx.restore();
 }
 
 /** A ring around the selected object, or an arrow at the border of the screen that leads to it. */
@@ -1159,6 +1229,19 @@ nightBox.addEventListener("change", () => {
   nightOn = nightBox.checked;
   localStorage.setItem(NIGHT_SETTING, String(nightOn));
   applyNight();
+});
+const pathsBox = $<HTMLInputElement>("paths-on");
+function setPaths(on: boolean) {
+  pathsOn = on;
+  pathsBox.checked = on;
+  localStorage.setItem(PATHS_SETTING, String(on));
+}
+pathsBox.checked = pathsOn;
+pathsBox.addEventListener("change", () => setPaths(pathsBox.checked));
+// The button of the info card shows or hides the path. The card writes its HTML again on a
+// change, so the listener is on the card and not on the button.
+info.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement | null)?.closest?.("[data-action=path]")) setPaths(!pathsOn);
 });
 $<HTMLInputElement>("fov").addEventListener("input", (e) => {
   fovDeg = Number((e.target as HTMLInputElement).value);

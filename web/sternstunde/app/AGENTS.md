@@ -10,11 +10,12 @@ workspace `web/` (see [`../../AGENTS.md`](../../AGENTS.md)). GitHub Pages serves
 
 | Path | What |
 |---|---|
-| `src/main.ts` | The app: the star data, the sky at the selected time (`computeSky`, again once per second), the frame (projection and drawing), the tap and the info card (with the rise and set over the terrain), Find, the alignment with a bright object, sensors, location, camera, and the settings. |
+| `src/main.ts` | The app: the star data, the sky at the selected time (`computeSky`, again once per second), the frame (projection and drawing), the tap and the info card (with the rise and set over the terrain, and the button of the path), Find, the alignment with a bright object, sensors, location, camera, and the settings. |
+| `src/path.ts` | The path of the selected sun, moon, or planet in the 24 hours around the selected time: the samples every 10 minutes, the split at the visible horizon (`splitAtHorizon`), and the full hours in the time zone of the place. The functions are pure, so `test/path.test.ts` tests them without the core. |
 | `src/style.css` | The layout, the Find panel, the info card, and the red light (`#night`). |
 | `public/` | The manifest, the icon (`assets/sternstunde-logo.svg`), and the service worker (cache prefix `sternstunde:`). |
 | `index.html` | The page, with the markup of the shared place panel. |
-| `test/` | The start of the app with a mock of the core, and the offline cache of the service worker. |
+| `test/` | The start of the app with a mock of the core, the offline cache of the service worker, and the path of a body. |
 
 The star data is `assets/stars/stars.json` (see `assets/stars/README.md`). `@almucantar/web-shared/stars`
 decodes it, and gives the size, the color, and the faintest magnitude of the sky.
@@ -42,4 +43,6 @@ npm run format:check -w sternstunde/app
 - An object below the horizon or behind the terrain is dim, not hidden, so the user can find it.
 - The settings are in localStorage with the prefix `sternstunde-`, and the terrain cache has its own
   names (`sternstunde-terrain`), because the apps of the site share localStorage.
+- The path of a body has 145 samples and about 24 hours, so the app calculates it again only for
+  a new target, place, terrain, time zone, or step of 10 minutes. A frame only projects it.
 - The alignment takes only objects to magnitude 2.5, because the user must see them in the sky.
