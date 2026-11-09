@@ -6,6 +6,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +49,9 @@ enum class MagnetometerKind {
  * to true north, the hard-iron bias of the magnetometer, and a local disturbance of the field. It
  * takes one magnetometer sample per second, and calibrations such as a sun tap with [apply]. A sun
  * tap also corrects the bias, so the magnetometer does not pull the offset back.
+ *
+ * The screens draw with [shownOffsetDeg], not with the offset of [estimate]: it glides to each new
+ * offset of the filter (see [OffsetGlide]), so the sky does not jump once per second.
  */
 class HeadingTracker {
     var deviceToFrame by mutableStateOf<Quaternion?>(null)
@@ -56,6 +60,12 @@ class HeadingTracker {
     /** The offset and its variance, for the view. */
     var estimate by mutableStateOf(HeadingEstimate())
         private set
+
+    /** The heading offset for the view: it glides to the offset of [estimate]. */
+    var shownOffsetDeg by mutableDoubleStateOf(0.0)
+        private set
+
+    private val glide = OffsetGlide()
 
     var frame by mutableStateOf(OrientationFrame.GAME)
         internal set
@@ -74,13 +84,19 @@ class HeadingTracker {
     internal fun onOrientation(values: FloatArray, timestampNs: Long) {
         val q = FloatArray(4)
         SensorManager.getQuaternionFromVector(q, values)
+        var dt = 0.0
         if (lastOrientationNs != 0L) {
-            val dt = (timestampNs - lastOrientationNs) / 1e9
+            dt = (timestampNs - lastOrientationNs) / 1e9
             if (dt > 0) pendingDtS += dt
         }
         lastOrientationNs = timestampNs
         // The prediction needs the core, so it runs at most ten times per second.
         if (pendingDtS >= 0.1) filter?.let { set(predicted(it)) }
+        // Until the filter has a first offset, the view shows the offset 0 of the game frame.
+        if (filter != null) {
+            glide.follow(estimate.offsetDeg, dt)
+            shownOffsetDeg = glide.offsetDeg
+        }
         deviceToFrame =
             Quaternion(q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble())
     }
@@ -130,6 +146,8 @@ class HeadingTracker {
     internal fun fix(q: Quaternion, fixed: HeadingEstimate) {
         deviceToFrame = q
         estimate = fixed
+        glide.jump(fixed.offsetDeg)
+        shownOffsetDeg = glide.offsetDeg
     }
 
     /** Combines a measurement with the filter, for example from a sun tap. */
@@ -145,6 +163,11 @@ class HeadingTracker {
     }
 
     private fun set(f: HeadingFilter) {
+        // The first offset of the filter replaces the arbitrary offset 0 at once.
+        if (filter == null) {
+            glide.jump(f.estimate.offsetDeg)
+            shownOffsetDeg = glide.offsetDeg
+        }
         filter = f
         estimate = f.estimate
     }

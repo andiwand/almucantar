@@ -6,6 +6,10 @@ Each release has the tag `sonnseite-android-vX.Y.Z`. The rules are the same as i
 
 ## Unreleased
 
+- The sky no longer jumps once per second while the compass calibrates itself after the start.
+  The heading now glides to each new estimate in less than a second. The view still follows a
+  turn of the phone at once.
+
 ## 0.5.0 - 2026-11-07
 
 - Without a location and without a last place, the app uses the most probable place: the main

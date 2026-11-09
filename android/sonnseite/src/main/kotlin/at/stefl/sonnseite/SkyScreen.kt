@@ -329,7 +329,7 @@ fun SkyScreen(locationGranted: Boolean, scene: ScreenshotScene? = null) {
                 screenRotation =
                     if (scene != null) ScreenRotation.ROTATION_0
                     else ScreenRotation.entries[displayRotation],
-                headingOffsetDeg = tracker.estimate.offsetDeg,
+                headingOffsetDeg = tracker.shownOffsetDeg,
                 camera =
                     viewCamera?.camera?.takeIf { cameraOn }
                         ?: cameraFromFov(size.width.toDouble(), size.height.toDouble(), fov),

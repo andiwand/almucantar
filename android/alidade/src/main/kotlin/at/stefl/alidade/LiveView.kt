@@ -148,7 +148,7 @@ fun LiveScreen(model: Model, shot: Shot, startUtc: Double, locationGranted: Bool
             View(
                 deviceToEnu = q,
                 screenRotation = ScreenRotation.entries[displayRotation],
-                headingOffsetDeg = tracker.estimate.offsetDeg,
+                headingOffsetDeg = tracker.shownOffsetDeg,
                 camera =
                     viewCamera?.camera?.takeIf { cameraOn }
                         ?: cameraFromFov(

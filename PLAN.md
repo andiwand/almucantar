@@ -226,7 +226,12 @@ The core does:
 1. Remap the axes for the screen rotation (portrait or landscape).
 2. Convert magnetic north to true north (5.2).
 3. Apply the heading offset from the calibration (5.4).
-4. Smooth the orientation with slerp, so the overlay does not shake.
+4. Smooth the heading offset for the screen, so the overlay does not jump. The heading filter
+   (5.4a) changes the offset once per second, in steps of some degrees while it calibrates the
+   magnetometer. The apps let the shown offset glide to each new offset (a time constant of
+   0.4 s, and a jump for a step of more than 45°). The orientation of the device is not smoothed,
+   because a delay would move the overlay away from the camera image in a turn. The glide is in
+   the apps (`OffsetGlide.kt`, `MotionTracker.swift`), not in the core.
 
 We do not write our own sensor fusion at first, because the platforms already do it. If
 the fusion of the platform is not good enough, we can add a Madgwick or Mahony filter in
