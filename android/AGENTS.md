@@ -26,7 +26,8 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 
 | Path | What |
 |---|---|
-| `.../HeadingTracker.kt` | The game rotation vector, the magnetometer (once per second), and the heading filter of the core. `apply()` takes a calibration, for example a sun tap. |
+| `.../HeadingTracker.kt` | The game rotation vector, the magnetometer (once per second), and the heading filter of the core. `apply()` takes a calibration, for example a sun tap. The screens draw with `shownOffsetDeg`, not with `estimate.offsetDeg`. |
+| `.../OffsetGlide.kt` | The shown heading offset: it glides to each new offset of the filter (0.4 s), so the sky does not jump once per second. Tested in `shared/src/test/`. |
 | `.../SkyDrawing.kt` | Drawing helpers: upright labels, the arrow at the screen border, dashed lines. |
 | `.../MapPicker.kt` | A small OpenStreetMap tile map to pick a landmark. It follows the OSM tile policy: a User-Agent that names the app, the attribution, and tiles in memory only. It needs the network. `OsmTiles` (the tiles in memory of the process) and the Web Mercator functions are public, so the map of alidade uses them too. |
 | `.../BaseMap.kt` | The offline base map (`assets/basemap/basemap.json`, Natural Earth): a small JSON reader for its format, the Web Mercator functions, the search of the places (without accents, the largest first), the nearest place, and the time zone of a dropped place. Pure Kotlin, tested in `shared/src/test/` with the real asset. |
@@ -61,9 +62,9 @@ In each table, `.../` is the Kotlin package directory of the module, for example
 |---|---|
 | `.../MainActivity.kt` | The activity: the User-Agent, the location permission, and the star data (`assets/stars/stars.json`, an assets directory in `sternstunde/build.gradle.kts`). |
 | `.../StarScreen.kt` | The sky view: the Milky Way, the constellation lines, the stars (size from the magnitude, color from B−V, down to the limit of the twilight), the names, the planets, the moon, the sun, the horizon, the terrain, and the selection or the arrow to it. The tap with the info card (rise and set over the terrain, in the background), Find, Align (a tap on an object to magnitude 2.5), the time panel, the place panel, and the red light. |
-| `.../Sky.kt` | `SkyAt`: the sky at one time (`starPositions` for the stars, the names of the constellations, and the Milky Way, once per second), and the targets (`Target`) with their name, direction, and rise and set (samples every 10 minutes). |
+| `.../Sky.kt` | `SkyAt`: the sky at one time (`starPositions` for the stars, the names of the constellations, and the Milky Way, once per second), and the targets (`Target`) with their name, direction, and rise and set (samples every 10 minutes). `path` is the path of the sun, the moon, or a planet in the 24 hours around a time, split at the horizon or the terrain (`splitAtHorizon`, tested in `sternstunde/src/test/`). |
 | `.../StarData.kt` | The decoder of `stars.json`, the planets with their colors, and `StarLook` (size, color, limiting magnitude, twilight), the same rules as `web/shared/src/stars.ts`. Tested in `sternstunde/src/test/`. |
-| `.../Settings.kt` | The settings (constellation lines, terrain, red light), the credits of the data, and the privacy link. `demoSettings` gives the fixed settings of the demo mode. |
+| `.../Settings.kt` | The settings (constellation lines, terrain, red light, the path of the selected body), the credits of the data, and the privacy link. `demoSettings` gives the fixed settings of the demo mode. |
 | `.../ScreenshotScene.kt` | A fixed scene of the demo mode for the store screenshots (view, place, time, selection, red light). |
 | `sternstunde/src/debug/.../ScreenshotMode.kt` | The demo mode: the scenes of `screenshots/README.md`, chosen with the intent extra `sternstunde.screenshot`. The release build has a no-op version in `sternstunde/src/release/`. |
 | `sternstunde/src/androidTest/.../ScreenshotTests.kt` | Takes the store screenshots. It runs only with the instrumentation argument `device`. |

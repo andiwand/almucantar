@@ -33,6 +33,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,6 +93,7 @@ import at.stefl.almucantar.shared.PlaceSource
 import at.stefl.almucantar.shared.TerrainLines
 import at.stefl.almucantar.shared.TimePanel
 import at.stefl.almucantar.shared.ViewCamera
+import at.stefl.almucantar.shared.dashed
 import at.stefl.almucantar.shared.drawArrow
 import at.stefl.almucantar.shared.drawPolylines
 import at.stefl.almucantar.shared.drawUprightText
@@ -141,7 +143,8 @@ private class Hit(val target: Target, val at: Offset, val mag: Double)
  * The sky view of sternstunde: the stars, the constellations, the planets, the moon, and the Milky
  * Way in the direction of the phone, over the terrain of the place. With the camera, the same
  * overlay lies on the camera image. A tap on an object shows its name and its rise and set; Find
- * leads to an object; Align corrects the heading with a bright star.
+ * leads to an object; Align corrects the heading with a bright star. For a selected sun, moon, or
+ * planet, the user can show its path in the 24 hours around the selected time.
  *
  * With a [scene] (the demo mode of the store screenshots), the view, the heading, the place, the
  * time, the selection, and the settings are fixed, and the app uses no sensors and no network.
@@ -208,6 +211,19 @@ fun StarScreen(stars: StarData, locationGranted: Boolean, scene: ScreenshotScene
     var showSettings by remember { mutableStateOf(false) }
     var aligning by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(scene?.target(stars)) }
+    // The path of the selected body takes some milliseconds: calculate it in the background, again
+    // for a new target, a new place, a new terrain, or after 10 minutes of the selected time.
+    val pathTarget = selected?.takeIf { it.hasPath && settings.paths.value }
+    val pathStep = (time / 600).toLong()
+    val path by
+        produceState<BodyPath?>(null, pathTarget, place.observer, pathStep, profile, zone) {
+            value = pathTarget?.let { target ->
+                val at = pathStep * 600.0
+                withContext(Dispatchers.Default) {
+                    target.path(stars, at, place.observer, profile, zone)
+                }
+            }
+        }
     // The zoom of the sky view: a pinch changes it, a double tap resets it. The camera view has the
     // field of view of the lens, so the zoom does not change it.
     var zoom by remember { mutableDoubleStateOf(1.0) }
@@ -293,7 +309,7 @@ fun StarScreen(stars: StarData, locationGranted: Boolean, scene: ScreenshotScene
                 screenRotation =
                     if (scene != null) ScreenRotation.ROTATION_0
                     else ScreenRotation.entries[displayRotation],
-                headingOffsetDeg = tracker.estimate.offsetDeg,
+                headingOffsetDeg = tracker.shownOffsetDeg,
                 camera =
                     viewCamera?.camera?.takeIf { cameraOn }
                         ?: cameraFromFov(size.width.toDouble(), size.height.toDouble(), fov),
@@ -421,6 +437,7 @@ fun StarScreen(stars: StarData, locationGranted: Boolean, scene: ScreenshotScene
                         cameraOn,
                         settings.lines.value,
                         selected,
+                        path?.takeIf { it.target == pathTarget },
                         hits,
                     )
                 }
@@ -468,7 +485,9 @@ fun StarScreen(stars: StarData, locationGranted: Boolean, scene: ScreenshotScene
                         )
                     }
                 }
-                selected?.let { InfoCard(it, stars, sky, profile, zone) { selected = null } }
+                selected?.let {
+                    InfoCard(it, stars, sky, profile, zone, settings.paths) { selected = null }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilledTonalButton(onClick = toggleCamera, contentPadding = BUTTON_PADDING) {
                         Text(if (cameraOn) "Sky" else "Camera")
@@ -622,6 +641,7 @@ private fun InfoCard(
     sky: SkyAt,
     profile: at.stefl.almucantar.core.HorizonProfile?,
     zone: ZoneId,
+    paths: BooleanSetting,
     onClose: () -> Unit,
 ) {
     // The rise and the set take some milliseconds: calculate them in the background, again for a
@@ -680,6 +700,14 @@ private fun InfoCard(
                 "%.0f° high, azimuth %.0f°".format(d.altitudeDeg, d.azimuthDeg),
                 color = Color(0xFFB4C0D2),
             )
+            if (target.hasPath) {
+                TextButton(
+                    onClick = { paths.value = !paths.value },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                ) {
+                    Text(if (paths.value) "Hide path" else "Show path (24 h)")
+                }
+            }
         }
     }
 }
@@ -782,9 +810,10 @@ private fun tintedPaint(sizePx: Float, bold: Boolean, color: Color): Paint =
     Paint(labelPaint(sizePx, bold)).apply { this.color = color.toArgb() }
 
 /**
- * Draws the sky: the Milky Way, the constellation lines, the stars, the names, the planets, the
- * moon, the sun, the horizon, the terrain, and the selection. Objects below the horizon or behind
- * the terrain are dim, so the user can still find them. Each drawn object goes into [hits].
+ * Draws the sky: the Milky Way, the constellation lines, the stars, the names, the path of the
+ * selected body, the planets, the moon, the sun, the horizon, the terrain, and the selection.
+ * Objects below the horizon or behind the terrain are dim, so the user can still find them. Each
+ * drawn object goes into [hits].
  */
 private fun DrawScope.drawStarSky(
     view: View,
@@ -796,6 +825,7 @@ private fun DrawScope.drawStarSky(
     cameraOn: Boolean,
     linesOn: Boolean,
     selected: Target?,
+    path: BodyPath?,
     hits: MutableList<Hit>,
 ) {
     val dp = density
@@ -907,6 +937,9 @@ private fun DrawScope.drawStarSky(
         }
     }
 
+    // The path of the selected body, under the bodies.
+    path?.let { drawBodyPath(view, it, pathColor(it.target, sky)) }
+
     // The planets that the eye sees now.
     val planetPaint = tintedPaint(13 * dp, true, Color(0xFFFFDCA0))
     for (planet in sky.planets) {
@@ -973,6 +1006,38 @@ private fun DrawScope.drawStarSky(
             }
         } else {
             drawArrow(edge.first, edge.second, 14 * dp, selectionColor)
+        }
+    }
+}
+
+/** The color of the path of a body: the color of the planet, of the moon, or of the sun. */
+private fun pathColor(target: Target, sky: SkyAt): Color =
+    when (target) {
+        is Target.PlanetTarget -> sky.planets.first { it.planet == target.planet }.color
+        Target.Sun -> Color(0xFFFFE08A)
+        else -> Color(0xFFE0E6F0)
+    }
+
+/**
+ * The path of a body: a line over the horizon or the terrain, a faint dashed line below it, and a
+ * dot with the hour at each full hour. Only the hours over the horizon have a label.
+ */
+private fun DrawScope.drawBodyPath(view: View, path: BodyPath, color: Color) {
+    val dp = density
+    for (line in path.hidden) {
+        drawPolylines(projectLine(view, line), color.copy(alpha = 0.3f), dashed(1.5f * dp, 5 * dp))
+    }
+    for (line in path.visible) {
+        drawPolylines(projectLine(view, line), color.copy(alpha = 0.8f), Stroke(width = 2 * dp))
+    }
+    val paint = tintedPaint(11 * dp, false, color.copy(alpha = 0.9f))
+    for (hour in path.hours) {
+        val at = screenPoint(view, hour.direction) ?: continue
+        if (hour.hidden) {
+            drawCircle(color.copy(alpha = 0.3f), radius = 2 * dp, center = at)
+        } else {
+            drawCircle(color, radius = 3 * dp, center = at)
+            drawUprightText(hour.label, at, upAt(view, hour.direction, at), 7 * dp, paint)
         }
     }
 }

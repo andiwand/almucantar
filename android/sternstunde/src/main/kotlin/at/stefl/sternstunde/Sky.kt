@@ -19,6 +19,10 @@ import at.stefl.almucantar.core.starPositions
 import at.stefl.almucantar.core.sunPosition
 import at.stefl.almucantar.shared.MilkyWay
 import at.stefl.almucantar.shared.MoonAt
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /** A planet at the selected time. */
 data class PlanetAt(
@@ -220,4 +224,101 @@ fun Target.riseAndSet(
             else -> null
         },
     )
+}
+
+/** True for the sun, the moon, and the planets: the objects with a path among the stars. */
+val Target.hasPath: Boolean
+    get() = this is Target.Sun || this is Target.Moon || this is Target.PlanetTarget
+
+/** A full hour on a path: the direction, the hour ("21"), and true if the terrain hides it. */
+data class PathHour(val direction: Horizontal, val label: String, val hidden: Boolean)
+
+/**
+ * The path of a body in the 24 hours around a time: the parts over the horizon or the terrain
+ * ([visible]), the parts below it ([hidden]), and the full hours on the time of the place. The
+ * screen calculates it in the background and only projects it in a frame.
+ */
+class BodyPath(
+    val target: Target,
+    val visible: List<DirectionLine>,
+    val hidden: List<DirectionLine>,
+    val hours: List<PathHour>,
+)
+
+/** The samples of a path: every 10 minutes, from 12 hours before [unixUtc] to 12 hours after it. */
+private const val PATH_STEP_S = 600.0
+private const val PATH_HALF_SPAN_S = 12 * 3600.0
+
+private val PATH_HOUR = DateTimeFormatter.ofPattern("HH")
+
+/** The path of the target in the 24 hours around [unixUtc]: see [BodyPath]. */
+fun Target.path(
+    data: StarData,
+    unixUtc: Double,
+    observer: Observer,
+    profile: HorizonProfile?,
+    zone: ZoneId,
+): BodyPath {
+    val start = unixUtc - PATH_HALF_SPAN_S
+    val count = (2 * PATH_HALF_SPAN_S / PATH_STEP_S).toInt()
+    val samples = (0..count).map { directionAt(data, start + it * PATH_STEP_S, observer) }
+    val (visible, hidden) = splitAtHorizon(samples, profile)
+    // The full hours of the place, also in a time zone with an offset of 30 or 45 minutes.
+    var hour =
+        Instant.ofEpochSecond(start.toLong())
+            .atZone(zone)
+            .truncatedTo(ChronoUnit.HOURS)
+            .plusHours(1)
+    val hours = ArrayList<PathHour>()
+    while (hour.toEpochSecond() < start + 2 * PATH_HALF_SPAN_S) {
+        val d = directionAt(data, hour.toEpochSecond().toDouble(), observer)
+        hours +=
+            PathHour(d, PATH_HOUR.format(hour), d.altitudeDeg < horizonAt(profile, d.azimuthDeg))
+        hour = hour.plusHours(1)
+    }
+    return BodyPath(
+        this,
+        visible.map { DirectionLine.of(it) },
+        hidden.map { DirectionLine.of(it) },
+        hours,
+    )
+}
+
+/**
+ * Splits a line of directions into the parts over the visible horizon (the first list) and the
+ * parts below it (the second list). The two parts meet at the crossing, which is interpolated
+ * between the samples, so the line has no gap.
+ */
+fun splitAtHorizon(
+    line: List<Horizontal>,
+    profile: HorizonProfile?,
+): Pair<List<List<Horizontal>>, List<List<Horizontal>>> {
+    val visible = ArrayList<List<Horizontal>>()
+    val hidden = ArrayList<List<Horizontal>>()
+    var part = ArrayList<Horizontal>()
+    var up: Boolean? = null
+    var previous: Horizontal? = null
+    var previousHeight = 0.0
+    for (d in line) {
+        val height = d.altitudeDeg - horizonAt(profile, d.azimuthDeg)
+        val isUp = height > 0
+        if (up != null && isUp != up && previous != null) {
+            val t = previousHeight / (previousHeight - height)
+            val turn = ((d.azimuthDeg - previous.azimuthDeg + 540) % 360) - 180
+            val crossing =
+                Horizontal(
+                    ((previous.azimuthDeg + t * turn) % 360 + 360) % 360,
+                    previous.altitudeDeg + t * (d.altitudeDeg - previous.altitudeDeg),
+                )
+            part += crossing
+            (if (up) visible else hidden) += part
+            part = arrayListOf(crossing)
+        }
+        part += d
+        up = isUp
+        previous = d
+        previousHeight = height
+    }
+    if (up != null && part.size > 1) (if (up) visible else hidden) += part
+    return visible to hidden
 }

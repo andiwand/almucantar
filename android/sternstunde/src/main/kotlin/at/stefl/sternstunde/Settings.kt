@@ -45,6 +45,8 @@ class Settings(
     val terrain: BooleanSetting,
     /** The red light, so the eyes stay adapted to the dark. */
     val red: BooleanSetting,
+    /** The path of the selected sun, moon, or planet. */
+    val paths: BooleanSetting,
 )
 
 @Composable
@@ -56,17 +58,22 @@ fun rememberSettings(): Settings {
             BooleanSetting(mutableStateOf(preferences.getBoolean(key, default))) {
                 preferences.edit { putBoolean(key, it) }
             }
-        Settings(setting("lines", true), setting("terrain", true), setting("red", false))
+        Settings(
+            setting("lines", true),
+            setting("terrain", true),
+            setting("red", false),
+            setting("paths", false),
+        )
     }
 }
 
 /**
  * The settings of the demo mode of the store screenshots: the constellation lines, no terrain (the
- * demo mode downloads nothing), and the red light of [scene]. A change is never stored.
+ * demo mode downloads nothing), the red light of [scene], and no path. A change is never stored.
  */
 fun demoSettings(scene: ScreenshotScene): Settings {
     fun fixed(value: Boolean) = BooleanSetting(mutableStateOf(value)) {}
-    return Settings(fixed(true), fixed(false), fixed(scene.red))
+    return Settings(fixed(true), fixed(false), fixed(scene.red), fixed(false))
 }
 
 /** The settings and the credits of the data. */
@@ -81,6 +88,7 @@ fun SettingsDialog(settings: Settings, stars: String, onDismiss: () -> Unit) {
                 Toggle("Constellation lines", settings.lines)
                 Toggle("Terrain horizon", settings.terrain)
                 Toggle("Red light", settings.red)
+                Toggle("Path of the sun, the moon, or a planet", settings.paths)
                 Text(
                     "$stars ${TERRAIN_SOURCE.attribution} Maps: Natural Earth (public domain), " +
                         "© OpenStreetMap contributors.",

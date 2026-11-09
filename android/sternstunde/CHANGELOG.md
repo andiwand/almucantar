@@ -5,6 +5,13 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+- Tap the sun, the moon, or a planet, and choose "Show path (24 h)" to see its path from 12 hours
+  before to 12 hours after the selected time, with the full hours. The parts behind the terrain or
+  below the horizon are dashed. The settings have the same switch.
+- The sky no longer jumps once per second while the compass calibrates itself after the start.
+  The heading now glides to each new estimate in less than a second. The view still follows a
+  turn of the phone at once.
+
 ## 0.3.0 - 2026-11-07
 
 - Without a location and without a last place, the app uses the most probable place: the main
