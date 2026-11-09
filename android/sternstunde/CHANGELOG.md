@@ -5,6 +5,8 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+## 0.4.0 - 2026-11-09
+
 - Tap the sun, the moon, or a planet, and choose "Show path (24 h)" to see its path from 12 hours
   before to 12 hours after the selected time, with the full hours. The parts behind the terrain or
   below the horizon are dashed. The settings have the same switch.
