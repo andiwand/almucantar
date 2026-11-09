@@ -290,7 +290,7 @@ struct SkyScreen: SwiftUI.View {
             return Almucantar.View(
                 // The scenes of the demo mode are for a device in portrait.
                 deviceToEnu: q, screenRotation: ScreenshotMode.scene != nil ? .rotation0 : SkyOrientation.screenRotation(),
-                headingOffsetDeg: motion.estimate.offsetDeg,
+                headingOffsetDeg: motion.shownOffsetDeg,
                 camera: cameraOn ? (camera ?? virtualCamera) : virtualCamera)
         }
         return Almucantar.View(deviceToEnu: SkyOrientation.upright(azimuthDeg: dragAzimuth, pitchDeg: dragPitch), camera: virtualCamera)

@@ -5,6 +5,9 @@ The changes in the iOS app Sonnseite that a user notices. Each release has the t
 
 ## Unreleased
 
+- The sky no longer jumps once per second while the compass calibrates itself after the start.
+  The heading now glides to each new estimate in less than a second. The view still follows a
+  turn of the phone at once.
 - Without a location and without a last place, the app uses the most probable place: the main
   city of the time zone of the phone, else of the country of its region.
 - The app has the bright look of the day of the website and the web app. Without the camera, the

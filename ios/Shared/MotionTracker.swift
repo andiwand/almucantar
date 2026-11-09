@@ -11,16 +11,22 @@ import Almucantar
 /// this one uses it a little for the drift. iOS does not give its bias estimate, so the filter
 /// starts with a bias of 0 and corrects the error that the OS calibration leaves. A sun tap also
 /// corrects that bias, so the magnetometer does not pull the offset back.
+///
+/// The screens draw with `shownOffsetDeg`, not with the offset of `estimate`: it glides to each new
+/// offset of the filter (see `OffsetGlide`), so the sky does not jump once per second.
 @MainActor
 final class MotionTracker: ObservableObject {
     @Published private(set) var deviceToFrame: Almucantar.Quaternion?
     @Published private(set) var estimate = HeadingEstimate()
+    /// The heading offset for the view: it glides to the offset of `estimate`.
+    @Published private(set) var shownOffsetDeg = 0.0
     @Published private(set) var available = true
 
     var observer = Observer(latitudeDeg: 48.2082, longitudeDeg: 16.3738)
 
     private let manager = CMMotionManager()
     private var filter: HeadingFilter?
+    private var glide = OffsetGlide()
     private var lastTimestamp: TimeInterval?
     private var pendingDtS = 0.0
     private var lastMagnetometerUpdate: TimeInterval = 0
@@ -48,6 +54,8 @@ final class MotionTracker: ObservableObject {
         available = true
         deviceToFrame = q
         estimate = HeadingEstimate(offsetDeg: 0, varianceDeg2: headingSigmaDeg * headingSigmaDeg)
+        glide.jump(estimate.offsetDeg)
+        shownOffsetDeg = glide.offsetDeg
     }
 
     /// The error that is left in a field that the OS calibrated, in µT.
@@ -71,6 +79,11 @@ final class MotionTracker: ObservableObject {
     }
 
     private func set(_ f: HeadingFilter) {
+        // The first offset of the filter replaces the arbitrary offset 0 at once.
+        if filter == nil {
+            glide.jump(f.estimate.offsetDeg)
+            shownOffsetDeg = glide.offsetDeg
+        }
         filter = f
         estimate = f.estimate
     }
@@ -81,7 +94,11 @@ final class MotionTracker: ObservableObject {
         if conjugate == nil { conjugate = Self.needsConjugate(q, gravity: motion.gravity) }  // nil until the tilt is clear
         if conjugate == true { q = Almucantar.Quaternion(w: q.w, x: -q.x, y: -q.y, z: -q.z) }
 
-        if let last = lastTimestamp, motion.timestamp > last { pendingDtS += motion.timestamp - last }
+        var dt = 0.0
+        if let last = lastTimestamp, motion.timestamp > last {
+            dt = motion.timestamp - last
+            pendingDtS += dt
+        }
         lastTimestamp = motion.timestamp
         deviceToFrame = q
         // The prediction copies the covariance, so it runs at most ten times per second.
@@ -100,6 +117,12 @@ final class MotionTracker: ObservableObject {
             {
                 set(updated)
             }
+        }
+
+        // Until the filter has a first offset, the view shows the offset 0 of the frame.
+        if filter != nil {
+            glide.follow(estimate.offsetDeg, dtS: dt)
+            shownOffsetDeg = glide.offsetDeg
         }
     }
 
@@ -127,5 +150,52 @@ final class MotionTracker: ObservableObject {
             x: v.x + 2 * (u.y * t.z - u.z * t.y), y: v.y + 2 * (u.z * t.x - u.x * t.z),
             z: v.z + 2 * (u.x * t.y - u.y * t.x)
         )
+    }
+}
+
+/// The heading offset that the screen shows. The heading filter changes its offset once per second,
+/// in steps of some degrees while it calibrates the magnetometer. So the shown offset glides to the
+/// offset of the filter, and the sky does not jump. Only the offset glides: the orientation of the
+/// device goes to the screen without a delay, so the overlay stays on the camera image in a turn.
+///
+/// The same rules are in `android/shared/src/main/kotlin/at/stefl/almucantar/shared/OffsetGlide.kt`.
+struct OffsetGlide {
+    /// The time constant of the glide: after 1 s (the next filter step), 92 % of a step is done.
+    static let timeConstantS = 0.4
+    /// A step of the offset larger than this jumps at once.
+    static let jumpDeg = 45.0
+    /// The longest time step: after a pause of the sensors, the glide does not jump.
+    static let maxStepS = 0.1
+
+    /// The shown offset in degrees, in [0, 360).
+    private(set) var offsetDeg = 0.0
+    private var started = false
+
+    /// Sets the shown offset to `targetDeg` at once, for example for the first estimate.
+    mutating func jump(_ targetDeg: Double) {
+        offsetDeg = Self.wrap360(targetDeg)
+        started = true
+    }
+
+    /// Moves the shown offset toward `targetDeg` for a time step of `dtS` seconds. A step larger
+    /// than `jumpDeg` does not glide, because a glide over a large angle looks like a turn of the
+    /// sky.
+    mutating func follow(_ targetDeg: Double, dtS: Double) {
+        let difference = Self.wrap180(targetDeg - offsetDeg)
+        if !started || abs(difference) > Self.jumpDeg {
+            jump(targetDeg)
+            return
+        }
+        let dt = min(max(dtS, 0), Self.maxStepS)
+        offsetDeg = Self.wrap360(offsetDeg + difference * (1 - exp(-dt / Self.timeConstantS)))
+    }
+
+    private static func wrap360(_ deg: Double) -> Double {
+        let r = deg.truncatingRemainder(dividingBy: 360)
+        return r < 0 ? r + 360 : r
+    }
+
+    private static func wrap180(_ deg: Double) -> Double {
+        (deg.truncatingRemainder(dividingBy: 360) + 540).truncatingRemainder(dividingBy: 360) - 180
     }
 }
