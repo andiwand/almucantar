@@ -68,6 +68,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // The app bundle carries the symbols of the native core, so the crashes and the ANRs in
+            // Google Play show the functions and the lines of the C++ code.
+            ndk { debugSymbolLevel = "FULL" }
             if (keystoreFile != null) signingConfig = signingConfigs.getByName("release")
         }
     }
