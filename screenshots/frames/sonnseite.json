@@ -1,7 +1,7 @@
 {
   "_comment": [
     "The store pictures: the background and the headline of each screen.",
-    "scripts/screenshots/frame.py draws them; see that file for the geometry.",
+    "storeframe draws them (https://github.com/andiwand/storeframe); see it for the geometry.",
     "With \"arc\": true, the images get the dashed path of the sun across the gallery.",
     "",
     "One entry per screen, in the order of the store, with the names that the UI tests",

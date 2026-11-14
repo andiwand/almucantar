@@ -6,7 +6,7 @@ Sternstunde (Android), and Alidade (Android). The scripts and the lanes take the
 (`--app` and `app:`), and Sonnseite is the default.
 
 1. A UI test starts the real app in a demo mode for each screen and saves a raw PNG.
-2. `scripts/screenshots/frame.py` draws the store image with Pillow: a gradient background, a
+2. [storeframe](https://github.com/andiwand/storeframe) draws the store image: a gradient background, a
    drawn device body, a headline of two lines, and the dashed path of the sun across the gallery.
 3. `scripts/screenshots/store.py` checks the complete set and stages it for fastlane.
 4. fastlane runs all steps (`bundle exec fastlane screenshots` in `android/` or `ios/`). The
@@ -16,7 +16,7 @@ Sternstunde (Android), and Alidade (Android). The scripts and the lanes take the
 
 ```sh
 bundle install                                              # fastlane, from the Gemfile at the root
-.venv/bin/pip install -r scripts/requirements-dev.txt       # Pillow
+.venv/bin/pip install -r scripts/requirements-dev.txt       # storeframe and Pillow
 ```
 
 ## Commands
@@ -27,7 +27,8 @@ cd android && SONNSEITE_SCREENSHOT_DEVICE=tablet bundle exec fastlane screenshot
 cd android && bundle exec fastlane screenshots app:sternstunde   # the same for Sternstunde or Alidade
 cd ios && bundle exec fastlane screenshots                  # iPhone and iPad
 cd ios && SONNSEITE_SCREENSHOT_DEVICE=ipad bundle exec fastlane screenshots
-.venv/bin/python scripts/screenshots/frame.py --platform android   # frame again only
+.venv/bin/python -m storeframe frame screenshots/frames/sonnseite.json --platform android \
+  --captured android/fastlane/screenshots --out android/fastlane/framed --locale en-US   # frame again only
 ```
 
 The raw captures of Sonnseite go to `<platform>/fastlane/screenshots/en-US/`, and the framed
@@ -100,9 +101,9 @@ has its own size. The App Store wants the size of the device, so the iOS store i
 | Path | What |
 |---|---|
 | `screenshots/frames/<app>.json` | The design of an app: the backgrounds and the headline of each screen, and `arc` (the dashed path of the sun of Sonnseite). The screens of the design are the screens of the app. |
-| `screenshots/frames/Nunito[wght].ttf`, `OFL.txt` | The font of the headlines (SIL Open Font License). |
+| `screenshots/frames/Nunito[wght].ttf`, `OFL.txt` | The font of the headlines (SIL Open Font License). storeframe and `scripts/screenshots/listing.py` use it. |
 | `scripts/screenshots/store.py` | The locales, the screens, the sizes; checks and stages a set. |
-| `scripts/screenshots/frame.py` | Draws the store images. |
+| `scripts/requirements-dev.txt` | storeframe, which draws the store images, and its version. |
 | `Gemfile` | fastlane. |
 | `android/fastlane/`, `ios/fastlane/` | The lanes `screenshots` and `upload_listing` (Android: with `app:`). |
 | `.github/workflows/screenshots.yml` | Captures on CI for the input `app`, and uploads if the store credentials exist. iOS: Sonnseite only. |

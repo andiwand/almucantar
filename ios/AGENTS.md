@@ -155,7 +155,7 @@ version:
    `ipad` for one device.
 3. The lane runs `xcodegen generate`, builds the scheme `Sonnseite Screenshots` one time, and runs
    snapshot for each device on the newest runtime that has the device. Then it frames the images
-   with `scripts/screenshots/frame.py`.
+   with storeframe (see `../screenshots/README.md`).
 
 The UI test starts the app with `-SonnseiteScreenshot <screen>` and `TZ=Europe/Vienna`. The demo
 mode fixes the place, the time, the view, and the heading, and draws the sky in place of the camera.

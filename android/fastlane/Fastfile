@@ -32,7 +32,8 @@ RELEASE_STATUSES = %w[draft completed].freeze
 ANDROID = File.expand_path("..", __dir__).freeze
 ROOT = File.expand_path("..", ANDROID).freeze
 PYTHON = File.join(ROOT, ".venv", "bin", "python").freeze
-FRAME = File.join(ROOT, "scripts", "screenshots", "frame.py").freeze
+# The designs of the store images (screenshots/frames/<app>.json). storeframe draws the images.
+FRAMES = File.join(ROOT, "screenshots", "frames").freeze
 STORE = File.join(ROOT, "scripts", "screenshots", "store.py").freeze
 
 SCREENSHOT_DEVICES = %w[phone tablet].freeze
@@ -77,7 +78,7 @@ def additional_output(app)
   )
 end
 
-# The Python of the venv of the repository, or python3 if there is no venv (CI installs Pillow).
+# The Python of the venv of the repository, or python3 if there is no venv (CI installs storeframe).
 def python
   File.executable?(PYTHON) ? PYTHON : "python3"
 end
@@ -142,7 +143,9 @@ platform :android do
     UI.user_error!("no screenshots for #{missing.join(', ')}") unless missing.empty?
     UI.success("captured #{taken.length} #{device} screenshots in #{captured_dir}")
 
-    sh(python, FRAME, "--platform", "android", "--app", app, "--captured", captured_dir, "--framed", framed)
+    # Only the locales of this app: the folder of Sonnseite also has the folders of the other apps.
+    sh(python, "-m", "storeframe", "frame", File.join(FRAMES, "#{app}.json"), "--platform", "android",
+       "--captured", captured_dir, "--out", framed, *languages.flat_map { |locale| ["--locale", locale] })
     # The set is complete only with the pictures of both devices, which are two runs (CI gives each
     # device its own runner). So the lane checks the set when both devices have pictures.
     if screenshots_narrowed?

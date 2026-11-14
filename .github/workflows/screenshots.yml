@@ -79,10 +79,10 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
 
-      - name: Install Pillow
+      - name: Install storeframe
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install "$(grep -i '^pillow==' scripts/requirements-dev.txt)"
+          .venv/bin/pip install $(grep -iE '^(pillow|storeframe)==' scripts/requirements-dev.txt)
 
       # The newest device profile of the runner. The phone set is a Pixel Pro, the tablet set the
       # Pixel Tablet.
@@ -174,13 +174,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Conan, XcodeGen, and Pillow
+      - name: Install Conan, XcodeGen, and storeframe
         run: |
           pip install "conan==${CONAN_VERSION}"
           conan profile detect --force
           brew install xcodegen
           python3 -m venv .venv
-          .venv/bin/pip install "$(grep -i '^pillow==' scripts/requirements-dev.txt)"
+          .venv/bin/pip install $(grep -iE '^(pillow|storeframe)==' scripts/requirements-dev.txt)
 
       - name: Build the xcframework
         run: python3 core/apple/build_xcframework.py

@@ -29,7 +29,7 @@ enum Snapshots {
         if let region { app.launchArguments += ["-AppleLocale", "\"\(region)\""] }
     }
 
-    /// Writes `<device>-<screen>.png`, the name that scripts/screenshots/frame.py reads.
+    /// Writes `<device>-<screen>.png`, the name that storeframe reads.
     @MainActor
     static func take(_ name: String) {
         guard let pictures, let simulator = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] else {
