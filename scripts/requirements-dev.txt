@@ -6,3 +6,4 @@ clang-tidy==23.1.4
 git-cliff==2.14.2
 pytest==9.2.0
 pillow==13.0.0
+storeframe==0.1.0

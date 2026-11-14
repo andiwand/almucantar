@@ -57,7 +57,8 @@ REPO_DIR = File.expand_path("../..").freeze
 PROJECT = File.join(IOS_DIR, "Almucantar.xcodeproj").freeze
 SCHEME = "Sonnseite Screenshots"
 
-FRAME_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "frame.py").freeze
+# The design of the store images. storeframe draws the images.
+FRAMES_DESIGN = File.join(REPO_DIR, "screenshots", "frames", "sonnseite.json").freeze
 STORE_SCREENSHOTS = File.join(REPO_DIR, "scripts", "screenshots", "store.py").freeze
 
 # The raw captures and the framed set. Git ignores both.
@@ -75,7 +76,7 @@ SCREENSHOT_DEVICES = {
 
 NARROWING = %w[SONNSEITE_SCREENSHOT_DEVICE SONNSEITE_SCREENSHOT_DEVICES SONNSEITE_SCREENSHOT_IOS].freeze
 
-# The Python of the repository (.venv, with Pillow), else python3. SONNSEITE_PYTHON overrides it.
+# The Python of the repository (.venv, with storeframe), else python3. SONNSEITE_PYTHON overrides it.
 def python
   given = ENV["SONNSEITE_PYTHON"].to_s.strip
   return given unless given.empty?
@@ -202,7 +203,8 @@ platform :ios do
     end
 
     # The framing is a separate step, so a change of the design needs no new captures.
-    sh(python, FRAME_SCREENSHOTS, "--platform", "ios")
+    sh(python, "-m", "storeframe", "frame", FRAMES_DESIGN, "--platform", "ios",
+       "--captured", SCREENSHOT_DIR, "--out", FRAMED_DIR, "--locale", "en-US")
 
     # Only a complete set can be checked. The workflow checks the set of all devices together.
     if NARROWING.any? { |name| !ENV[name].to_s.strip.empty? }

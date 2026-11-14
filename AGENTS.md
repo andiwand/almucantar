@@ -25,7 +25,7 @@ a shared part and one part for each app.
 | `assets/` | The logos (`sonnseite-logo.svg`, `sternstunde-logo.svg`, `alidade-logo.svg`), the offline base map (`assets/basemap/`), the star data (`assets/stars/`), and the main cities of the time zones (`assets/tzdata/`). | no |
 | `Package.swift` | The Swift package of the core. It must be at the root, because SwiftPM needs that for a package from a Git URL. | no |
 | `scripts/` | Repository tools: `format`, `release.py`, the base map, the star data, the horizon of a website chapter (`site/`), the store screenshots, and the pinned versions of the dev tools. | no |
-| `screenshots/` | The design of the store screenshots and the description of the pipeline (`README.md`). The scripts are in `scripts/screenshots/`, the lanes in `android/fastlane/` and `ios/fastlane/`. | no |
+| `screenshots/` | The design of the store screenshots and the description of the pipeline (`README.md`). The scripts are in `scripts/screenshots/`, the framing is the package storeframe, the lanes in `android/fastlane/` and `ios/fastlane/`. | no |
 | `.github/workflows/` | One workflow per platform and per package, with path filters. | no |
 
 A new app gets a module or a folder on each platform next to `sonnseite`, and uses the shared part
