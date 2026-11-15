@@ -96,6 +96,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # The release build strips the native libraries with the NDK of `ndk` in libs.versions.toml and
+      # puts their debug symbols into the app bundle. Without that NDK, it ships them unstripped and
+      # Google Play has no symbols for the crashes.
+      - name: Install the NDK
+        run: |
+          ndk="$(sed -n 's/^ndk = "\(.*\)"$/\1/p' gradle/libs.versions.toml)"
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${ndk}" > /dev/null
+
       # The Gradle module of the app reads <APP>_VERSION and the signing variables <APP>_*.
       - name: Build
         env:
@@ -119,6 +127,10 @@ jobs:
             cp "${APP}/build/outputs/apk/release/${APP}-release.apk" "out/${APP}-${VERSION}.apk"
             cp "${APP}/build/outputs/bundle/release/${APP}-release.aab" "out/${APP}-${VERSION}.aab"
             cp "${APP}/build/outputs/mapping/release/mapping.txt" "out/${APP}-${VERSION}-mapping.txt"
+            if ! unzip -l "out/${APP}-${VERSION}.aab" | grep -q 'debugsymbols/.*\.so\.dbg$'; then
+              echo "::error::The app bundle has no debug symbols of the native libraries"
+              exit 1
+            fi
           else
             echo "::notice::No signing secrets; the release gets a debug build"
             ./gradlew ":${APP}:assembleDebug"

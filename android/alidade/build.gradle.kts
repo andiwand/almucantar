@@ -41,6 +41,8 @@ android {
     namespace = "at.stefl.alidade"
     // Compose 2026.09 needs API 37 to compile.
     compileSdk = 37
+    // The NDK of the release build: it strips the native libraries and keeps their symbols.
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         applicationId = "at.stefl.alidade"
