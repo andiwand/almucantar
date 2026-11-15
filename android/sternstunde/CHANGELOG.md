@@ -5,6 +5,8 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+## 0.4.1 - 2026-11-15
+
 No changes that a user notices.
 
 ## 0.4.0 - 2026-11-09
