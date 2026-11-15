@@ -6,6 +6,8 @@ Each release has the tag `sonnseite-android-vX.Y.Z`. The rules are the same as i
 
 ## Unreleased
 
+No changes that a user notices.
+
 ## 0.5.1 - 2026-11-09
 
 - The sky no longer jumps once per second while the compass calibrates itself after the start.

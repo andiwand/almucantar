@@ -5,6 +5,8 @@ The changes in the Android app Sternstunde that a user notices. Each release has
 
 ## Unreleased
 
+No changes that a user notices.
+
 ## 0.4.0 - 2026-11-09
 
 - Tap the sun, the moon, or a planet, and choose "Show path (24 h)" to see its path from 12 hours
