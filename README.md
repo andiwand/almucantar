@@ -1,5 +1,13 @@
 # almucantar
 
+[![core](https://github.com/andiwand/almucantar/actions/workflows/core.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/core.yml)
+[![python](https://github.com/andiwand/almucantar/actions/workflows/python.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/python.yml)
+[![android](https://github.com/andiwand/almucantar/actions/workflows/android.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/android.yml)
+[![apple](https://github.com/andiwand/almucantar/actions/workflows/apple.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/apple.yml)
+[![web](https://github.com/andiwand/almucantar/actions/workflows/web.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/web.yml)
+[![format](https://github.com/andiwand/almucantar/actions/workflows/format.yml/badge.svg)](https://github.com/andiwand/almucantar/actions/workflows/format.yml)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-brightgreen.svg)](LICENSE)
+
 An almucantar is a circle of equal altitude in the sky. This repository has one C++ core that
 calculates the sky (the sun, the moon, the planets, the Milky Way, the terrain horizon, and the
 projection on a camera image), and the apps that use it. See [PLAN.md](PLAN.md) for the design,
